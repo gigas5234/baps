@@ -25,6 +25,7 @@ import {
 } from "@/lib/chat-coach";
 import {
   COACH_PERSONAS_UI,
+  COACH_QUICK_CHIP_ACCENT,
   DEFAULT_COACH_PERSONA_ID,
   coachMeta,
   type CoachPersonaId,
@@ -178,19 +179,22 @@ function CoachPersonaPicker({
 
 function QuickChipRow({
   chips,
+  coachId,
   disabled,
   onPick,
 }: {
   chips: QuickChip[];
+  coachId: CoachPersonaId;
   disabled: boolean;
   onPick: (prompt: string) => void;
 }) {
   if (!chips.length) return null;
+  const accent = COACH_QUICK_CHIP_ACCENT[coachId];
   return (
     <div
       className={cn(
         "rounded-xl border border-dashed border-muted-foreground/35 bg-muted/30 p-2.5",
-        "dark:border-white/12 dark:bg-muted/20"
+        "dark:border-white/14 dark:bg-muted/12"
       )}
     >
       <p className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
@@ -205,15 +209,23 @@ function QuickChipRow({
             disabled={disabled}
             onClick={() => onPick(c.prompt)}
             className={cn(
-              "flex w-full max-w-full shrink-0 items-start gap-2 rounded-lg border border-border bg-background px-3 py-2 text-left",
+              "flex w-full max-w-full shrink-0 items-start gap-2 rounded-lg bg-background pl-2.5 pr-3 py-2 text-left",
               "text-[11px] font-medium leading-snug text-foreground",
-              "transition-colors hover:bg-muted/70 active:scale-[0.99]",
+              accent.border,
+              "transition-colors hover:bg-muted/60 active:scale-[0.99]",
               "disabled:pointer-events-none disabled:opacity-45",
-              "dark:border-white/12 dark:bg-card/80 dark:hover:bg-muted/40"
+              "dark:bg-zinc-900/75 dark:hover:bg-zinc-800/85"
             )}
           >
             <span
-              className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-muted font-mono text-[9px] font-bold text-muted-foreground"
+              className={cn(
+                "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
+                accent.dot
+              )}
+              aria-hidden
+            />
+            <span
+              className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-muted/90 font-mono text-[9px] font-bold text-muted-foreground dark:bg-zinc-800/90"
               aria-hidden
             >
               {i + 1}
@@ -853,6 +865,7 @@ export function ChatFab({
               />
               <QuickChipRow
                 chips={quickChips}
+                coachId={coachPersona}
                 disabled={isLoading || bootLoading}
                 onPick={(prompt) => void sendWithText(prompt, "chip")}
               />
