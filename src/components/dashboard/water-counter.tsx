@@ -5,6 +5,23 @@ import { Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { WaterBottleVisual } from "@/components/dashboard/water-bottle-visual";
 
+function waterCoachCopy(opts: {
+  pctTowardRecommended: number;
+  cups: number;
+}): string {
+  const { pctTowardRecommended, cups } = opts;
+  if (cups === 0 || pctTowardRecommended < 42) {
+    return "수분이 부족하면 신진대사가 느려집니다. 마시십시오.";
+  }
+  if (pctTowardRecommended < 78) {
+    return "흐름이 안정적입니다. 권장량까지 한 잔씩 밀어 넣으십시오.";
+  }
+  if (pctTowardRecommended < 100) {
+    return "거의 도달했습니다. 가짜 갈증을 경계하고 마무리만 정확히.";
+  }
+  return "목표를 넘겼습니다. 내일 분석 신뢰도를 위해 과다는 피하십시오.";
+}
+
 interface WaterCounterProps {
   cups: number;
   /** 1잔당 ml (설정에서 변경) */
@@ -35,9 +52,14 @@ export function WaterCounter({
 }: WaterCounterProps) {
   const paired = variant === "paired";
   const safeTarget = Math.max(1, targetCups);
-  const percentage = Math.min((cups / safeTarget) * 100, 100);
+  const fillProgress = Math.min((cups / safeTarget) * 100, 100);
   const totalMl = cups * cupMl;
   const goalMl = safeTarget * cupMl;
+  const pctTowardRecommended =
+    recommendedMl > 0
+      ? Math.min(999, Math.round((totalMl / recommendedMl) * 100))
+      : Math.round((cups / safeTarget) * 100);
+  const centerLabel = `${pctTowardRecommended}%`;
   const canDecrement = !readOnly && cups > 0 && !isUpdating;
   const canIncrement = !readOnly && !isUpdating;
 
@@ -45,31 +67,34 @@ export function WaterCounter({
     return (
       <div
         className={cn(
-          "flex h-full min-h-0 flex-col rounded-2xl border border-white/25 p-2.5 shadow-md",
-          "bg-card/65 backdrop-blur-xl dark:border-white/10 dark:bg-card/40"
+          "flex min-h-[22rem] flex-col rounded-2xl border p-2.5 shadow-md backdrop-blur-md",
+          "border-zinc-300/80 bg-gradient-to-b from-zinc-50 via-white to-zinc-100/90",
+          "dark:border-zinc-600/50 dark:from-zinc-800/90 dark:via-zinc-900/80 dark:to-zinc-950/90"
         )}
       >
-        <p className="text-center text-xs font-semibold leading-tight">
+        <p className="text-center text-xs font-semibold leading-tight text-foreground">
           물 섭취
         </p>
         <p className="text-[10px] text-center text-muted-foreground tabular-nums dark:text-foreground/65">
           {safeTarget}잔 · {goalMl.toLocaleString()}ml
         </p>
-        <div className="mt-1.5 flex flex-1 flex-col items-center justify-center gap-1.5">
+        <div className="mt-1 flex flex-1 flex-col items-center justify-between gap-2">
           <WaterBottleVisual
-            progress={percentage}
-            className="w-[4.75rem] shrink-0"
+            progress={fillProgress}
+            size="compact"
+            centerPercentLabel={centerLabel}
+            className="shrink-0"
           />
-          <div className="flex w-full max-w-[11rem] items-center justify-between gap-1">
+          <div className="flex w-full max-w-[11.5rem] items-center justify-between gap-1">
             <button
               type="button"
               onClick={onDecrement}
               disabled={!canDecrement}
               aria-label="1잔 빼기"
               className={cn(
-                "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border-2 border-border bg-background text-foreground shadow-sm transition-transform active:scale-95",
+                "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border-2 border-zinc-300/90 bg-white text-foreground shadow-sm transition-transform active:scale-95",
                 "disabled:pointer-events-none disabled:opacity-35",
-                "hover:bg-muted/80"
+                "hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-800 dark:hover:bg-zinc-700"
               )}
             >
               <Minus className="h-4 w-4 stroke-[2.5]" aria-hidden />
@@ -107,6 +132,9 @@ export function WaterCounter({
             <p className="text-[9px] text-muted-foreground">로그인 후 기록</p>
           ) : null}
         </div>
+        <p className="mt-2 border-t border-zinc-200/80 pt-2 text-center text-[10px] font-semibold leading-snug text-foreground dark:border-zinc-600/50">
+          {waterCoachCopy({ pctTowardRecommended, cups })}
+        </p>
       </div>
     );
   }
@@ -120,8 +148,8 @@ export function WaterCounter({
     >
       <div className="flex items-center gap-4 sm:gap-5">
         <WaterBottleVisual
-          progress={percentage}
-          className="w-[7.25rem] sm:w-32"
+          progress={fillProgress}
+          centerPercentLabel={centerLabel}
         />
 
         <div className="min-w-0 flex-1 space-y-3">
@@ -186,6 +214,12 @@ export function WaterCounter({
 
           <p className="text-[10px] leading-snug text-muted-foreground dark:text-foreground/60">
             권장 약 {recommendedMl.toLocaleString()}ml
+            {centerLabel ? (
+              <span className="font-data font-semibold text-foreground/80">
+                {" "}
+                · 병 기준 {centerLabel}
+              </span>
+            ) : null}
             <span className="hidden sm:inline">
               {" "}
               (체중·BMR·목표 칼로리 반영)

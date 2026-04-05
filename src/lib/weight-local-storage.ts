@@ -1,3 +1,5 @@
+import { getLocalYmd } from "@/lib/local-date";
+
 export const WEIGHT_STORAGE_KEY = "baps-weight-entries-v1";
 const STORAGE_KEY = WEIGHT_STORAGE_KEY;
 
@@ -59,4 +61,20 @@ export function lastNWeightEntries(n: number): WeightEntry[] {
 /** 차트용: 입력한 날짜만, 최대 maxPoints개(기본 7), 최신 기준 */
 export function getChartWeightEntries(maxPoints = 7): WeightEntry[] {
   return lastNWeightEntries(maxPoints);
+}
+
+/** 오늘 기준 최근 `days`일(달력일) 구간 안의 기록만 (양 끝 포함) */
+export function getWeightEntriesInRollingWindow(days: number): WeightEntry[] {
+  if (days < 1) return [];
+  const end = getLocalYmd();
+  const endD = new Date(`${end}T12:00:00`);
+  const startD = new Date(endD);
+  startD.setDate(startD.getDate() - (days - 1));
+  const y = startD.getFullYear();
+  const m = String(startD.getMonth() + 1).padStart(2, "0");
+  const day = String(startD.getDate()).padStart(2, "0");
+  const start = `${y}-${m}-${day}`;
+  return loadWeightEntries()
+    .filter((e) => e.date >= start && e.date <= end)
+    .sort((a, b) => a.date.localeCompare(b.date));
 }

@@ -535,9 +535,12 @@ export default function HomePage() {
             />
           </section>
 
-          {/* 물 + 체중: 2컬럼 카드 페어링 */}
+          {/* 물 + 체중: BAPS 감시본부 2컬럼 */}
           {userId ? (
             <section className="px-4 pb-3 pt-1">
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                BAPS 감시본부 · 수분·체중
+              </p>
               <div className="grid grid-cols-2 gap-2.5 items-stretch">
                 <WaterCounter
                   variant="paired"

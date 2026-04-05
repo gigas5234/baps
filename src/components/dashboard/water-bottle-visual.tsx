@@ -9,18 +9,23 @@ const BOTTLE_PATH =
   "M35,10 h30 v15 h10 q15,0 15,15 v85 q0,15 -15,15 h-50 q-15,0 -15,-15 v-85 q0,-15 15,-15 h10 z";
 
 interface WaterBottleVisualProps {
-  /** 0–100, 목표 대비 충만도 */
+  /** 0–100, 목표 잔수 대비 충만도(액면 높이) */
   progress: number;
   className?: string;
+  /** 페어링 카드 등 작은 사이즈 */
+  size?: "default" | "compact";
+  /** 병 중앙에 표시할 퍼센트 (예: 권장 ml 대비) */
+  centerPercentLabel?: string | null;
 }
 
 /**
  * 이미지 없이 SVG clipPath + framer-motion만으로 물이 차오르는 물통.
- * clipPath를 쿠키 틀처럼 쓰고, rect 높이만 조절합니다.
  */
 export function WaterBottleVisual({
   progress,
   className,
+  size = "default",
+  centerPercentLabel,
 }: WaterBottleVisualProps) {
   const rawId = useId().replace(/:/g, "");
   const clipId = `wb-clip-${rawId}`;
@@ -30,15 +35,23 @@ export function WaterBottleVisual({
   const fillH = (pct / 100) * 148;
   const surfaceY = 150 - fillH;
 
+  const svgClass =
+    size === "compact"
+      ? "h-24 w-[4.75rem] drop-shadow-md"
+      : "h-[11.5rem] w-[7.25rem] drop-shadow-md sm:h-[12.5rem] sm:w-32";
+
   return (
     <div
       className={cn("relative flex shrink-0 justify-center", className)}
-      aria-hidden
+      aria-hidden={!centerPercentLabel}
+      {...(centerPercentLabel
+        ? {
+            role: "img",
+            "aria-label": `물 섭취 진행률 ${centerPercentLabel}`,
+          }
+        : { "aria-hidden": true })}
     >
-      <svg
-        viewBox="0 0 100 150"
-        className="h-[11.5rem] w-[7.25rem] drop-shadow-md sm:h-[12.5rem] sm:w-32"
-      >
+      <svg viewBox="0 0 100 150" className={svgClass}>
         <defs>
           <clipPath id={clipId}>
             <path d={BOTTLE_PATH} />
@@ -62,7 +75,6 @@ export function WaterBottleVisual({
           </linearGradient>
         </defs>
 
-        {/* 빈 통 */}
         <path
           d={BOTTLE_PATH}
           className="fill-muted/80 dark:fill-muted/35"
@@ -101,7 +113,18 @@ export function WaterBottleVisual({
           ) : null}
         </g>
 
-        {/* 테두리 */}
+        {centerPercentLabel ? (
+          <text
+            x={50}
+            y={96}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            className="fill-white font-data text-[17px] font-bold tabular-nums [filter:drop-shadow(0_1px_2px_rgba(0,0,0,0.55))]"
+          >
+            {centerPercentLabel}
+          </text>
+        ) : null}
+
         <path
           d={BOTTLE_PATH}
           fill="none"

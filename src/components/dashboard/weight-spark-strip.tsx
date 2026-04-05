@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Scale } from "lucide-react";
+import { DigitalWheelColumn } from "@/components/dashboard/digital-wheel-column";
 import {
-  getChartWeightEntries,
+  getWeightEntriesInRollingWindow,
+  loadWeightEntries,
   upsertWeightEntry,
   WEIGHT_STORAGE_KEY,
 } from "@/lib/weight-local-storage";
@@ -12,16 +14,36 @@ import { createClient } from "@/lib/supabase-browser";
 import { cn } from "@/lib/utils";
 import { getLocalYmd } from "@/lib/local-date";
 
-const CHART_DOTS = 7;
+const KG_INT_MIN = 35;
+const KG_INT_MAX = 180;
+const DATE_WHEEL_DAYS = 120;
+
+function buildDateOptions(days: number): string[] {
+  const end = getLocalYmd();
+  const endD = new Date(`${end}T12:00:00`);
+  const out: string[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(endD);
+    d.setDate(endD.getDate() - i);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    out.push(`${y}-${m}-${day}`);
+  }
+  return out;
+}
+
+const KG_INTS = Array.from({ length: KG_INT_MAX - KG_INT_MIN + 1 }, (_, i) =>
+  String(KG_INT_MIN + i)
+);
+const KG_DECS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
 interface WeightSparkStripProps {
   userId: string | undefined;
   selectedDate: string;
   profileKg: number | null | undefined;
-  /** 프로필에 저장된 목표 몸무게 — 점선 기준선 */
   targetWeightKg: number | null | undefined;
   onSavedProfile?: () => void;
-  /** 물 카드와 한 줄 배치 시 */
   compact?: boolean;
 }
 
@@ -33,63 +55,101 @@ export function WeightSparkStrip({
   onSavedProfile,
   compact = false,
 }: WeightSparkStripProps) {
-  const [entries, setEntries] = useState(() => getChartWeightEntries(CHART_DOTS));
-  const [input, setInput] = useState("");
+  const dateOptions = useMemo(() => buildDateOptions(DATE_WHEEL_DAYS), []);
+  const [chartWindow, setChartWindow] = useState<7 | 30>(7);
+  const [entriesVersion, setEntriesVersion] = useState(0);
+
+  const [pickDate, setPickDate] = useState(selectedDate);
+  const [kgInt, setKgInt] = useState("70");
+  const [kgDec, setKgDec] = useState("0");
   const [saving, setSaving] = useState(false);
 
+  const bumpEntries = useCallback(() => {
+    setEntriesVersion((v) => v + 1);
+  }, []);
+
   useEffect(() => {
-    const load = () => setEntries(getChartWeightEntries(CHART_DOTS));
-    load();
+    const load = () => bumpEntries();
     const onStorage = (e: StorageEvent) => {
       if (e.key === WEIGHT_STORAGE_KEY || e.key === null) load();
     };
-    const onCustom = () => load();
     window.addEventListener("storage", onStorage);
-    window.addEventListener("baps-weight-storage", onCustom);
+    window.addEventListener("baps-weight-storage", load);
     return () => {
       window.removeEventListener("storage", onStorage);
-      window.removeEventListener("baps-weight-storage", onCustom);
+      window.removeEventListener("baps-weight-storage", load);
     };
-  }, [selectedDate]);
+  }, [bumpEntries]);
 
-  const { pts, pathD, yTarget } = layoutWeightChart(entries, targetWeightKg);
+  useEffect(() => {
+    if (dateOptions.includes(selectedDate)) {
+      setPickDate(selectedDate);
+    } else {
+      setPickDate(getLocalYmd());
+    }
+  }, [selectedDate, dateOptions]);
+
+  const chartEntries = useMemo(
+    () => getWeightEntriesInRollingWindow(chartWindow),
+    [chartWindow, entriesVersion]
+  );
+
+  const { pts, pathD, yTarget, minKg, maxKg } = layoutWeightChart(
+    chartEntries,
+    targetWeightKg
+  );
   const hasLine = pathD.length > 0;
   const hasDots = pts.length > 0;
 
-  const isToday = selectedDate === getLocalYmd();
-  const entryForSelected = entries.find((e) => e.date === selectedDate);
-  const latestEntry =
-    entries.length > 0 ? entries[entries.length - 1] : undefined;
+  const entryForPick = useMemo(() => {
+    return loadWeightEntries().find((e) => e.date === pickDate);
+  }, [pickDate, entriesVersion]);
 
-  const parsedInput = parseFloat(input.replace(",", "."));
-  const inputPreview =
-    Number.isFinite(parsedInput) && parsedInput > 0 && parsedInput <= 500
-      ? parsedInput
-      : null;
+  useEffect(() => {
+    const e = loadWeightEntries().find((x) => x.date === pickDate);
+    let seed = e?.kg;
+    if (seed == null && pickDate === getLocalYmd() && profileKg != null) {
+      seed = profileKg;
+    }
+    if (seed == null) seed = 70;
+    const clamped = Math.min(
+      KG_INT_MAX,
+      Math.max(KG_INT_MIN, Math.round(seed * 10) / 10)
+    );
+    const flo = Math.floor(clamped);
+    const dec = Math.round((clamped - flo) * 10);
+    setKgInt(String(flo));
+    setKgDec(String(Math.min(9, Math.max(0, dec))));
+  }, [pickDate, profileKg, entriesVersion]);
 
-  const lcdKg = inputPreview ?? entryForSelected?.kg ?? null;
-  const lcdSecondary =
-    inputPreview != null
-      ? "입력 중"
-      : entryForSelected
-        ? isToday
-          ? "이 날 기록됨"
-          : `${selectedDate.slice(5)} 기록`
-        : latestEntry
-          ? `최근 ${latestEntry.date.slice(5)} · ${latestEntry.kg}kg`
-          : "측정값을 입력하세요";
+  const parsedKg =
+    Number.parseInt(kgInt, 10) + Number.parseInt(kgDec, 10) / 10;
+  const kgValid =
+    Number.isFinite(parsedKg) &&
+    parsedKg >= KG_INT_MIN &&
+    parsedKg <= KG_INT_MAX + 0.9;
 
-  const formatLcd = (v: number | null) =>
-    v != null ? v.toFixed(1) : "--.-";
+  const isToday = pickDate === getLocalYmd();
+  const chartHeight = compact
+    ? "h-[5.5rem] min-h-[5.5rem]"
+    : "h-[6.5rem] min-h-[6.5rem]";
+
+  const lcdTop =
+    entryForPick != null
+      ? isToday
+        ? `오늘 기록: ${entryForPick.kg.toFixed(1)}kg`
+        : `${pickDate.slice(5)} 기록: ${entryForPick.kg.toFixed(1)}kg`
+      : isToday
+        ? "오늘은 아직 미기록"
+        : `${pickDate.slice(5)} 미기록`;
 
   const handleSave = async () => {
-    const kg = parseFloat(input.replace(",", "."));
-    if (!Number.isFinite(kg) || kg <= 0 || kg > 500) return;
+    if (!kgValid) return;
     setSaving(true);
     try {
-      upsertWeightEntry(selectedDate, kg);
-      setEntries(getChartWeightEntries(CHART_DOTS));
-      setInput("");
+      const kg = Math.round(parsedKg * 10) / 10;
+      upsertWeightEntry(pickDate, kg);
+      bumpEntries();
       if (userId) {
         const supabase = createClient();
         await supabase.from("profiles").update({ weight: kg }).eq("id", userId);
@@ -100,23 +160,18 @@ export function WeightSparkStrip({
     }
   };
 
-  const chartHeight = compact ? "h-[2.75rem] min-h-[2.75rem]" : "h-[4.25rem]";
-
   return (
     <section
       className={cn(
-        "rounded-2xl border shadow-md backdrop-blur-md",
+        "flex min-h-[22rem] flex-col rounded-2xl border shadow-md backdrop-blur-md",
         "border-zinc-300/80 bg-gradient-to-b from-zinc-50 via-white to-zinc-100/90",
         "dark:border-zinc-600/50 dark:from-zinc-800/90 dark:via-zinc-900/80 dark:to-zinc-950/90",
-        compact
-          ? "mx-0 flex h-full min-h-0 flex-col px-2 py-2"
-          : "mx-4 px-3 py-3"
+        "mx-0 flex-col px-2 py-2"
       )}
     >
-      {/* 상판: 유리 체중계 테두리 느낌 */}
       <div
         className={cn(
-          "rounded-xl border bg-white/60 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]",
+          "flex flex-1 flex-col rounded-xl border bg-white/60 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]",
           "dark:bg-zinc-800/40 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]",
           "border-zinc-200/90 dark:border-zinc-600/40"
         )}
@@ -124,28 +179,13 @@ export function WeightSparkStrip({
         <div className="flex items-center justify-between gap-1.5 px-0.5 pb-1">
           <div className="flex items-center gap-1 text-foreground">
             <Scale
-              className={cn(
-                "shrink-0 text-zinc-500 dark:text-zinc-400",
-                compact ? "h-3 w-3" : "h-3.5 w-3.5"
-              )}
+              className="h-3 w-3 shrink-0 text-zinc-500 dark:text-zinc-400"
               strokeWidth={2}
               aria-hidden
             />
-            <h3
-              className={cn(
-                "font-semibold tracking-tight",
-                compact ? "text-[11px]" : "text-xs"
-              )}
-            >
-              체중계
-            </h3>
+            <h3 className="text-[11px] font-semibold tracking-tight">체중계</h3>
           </div>
-          <div
-            className={cn(
-              "flex flex-wrap items-center justify-end gap-x-1 text-muted-foreground",
-              compact ? "text-[8px]" : "text-[10px]"
-            )}
-          >
+          <div className="flex flex-wrap items-center justify-end gap-x-1 text-[8px] text-muted-foreground">
             {targetWeightKg != null && targetWeightKg > 0 ? (
               <span className="tabular-nums text-primary/90">
                 목표 {targetWeightKg}kg
@@ -157,7 +197,6 @@ export function WeightSparkStrip({
           </div>
         </div>
 
-        {/* LCD 패널 */}
         <div
           className={cn(
             "relative overflow-hidden rounded-lg px-2 py-1.5",
@@ -167,143 +206,171 @@ export function WeightSparkStrip({
           aria-live="polite"
         >
           <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.04)_0%,transparent_40%)]" />
-          <p
-            className={cn(
-              "relative text-[9px] font-medium tracking-wider text-teal-500/50 uppercase",
-              compact && "text-[8px]"
-            )}
-          >
-            {lcdSecondary}
+          <p className="relative text-[8px] font-medium tracking-wider text-teal-500/55 uppercase">
+            {lcdTop}
           </p>
           <div
             className={cn(
               "relative flex items-baseline justify-center gap-0.5 font-mono tabular-nums",
               "text-[#4cf3d0] [text-shadow:0_0_12px_rgba(34,211,166,0.35)]",
-              compact ? "py-0.5" : "py-1"
+              "py-0.5"
             )}
           >
             <span
               className={cn(
-                "font-bold tracking-[0.08em]",
-                compact ? "text-xl" : "text-2xl",
-                lcdKg == null && "opacity-45"
+                "text-xl font-bold tracking-[0.06em]",
+                !kgValid && "opacity-45"
               )}
             >
-              {formatLcd(lcdKg)}
+              {kgValid ? parsedKg.toFixed(1) : "--.-"}
             </span>
-            <span
-              className={cn(
-                "font-semibold text-teal-400/75",
-                compact ? "text-xs" : "text-sm"
-              )}
-            >
-              kg
-            </span>
+            <span className="text-xs font-semibold text-teal-400/75">kg</span>
           </div>
         </div>
 
-        {/* 추이 미니 그래프 (유리 판 아래) */}
-        <div className={cn("mt-1.5 flex items-stretch", chartHeight)}>
-          {hasDots ? (
-            <svg
-              className="h-full w-full overflow-visible opacity-95"
-              viewBox="0 0 100 100"
-              preserveAspectRatio="none"
-              role="img"
-              aria-label="체중 추이 차트"
+        <div className="mt-1.5 flex gap-1 px-0.5">
+          {([7, 30] as const).map((d) => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => setChartWindow(d)}
+              className={cn(
+                "flex-1 rounded-md py-0.5 text-[9px] font-semibold transition-colors",
+                chartWindow === d
+                  ? "bg-zinc-800 text-white dark:bg-zinc-200 dark:text-zinc-900"
+                  : "bg-zinc-200/70 text-zinc-600 hover:bg-zinc-300/80 dark:bg-zinc-700/80 dark:text-zinc-300"
+              )}
             >
-              {yTarget != null ? (
-                <line
-                  x1={0}
-                  x2={100}
-                  y1={yTarget}
-                  y2={yTarget}
-                  stroke="currentColor"
-                  strokeWidth={1.25}
-                  strokeDasharray="5 4"
-                  vectorEffect="non-scaling-stroke"
-                  className="text-teal-600/35 dark:text-teal-400/30"
-                />
-              ) : null}
-              {hasLine ? (
-                <path
-                  d={pathD}
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  vectorEffect="non-scaling-stroke"
-                  className="text-teal-600 dark:text-teal-400"
-                />
-              ) : null}
-              {pts.map((p) => (
-                <circle
-                  key={p.date}
-                  cx={p.x}
-                  cy={p.y}
-                  r={compact ? 2.4 : 2.8}
-                  fill="currentColor"
-                  className="text-teal-600 dark:text-teal-400"
-                  vectorEffect="non-scaling-stroke"
-                />
-              ))}
-            </svg>
+              {d}일 추이
+            </button>
+          ))}
+        </div>
+
+        <div className={cn("relative mt-1 flex", chartHeight)}>
+          {hasDots ? (
+            <div className="relative grid h-full w-full grid-cols-[1.25rem_1fr] gap-0.5">
+              <div className="flex flex-col justify-between py-0.5 text-[7px] font-mono tabular-nums text-zinc-500 dark:text-zinc-400">
+                <span>{maxKg.toFixed(1)}</span>
+                <span>{minKg.toFixed(1)}</span>
+              </div>
+              <svg
+                className="h-full w-full overflow-visible opacity-95"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                role="img"
+                aria-label={`체중 ${chartWindow}일 추이`}
+              >
+                {[25, 50, 75].map((gy) => (
+                  <line
+                    key={gy}
+                    x1={0}
+                    x2={100}
+                    y1={gy}
+                    y2={gy}
+                    stroke="currentColor"
+                    strokeWidth={0.6}
+                    vectorEffect="non-scaling-stroke"
+                    className="text-zinc-400/18 dark:text-zinc-500/20"
+                  />
+                ))}
+                {yTarget != null ? (
+                  <line
+                    x1={0}
+                    x2={100}
+                    y1={yTarget}
+                    y2={yTarget}
+                    stroke="currentColor"
+                    strokeWidth={1.4}
+                    strokeDasharray="4 3"
+                    vectorEffect="non-scaling-stroke"
+                    className="text-teal-500/55 dark:text-teal-400/45"
+                  />
+                ) : null}
+                {hasLine ? (
+                  <path
+                    d={pathD}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={1.85}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    vectorEffect="non-scaling-stroke"
+                    className="text-teal-600 dark:text-teal-400"
+                  />
+                ) : null}
+                {pts.map((p) => (
+                  <circle
+                    key={p.date}
+                    cx={p.x}
+                    cy={p.y}
+                    r={2.5}
+                    fill="currentColor"
+                    className="text-teal-600 dark:text-teal-400"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                ))}
+              </svg>
+            </div>
           ) : (
             <div
               className={cn(
-                "flex h-full w-full items-center justify-center rounded-md border border-dashed border-zinc-300/70 bg-zinc-100/50 text-muted-foreground",
+                "flex h-full w-full items-center justify-center rounded-md border border-dashed border-zinc-300/70 bg-zinc-100/50 px-1 text-center text-zinc-500",
                 "dark:border-zinc-600/50 dark:bg-zinc-900/30",
-                compact ? "text-[9px] px-1 text-center" : "text-[11px]"
+                "text-[9px]"
               )}
             >
-              기록하면 그래프가 나타나요
+              기록이 쌓이면 추이선이 표시됩니다
             </div>
           )}
         </div>
       </div>
 
-      {!compact ? (
-        <p className="mt-2 text-[10px] leading-snug text-muted-foreground">
-          선택한 날짜에 맞춰 기록해요. 최대 {CHART_DOTS}일·점까지 차트에
-          연결돼요. 오늘 저장 시 프로필 체중도 같이 맞춰요.
-        </p>
-      ) : null}
+      <div className="mt-2 flex gap-1.5 px-0.5">
+        <DigitalWheelColumn
+          values={dateOptions}
+          selected={pickDate}
+          onSelect={setPickDate}
+          formatDisplay={(ymd) => ymd.slice(5)}
+          ariaLabel="기록 날짜"
+          className="min-w-[3.25rem]"
+        />
+        <DigitalWheelColumn
+          values={KG_INTS}
+          selected={kgInt}
+          onSelect={setKgInt}
+          ariaLabel="체중 정수 kg"
+        />
+        <div className="flex shrink-0 flex-col items-center justify-center px-0.5">
+          <span className="font-mono text-lg font-bold text-teal-600 dark:text-teal-400">
+            .
+          </span>
+        </div>
+        <DigitalWheelColumn
+          values={KG_DECS}
+          selected={kgDec}
+          onSelect={setKgDec}
+          ariaLabel="체중 소수 첫째"
+          className="min-w-[2.5rem]"
+        />
+      </div>
 
-      <div
+      <button
+        type="button"
+        disabled={saving || !kgValid}
+        onClick={handleSave}
         className={cn(
-          "mt-1.5 flex gap-1.5",
-          compact ? "mt-1.5" : "mt-2"
+          "mt-2 w-full shrink-0 rounded-xl py-2 text-[11px] font-bold shadow-md transition-all active:scale-[0.99]",
+          "bg-[var(--gauge-safe)] text-white shadow-[var(--gauge-safe)]/30",
+          "hover:brightness-105 disabled:pointer-events-none disabled:opacity-45",
+          "dark:text-zinc-950"
         )}
       >
-        <input
-          type="number"
-          inputMode="decimal"
-          step="0.1"
-          placeholder={isToday ? "0.0" : `${selectedDate.slice(5)}`}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          className={cn(
-            "min-w-0 flex-1 rounded-lg border border-zinc-300/90 bg-white/90 font-mono tabular-nums text-foreground shadow-sm",
-            "placeholder:text-zinc-400 focus:border-teal-500/50 focus:outline-none focus:ring-2 focus:ring-teal-500/25",
-            "dark:border-zinc-600 dark:bg-zinc-900/80 dark:placeholder:text-zinc-500",
-            compact ? "px-2 py-1.5 text-xs" : "px-3 py-2 text-sm"
-          )}
-        />
-        <button
-          type="button"
-          disabled={saving || !input}
-          onClick={handleSave}
-          className={cn(
-            "shrink-0 rounded-lg border border-zinc-400/40 bg-zinc-200/90 font-semibold text-zinc-800 shadow-sm",
-            "transition-colors hover:bg-zinc-300/90 active:scale-[0.98] disabled:opacity-40",
-            "dark:border-zinc-500/40 dark:bg-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-600",
-            compact ? "px-2.5 py-1.5 text-[10px]" : "px-3 py-2 text-xs"
-          )}
-        >
-          {saving ? "…" : "측정 저장"}
-        </button>
-      </div>
+        {saving ? "저장 중…" : "측정 저장"}
+      </button>
+
+      <p className="mt-2 border-t border-zinc-200/80 px-0.5 pt-2 text-center text-[10px] font-semibold leading-snug text-foreground dark:border-zinc-600/50">
+        정확한 측정이 결과를 만듭니다. 기록하십시오.
+      </p>
     </section>
   );
 }
