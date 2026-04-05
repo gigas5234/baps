@@ -73,7 +73,9 @@ export function WeeklyCalendar() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-base font-semibold text-foreground">{monthLabel}</p>
+        <p className="text-base font-semibold text-foreground dark:text-zinc-50">
+          {monthLabel}
+        </p>
         {todayStr && selectedDate !== todayStr ? (
           <button
             type="button"
@@ -117,14 +119,21 @@ export function WeeklyCalendar() {
               className={cn(
                 "flex flex-col items-center gap-1.5 min-w-[44px] py-2.5 px-1 rounded-2xl transition-all snap-center shrink-0",
                 isSelected
-                  ? "bg-primary text-primary-foreground shadow-md scale-105"
-                  : "hover:bg-muted active:scale-95"
+                  ? "border-transparent bg-primary text-primary-foreground shadow-md ring-2 ring-primary/35 scale-105"
+                  : cn(
+                      "border border-slate-300/80 bg-white/85 text-foreground shadow-sm",
+                      "hover:bg-white hover:border-slate-400/90 active:scale-95",
+                      "dark:border-zinc-600/85 dark:bg-zinc-800/95 dark:text-zinc-100 dark:shadow-black/25",
+                      "dark:hover:border-zinc-500 dark:hover:bg-zinc-700/95"
+                    )
               )}
             >
               <span
                 className={cn(
                   "text-[10px] font-medium",
-                  isSunday && !isSelected && "text-red-400"
+                  isSunday &&
+                    !isSelected &&
+                    "text-red-600 dark:text-red-400"
                 )}
               >
                 {DAY_LABELS[dayOfWeek]}

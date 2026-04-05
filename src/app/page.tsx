@@ -860,7 +860,13 @@ export default function HomePage() {
       />
 
       {/* 캘린더 */}
-      <section className="mx-4 rounded-2xl bg-slate-200/35 px-4 pb-[1.05rem] pt-[1.05rem] dark:bg-slate-900/50">
+      <section
+        className={cn(
+          "mx-4 rounded-2xl border px-4 pb-[1.05rem] pt-[1.05rem] shadow-sm",
+          "border-slate-300/70 bg-slate-200/55",
+          "dark:border-zinc-600/80 dark:bg-zinc-900/92 dark:shadow-lg dark:shadow-black/35"
+        )}
+      >
         <div className="mb-[1.05rem] flex items-center gap-1.5">
           <h2 className="flex min-w-0 items-center gap-2 text-lg font-bold tracking-tight text-foreground">
             <CalendarDays
