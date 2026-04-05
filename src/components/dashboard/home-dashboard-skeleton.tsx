@@ -1,38 +1,49 @@
 "use client";
 
-/** 메인 대시보드 로딩 — 콤팩트 게이지·퀵로그·타임라인·2컬럼 습관 */
+/** 메인 대시보드 로딩 — 상황판 게이지·퀵로그 카드·타임라인·2컬럼 습관 */
 export function HomeDashboardSkeleton() {
   return (
     <>
       <section className="space-y-2 px-4 pb-2 pt-1" aria-hidden>
         <div className="h-14 rounded-xl border border-border/70 bg-muted/40 animate-pulse" />
-        <div className="rounded-2xl border border-border/80 bg-card p-4 shadow-sm">
+        <div className="rounded-3xl border border-border/80 bg-card p-6 shadow-sm">
+          <div className="mx-auto mb-2 h-6 w-28 rounded-full bg-muted/90 animate-pulse" />
           <div className="flex flex-col items-center">
-            <div className="relative h-[92px] w-[168px]">
-              <div className="absolute inset-x-3 top-1 h-[72px] rounded-t-[100px] border-[10px] border-muted bg-muted/15 animate-pulse" />
-              <div className="absolute bottom-0 left-1/2 flex -translate-x-1/2 flex-col items-center gap-1">
-                <div className="h-6 w-16 rounded-md bg-muted animate-pulse" />
-                <div className="h-2.5 w-12 rounded bg-muted/80 animate-pulse" />
+            <div className="relative h-[118px] w-[220px]">
+              <div className="absolute inset-x-6 top-2 h-[88px] rounded-t-[100px] border-[14px] border-muted bg-muted/15 animate-pulse" />
+              <div className="absolute bottom-1 left-1/2 flex -translate-x-1/2 flex-col items-center gap-1">
+                <div className="h-8 w-20 rounded-md bg-muted animate-pulse" />
+                <div className="h-2.5 w-14 rounded bg-muted/80 animate-pulse" />
               </div>
             </div>
           </div>
+          <div className="mx-auto mt-4 h-3 w-[88%] rounded bg-muted/70 animate-pulse" />
+          <div className="mx-auto mt-2 space-y-1.5 pt-2">
+            <div className="h-1 w-full rounded-full bg-muted/60 animate-pulse" />
+            <div className="h-1 w-full rounded-full bg-muted/60 animate-pulse" />
+            <div className="h-1 w-full rounded-full bg-muted/60 animate-pulse" />
+          </div>
+          <div className="mx-auto mt-4 h-8 w-[90%] rounded-md bg-muted/50 animate-pulse" />
         </div>
       </section>
 
       <section className="px-4 pb-2 pt-1" aria-hidden>
-        <div className="mb-2 h-4 w-32 rounded bg-muted animate-pulse" />
-        <div className="flex gap-3">
-          {[1, 2, 3, 4].map((k) => (
+        <div className="mb-2 h-4 w-40 rounded bg-muted animate-pulse" />
+        <div className="flex gap-2.5">
+          {[1, 2, 3].map((k) => (
             <div
               key={k}
-              className="h-16 w-16 shrink-0 rounded-full bg-muted animate-pulse"
+              className="h-[4.25rem] min-w-[9.75rem] shrink-0 rounded-2xl border border-border/60 bg-muted/50 animate-pulse"
             />
           ))}
         </div>
       </section>
 
       <section className="px-4 py-2" aria-hidden>
-        <div className="mb-2 h-4 w-24 rounded bg-muted animate-pulse" />
+        <div className="mb-2 space-y-1">
+          <div className="h-4 w-24 rounded bg-muted animate-pulse" />
+          <div className="h-3 w-32 rounded bg-muted/70 animate-pulse" />
+        </div>
         <div className="space-y-3">
           {[0, 1, 2].map((i) => (
             <div
@@ -40,9 +51,9 @@ export function HomeDashboardSkeleton() {
               className="flex gap-3 rounded-2xl border border-border/60 bg-card p-3"
             >
               <div className="h-14 w-14 shrink-0 rounded-xl bg-muted animate-pulse" />
-              <div className="min-w-0 flex-1 space-y-2 py-1">
-                <div className="h-4 w-[72%] max-w-[200px] rounded bg-muted animate-pulse" />
-                <div className="h-3 w-16 rounded bg-muted/70 animate-pulse" />
+              <div className="min-w-0 flex-1 space-y-2 py-0.5">
+                <div className="h-7 w-24 rounded bg-muted animate-pulse" />
+                <div className="h-3 w-[70%] max-w-[180px] rounded bg-muted/80 animate-pulse" />
               </div>
             </div>
           ))}

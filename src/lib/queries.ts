@@ -124,6 +124,26 @@ export function useAdjustWater(userId: string | undefined, date: string) {
   });
 }
 
+export function useDeleteMeal(userId: string | undefined, date: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (mealId: string) => {
+      if (!userId) throw new Error("Not authenticated");
+      const { error } = await getSupabase()
+        .from("meals")
+        .delete()
+        .eq("id", mealId)
+        .eq("user_id", userId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["meals", userId, date] });
+    },
+  });
+}
+
 // --- Daily calorie total (computed from meals) ---
 
 export function useDailyCalories(meals: Meal[]) {

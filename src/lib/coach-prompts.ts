@@ -1,0 +1,135 @@
+import {
+  COACH_PERSONA,
+  COACH_TIME_BAND_HINT,
+  formatContextBlock,
+  type CoachApiContext,
+} from "@/lib/chat-coach";
+import { emergencyNutritionGuardPrompt } from "@/lib/coach-safety";
+import {
+  pickRuleBasedCoachSlots,
+  ruleLockedCoachPromptLines,
+  lateNightBioRhythmCue,
+} from "@/lib/coach-orchestrator-rules";
+import {
+  coachVoicePromptAppend,
+  coachMeta,
+  type CoachPersonaId,
+} from "@/lib/coach-personas";
+
+function buildTranscript(
+  history: { message: string; is_ai: boolean }[]
+): string {
+  if (!history?.length) return "";
+  return history
+    .map((h) => `${h.is_ai ? "코치" : "유저"}: ${h.message}`)
+    .join("\n");
+}
+
+function nightCueIfNeeded(ctx: CoachApiContext): string {
+  const h = ctx.local_hour;
+  if (h >= 22 || h < 5) return lateNightBioRhythmCue();
+  return "";
+}
+
+function requiredCoachTag(id: CoachPersonaId): string {
+  switch (id) {
+    case "diet":
+      return "[DIET]";
+    case "nutrition":
+      return "[NUTRITION]";
+    case "exercise":
+      return "[EXERCISE]";
+    case "mental":
+      return "[MENTAL]";
+    case "roi":
+      return "[ROI]";
+    default:
+      return "[DIET]";
+  }
+}
+
+/** 부트스트랩 — JSON 유지 (짧은 응답) */
+export function buildAiCoachBootstrapPrompt(
+  ctx: CoachApiContext,
+  coachId: CoachPersonaId
+): string {
+  const locked = pickRuleBasedCoachSlots(ctx);
+  const lockLines = ruleLockedCoachPromptLines(locked, "bootstrap");
+  const guard = ctx.emergency_nutrition_mode
+    ? emergencyNutritionGuardPrompt(ctx)
+    : "";
+  const { emoji, label } = coachMeta(coachId);
+
+  return `${COACH_PERSONA}
+${guard}
+${coachVoicePromptAppend(coachId)}
+${COACH_TIME_BAND_HINT}
+${nightCueIfNeeded(ctx)}
+${lockLines}
+
+[부트스트랩 작업 — 출력 형식]
+**반드시** 하나의 JSON 객체만 출력한다. 앞뒤 자연어·코드펜스·설명 금지.
+
+JSON 스키마 형태:
+{"opening":"문자열", "quick_chips":[{"label":"문자열","prompt":"문자열"}, ... 정확히 3개]}
+
+규칙:
+- 지금 화면의 **1:1 담당 코치**: ${emoji} **${label} 코치**. opening은 이 코치 톤.
+- ${ctx.emergency_nutrition_mode ? "**긴급 보호 모드** — 위 [🚨] 절대 준수." : "톤: **전략적 감시 코칭**(팩트·냉정·실행 압박)."}
+- opening 한 줄~최대 2문장.
+- opening·quick_chips는 **아래 컨텍스트** 숫자·메뉴명만 근거.
+- quick_chips **정확히 3개**. 각 prompt에 오늘 수치 최소 1회.
+
+컨텍스트:
+${formatContextBlock(ctx)}`;
+}
+
+/**
+ * 일반 턴 — 스트리밍 단톡 구분자 프로토콜.
+ * 태그는 대문자 그대로. 태그 밖에 여분 텍스트 금지.
+ */
+export function buildAiCoachChatPrompt(
+  ctx: CoachApiContext,
+  message: string,
+  history: { message: string; is_ai: boolean }[],
+  coachId: CoachPersonaId
+): string {
+  const locked = pickRuleBasedCoachSlots(ctx);
+  const lockLines = ruleLockedCoachPromptLines(locked, "chat");
+  const guard = ctx.emergency_nutrition_mode
+    ? emergencyNutritionGuardPrompt(ctx)
+    : "";
+  const { emoji, label } = coachMeta(coachId);
+  const transcript = buildTranscript(history);
+  const nightCue = nightCueIfNeeded(ctx);
+
+  return `${COACH_PERSONA}
+${guard}
+${coachVoicePromptAppend(coachId)}
+${COACH_TIME_BAND_HINT}
+${nightCue}
+${lockLines}
+
+[오케스트레이터 — BAPS 단톡 — 스트리밍 출력 규약]
+모델 응답은 **오직 아래 태그 블록만** 순서대로 이어 붙인다. 태그 이름·대문자 **정확히** 일치.
+블록 사이에 태그 없는 줄 금지. 이모지·코치 이름 접두어 금지(클라이언트가 붙임).
+
+필수 순서(내용 없으면 빈 줄이라도 태그는 유지):
+[ANALYSIS] 현상 1~2문장. 숫자·메뉴 ** 감싸기.
+[MISSION] 명령조 실행 1~2문장.
+그 다음, **상황에 맞는 코치만** 아래 태그 중 1~3개를 사용한다. 각 태그 아래 **한 문장**만 (팩폭·팩트).
+  [DIET] | [NUTRITION] | [EXERCISE] | [MENTAL] | [ROI]
+- **필수**: 유저가 고른 1:1 코치 **${emoji} ${label}** → 태그 **${requiredCoachTag(coachId)}** 를 반드시 1회 포함한다.
+- ${ctx.emergency_nutrition_mode ? "[긴급 보호 모드] 위 [🚨] — 독설·운동 강요 금지. 멘탈·분석관 톤." : "독설 허용(욕설·혐오·의학 단정 금지). 심야(22~05)에는 [MENTAL]에서 수면·리듬·호르몬 프레임, 즉시 고강도 운동 강요 금지."}
+- 규칙으로 이미 잡힌 코치 태그는 반드시 채운다 (${locked.join(", ") || "(없음)"}).
+[DATA_CARD] 유저가 특정 음식 **허용/먹어도 되나** 질문일 때만 JSON 한 줄: {"headline":"","summary":"","bullets":[],"actions":[]}; 아니면 {}
+[QUICK_CHIPS] JSON 배열 한 줄, 정확히 3개: [{"label":"...","prompt":"..."},...]
+
+컨텍스트:
+${formatContextBlock(ctx)}
+
+지금까지 대화:
+${transcript || "(없음)"}
+
+유저: ${message}`;
+}

@@ -25,6 +25,8 @@ export interface ManualMealSubmitPayload {
   protein: number;
   fat: number;
   saveAsFrequent: boolean;
+  /** 이번 기록 끼니 식비(원), 선택 */
+  price_won?: number | null;
   /** 자주 먹는 식단 등록 시 항상 1인분(100%) 기준 */
   baseForFrequent: {
     cal: number;
@@ -65,6 +67,7 @@ export function ManualInputModal({
   const [description, setDescription] = useState("");
   const [clarification, setClarification] = useState<string | null>(null);
   const [saveAsFrequent, setSaveAsFrequent] = useState(false);
+  const [priceWonInput, setPriceWonInput] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
 
@@ -76,6 +79,7 @@ export function ManualInputModal({
     setDescription("");
     setClarification(null);
     setSaveAsFrequent(false);
+    setPriceWonInput("");
     setAnalyzeError(null);
     setIsAnalyzing(false);
   }, [isOpen]);
@@ -194,6 +198,9 @@ export function ManualInputModal({
   const handleSubmit = () => {
     const name = foodName.trim();
     if (!name || scaled.cal <= 0) return;
+    const pr = priceWonInput.trim();
+    const pn = pr === "" ? NaN : Math.round(parseFloat(pr) || 0);
+    const price_won = Number.isFinite(pn) && pn > 0 ? pn : null;
     onSubmit({
       food_name: name,
       cal: scaled.cal,
@@ -201,6 +208,7 @@ export function ManualInputModal({
       protein: scaled.protein,
       fat: scaled.fat,
       saveAsFrequent,
+      price_won,
       baseForFrequent: {
         cal: Math.max(0, Math.round(base.cal)),
         carbs: Math.max(0, Math.round(base.carbs * 10) / 10),
@@ -454,6 +462,19 @@ export function ManualInputModal({
                   )}
                 />
               </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">식비(원, 선택)</label>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                placeholder="이번에 먹은 만큼의 식비"
+                value={priceWonInput}
+                onChange={(e) => setPriceWonInput(e.target.value)}
+                className="font-data w-full rounded-xl border px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
             </div>
 
             <button

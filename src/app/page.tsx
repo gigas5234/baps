@@ -18,7 +18,10 @@ import { HomeDashboardSkeleton } from "@/components/dashboard/home-dashboard-ske
 import { WaterCounter } from "@/components/dashboard/water-counter";
 import { HomeLanding } from "@/components/home/home-landing";
 import { AnalyzeModal } from "@/components/meal/analyze-modal";
-import { ManualInputModal } from "@/components/meal/manual-input-modal";
+import {
+  ManualInputModal,
+  type ManualMealSubmitPayload,
+} from "@/components/meal/manual-input-modal";
 import { useMealStore } from "@/store/use-meal-store";
 import { useProfileStore } from "@/store/use-profile-store";
 import { useAuth } from "@/lib/use-auth";
@@ -29,13 +32,12 @@ import {
   useAdjustWater,
   useDailyCalories,
   useProfile,
+  useDeleteMeal,
 } from "@/lib/queries";
 import { rankFrequentMealsForNow } from "@/lib/frequent-meals-rank";
-import {
-  upsertFrequentMealRow,
-  bumpFrequentMealLog,
-} from "@/lib/frequent-meals";
-import type { FrequentMeal } from "@/types/database";
+import { bumpFrequentMealLog } from "@/lib/frequent-meals";
+import { trackBapsEvent } from "@/lib/analytics";
+import type { FrequentMeal, Meal } from "@/types/database";
 import { compressImageForAnalysis } from "@/lib/image-compress";
 import { uploadMealImage } from "@/lib/storage";
 import { getCalorieZone } from "@/lib/calorie-zone";
@@ -88,6 +90,7 @@ export default function HomePage() {
   );
   const { data: waterLog } = useWaterLog(userId, selectedDate);
   const adjustWater = useAdjustWater(userId, selectedDate);
+  const deleteMealMutation = useDeleteMeal(userId, selectedDate);
   const displayName = profile?.user_name?.trim() || userName;
   const target = profile?.target_cal ?? targetCal ?? 2000;
   const totalCalories = useDailyCalories(meals);
@@ -171,6 +174,7 @@ export default function HomePage() {
 
   const [toast, setToast] = useState<string | null>(null);
   const [quickLogBusyId, setQuickLogBusyId] = useState<string | null>(null);
+  const [mealDeletingId, setMealDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!toast) return;
@@ -244,9 +248,11 @@ export default function HomePage() {
   const handleConfirmAnalysis = async ({
     saveAsFrequent,
     portionPct,
+    priceWon,
   }: {
     saveAsFrequent: boolean;
     portionPct: number;
+    priceWon: number | null;
   }) => {
     if (!analyzeResult || !userId) return;
     const p = Math.min(100, Math.max(0, portionPct)) / 100;
@@ -261,31 +267,34 @@ export default function HomePage() {
 
     try {
       const supabase = createClient();
-      const { error: mealErr } = await supabase.from("meals").insert({
-        user_id: userId,
-        food_name: analyzeResult.food_name,
-        cal,
-        carbs,
-        protein,
-        fat,
-        image_url: imageUrl,
-      });
+      const { error: mealErr } = await supabase.rpc(
+        "confirm_meal_and_optional_frequent",
+        {
+          p_food_name: analyzeResult.food_name,
+          p_cal: cal,
+          p_carbs: carbs,
+          p_protein: protein,
+          p_fat: fat,
+          p_image_url: imageUrl,
+          p_price_won: priceWon,
+          p_save_frequent: saveAsFrequent,
+          p_frequent_cal: analyzeResult.cal,
+          p_frequent_carbs: analyzeResult.carbs,
+          p_frequent_protein: analyzeResult.protein,
+          p_frequent_fat: analyzeResult.fat,
+          p_frequent_image_url: imageUrl,
+        }
+      );
       if (mealErr) throw mealErr;
-
-      if (saveAsFrequent) {
-        await upsertFrequentMealRow(supabase, userId, {
-          food_name: analyzeResult.food_name,
-          cal: analyzeResult.cal,
-          carbs: analyzeResult.carbs,
-          protein: analyzeResult.protein,
-          fat: analyzeResult.fat,
-          image_url: imageUrl,
-        });
-      }
 
       queryClient.invalidateQueries({ queryKey: ["meals", userId, selectedDate] });
       queryClient.invalidateQueries({ queryKey: ["frequentMeals", userId] });
       setAnalyzeOpen(false);
+      trackBapsEvent("meal_saved", {
+        source: "analyze_image",
+        save_as_frequent: saveAsFrequent,
+        has_price: priceWon != null,
+      });
       if (saveAsFrequent) setToast("자주 먹는 메뉴에도 저장했어요");
       else setToast("식단에 추가되었습니다");
     } catch {
@@ -295,20 +304,7 @@ export default function HomePage() {
     }
   };
 
-  const handleManualSubmit = async (data: {
-    food_name: string;
-    cal: number;
-    carbs: number;
-    protein: number;
-    fat: number;
-    saveAsFrequent: boolean;
-    baseForFrequent: {
-      cal: number;
-      carbs: number;
-      protein: number;
-      fat: number;
-    };
-  }) => {
+  const handleManualSubmit = async (data: ManualMealSubmitPayload) => {
     if (!userId) return;
     setIsManualSaving(true);
 
@@ -320,32 +316,35 @@ export default function HomePage() {
 
     try {
       const supabase = createClient();
-      const { error: mealErr } = await supabase.from("meals").insert({
-        user_id: userId,
-        food_name: data.food_name,
-        cal: data.cal,
-        carbs: data.carbs,
-        protein: data.protein,
-        fat: data.fat,
-        image_url: null,
-      });
+      const b = data.baseForFrequent;
+      const { error: mealErr } = await supabase.rpc(
+        "confirm_meal_and_optional_frequent",
+        {
+          p_food_name: data.food_name,
+          p_cal: data.cal,
+          p_carbs: data.carbs,
+          p_protein: data.protein,
+          p_fat: data.fat,
+          p_image_url: null,
+          p_price_won: data.price_won ?? null,
+          p_save_frequent: data.saveAsFrequent,
+          p_frequent_cal: b.cal,
+          p_frequent_carbs: b.carbs,
+          p_frequent_protein: b.protein,
+          p_frequent_fat: b.fat,
+          p_frequent_image_url: null,
+        }
+      );
       if (mealErr) throw mealErr;
-
-      if (data.saveAsFrequent) {
-        const b = data.baseForFrequent;
-        await upsertFrequentMealRow(supabase, userId, {
-          food_name: data.food_name,
-          cal: b.cal,
-          carbs: b.carbs,
-          protein: b.protein,
-          fat: b.fat,
-          image_url: null,
-        });
-      }
 
       queryClient.invalidateQueries({ queryKey: ["meals", userId, selectedDate] });
       queryClient.invalidateQueries({ queryKey: ["frequentMeals", userId] });
       setManualOpen(false);
+      trackBapsEvent("meal_saved", {
+        source: "manual",
+        save_as_frequent: data.saveAsFrequent,
+        has_price: data.price_won != null,
+      });
       if (fatBomb) {
         setToast(
           `${data.food_name}까지 더하니… 오늘 지방이 이미 빠듯해. 데이터가 널 보고 있어.`
@@ -383,6 +382,19 @@ export default function HomePage() {
       setToast("추가에 실패했어요");
     } finally {
       setQuickLogBusyId(null);
+    }
+  };
+
+  const handleDeleteMeal = async (meal: Meal) => {
+    if (!userId || mealDeletingId) return;
+    setMealDeletingId(meal.id);
+    try {
+      await deleteMealMutation.mutateAsync(meal.id);
+      setToast("기록을 삭제했어요");
+    } catch {
+      setToast("삭제에 실패했어요");
+    } finally {
+      setMealDeletingId(null);
     }
   };
 
@@ -490,7 +502,8 @@ export default function HomePage() {
               current={totalCalories}
               target={target}
               macros={macroTotals}
-              compact={Boolean(userId)}
+              compact={false}
+              mealCount={meals.length}
             />
           </section>
 
@@ -507,10 +520,19 @@ export default function HomePage() {
           ) : null}
 
           <section className="px-4 py-2">
-            <h2 className="mb-2 text-sm font-semibold text-muted-foreground">
-              오늘 먹은 것
-            </h2>
-            <MealTimeline meals={meals} />
+            <div className="mb-2">
+              <h2 className="text-sm font-semibold text-muted-foreground">
+                오늘 먹은 것
+              </h2>
+              <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">
+                식단 검거 · 타임라인
+              </p>
+            </div>
+            <MealTimeline
+              meals={meals}
+              onDeleteMeal={userId ? handleDeleteMeal : undefined}
+              isDeletingId={mealDeletingId}
+            />
           </section>
 
           {/* 물 + 체중: 2컬럼 카드 페어링 */}
@@ -576,15 +598,9 @@ export default function HomePage() {
             onManualInput={() => setManualOpen(true)}
           />
           <ChatFab
-            meals={meals}
+            selectedDate={selectedDate}
             totalCal={totalCalories}
             targetCal={target}
-            waterCups={waterLog?.cups ?? 0}
-            waterCupMl={cupMl}
-            waterTargetCups={waterTargetCups}
-            waterRecommendedMl={waterRecommendedMl}
-            displayName={displayName}
-            bmr={profile?.bmr ?? null}
             macros={macroTotals}
           />
         </>
@@ -593,7 +609,19 @@ export default function HomePage() {
       {/* Analyze Modal */}
       <AnalyzeModal
         isOpen={analyzeOpen}
-        onClose={() => setAnalyzeOpen(false)}
+        onClose={() => {
+          if (
+            analyzeResult &&
+            !isSaving &&
+            !isAnalyzing
+          ) {
+            trackBapsEvent("coach_intervention_canceled", {
+              surface: "analyze_modal",
+              stage: "result_visible_no_save",
+            });
+          }
+          setAnalyzeOpen(false);
+        }}
         imageUrl={imageUrl}
         previewUrl={previewUrl}
         result={analyzeResult}

@@ -37,6 +37,8 @@ interface AnalyzeModalProps {
   onConfirm: (options: {
     saveAsFrequent: boolean;
     portionPct: PortionStep;
+    /** 이번에 기록하는 끼니 식비(원), 미입력 시 null */
+    priceWon: number | null;
   }) => void | Promise<void>;
   isSaving: boolean;
 }
@@ -53,6 +55,7 @@ export function AnalyzeModal({
 }: AnalyzeModalProps) {
   const [saveAsFrequent, setSaveAsFrequent] = useState(false);
   const [portionPct, setPortionPct] = useState<PortionStep>(100);
+  const [priceWonInput, setPriceWonInput] = useState("");
 
   useEffect(() => {
     if (!isOpen) return;
@@ -71,6 +74,7 @@ export function AnalyzeModal({
     if (isOpen) {
       setSaveAsFrequent(false);
       setPortionPct(100);
+      setPriceWonInput("");
     }
   }, [isOpen, result?.food_name]);
 
@@ -229,11 +233,34 @@ export function AnalyzeModal({
                   </span>
                 </label>
 
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">
+                    식비(원, 선택)
+                  </label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    placeholder="가성비 코치용 — 이번 끼에 쓴 돈"
+                    value={priceWonInput}
+                    onChange={(e) => setPriceWonInput(e.target.value)}
+                    className="font-data w-full rounded-xl border px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    입력하면 오늘 합산·kcal당 원 맥락에 반영돼요.
+                  </p>
+                </div>
+
                 {/* Confirm button */}
                 <button
-                  onClick={() =>
-                    void onConfirm({ saveAsFrequent, portionPct })
-                  }
+                  onClick={() => {
+                    const raw = priceWonInput.trim();
+                    const n =
+                      raw === "" ? NaN : Math.round(parseFloat(raw) || 0);
+                    const priceWon =
+                      Number.isFinite(n) && n > 0 ? n : null;
+                    void onConfirm({ saveAsFrequent, portionPct, priceWon });
+                  }}
                   disabled={isSaving || portionPct <= 0 || scaled.cal <= 0}
                   className="w-full py-3.5 rounded-xl bg-primary text-primary-foreground font-medium text-sm flex items-center justify-center gap-2 disabled:opacity-50"
                 >

@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { SchemaType, type Schema } from "@google/generative-ai";
+import { getAuthenticatedSupabaseUser } from "@/lib/api-auth";
 import { createGenAI, getGeminiModelName } from "@/lib/gemini";
+
+export const maxDuration = 60;
+
+/** 대략 6MB 원본에 해당하는 base64 길이 상한 (과대 페이로드 방지) */
+const MAX_IMAGE_BASE64_CHARS = 8_500_000;
 
 /**
  * Gemini 3.1 Flash-Lite: 저지연·이미지→구조화 추출에 맞춘 스키마 전용 호출.
@@ -49,6 +55,14 @@ const VISION_PROMPT = `[작업]
 
 export async function POST(request: Request) {
   try {
+    const { user } = await getAuthenticatedSupabaseUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: "로그인이 필요합니다.", code: "UNAUTHORIZED" },
+        { status: 401 }
+      );
+    }
+
     const genAI = createGenAI();
     if (!genAI) {
       return NextResponse.json(
@@ -63,10 +77,17 @@ export async function POST(request: Request) {
 
     const { imageBase64, mimeType } = await request.json();
 
-    if (!imageBase64) {
+    if (typeof imageBase64 !== "string" || !imageBase64) {
       return NextResponse.json(
         { error: "이미지가 필요합니다" },
         { status: 400 }
+      );
+    }
+
+    if (imageBase64.length > MAX_IMAGE_BASE64_CHARS) {
+      return NextResponse.json(
+        { error: "이미지 크기가 너무 큽니다." },
+        { status: 413 }
       );
     }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, Pencil, Sparkles } from "lucide-react";
+import { Camera, Pencil, Plus, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FrequentMeal } from "@/types/database";
 
@@ -29,11 +29,11 @@ export function QuickLogSlider({
     return (
       <section className="px-4 pb-2 pt-1">
         <div className="mb-2 h-4 w-36 rounded bg-muted animate-pulse" />
-        <div className="flex gap-3 overflow-hidden pl-0.5">
-          {[1, 2, 3, 4].map((k) => (
+        <div className="flex gap-2 overflow-hidden pl-0.5">
+          {[1, 2, 3].map((k) => (
             <div
               key={k}
-              className="h-16 w-16 shrink-0 rounded-full bg-muted animate-pulse"
+              className="h-[4.25rem] min-w-[9.5rem] shrink-0 rounded-2xl bg-muted animate-pulse"
             />
           ))}
         </div>
@@ -46,19 +46,29 @@ export function QuickLogSlider({
       <section className="px-4 pb-3 pt-1">
         <h2 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-foreground">
           <Sparkles className="h-4 w-4 shrink-0 text-primary" aria-hidden />
-          자주 찾는 식단
+          퀵 로그 · 자주 찾는 식단
         </h2>
-        {/* 슬롯: 채워질 자리 — 클릭 대상 아님 */}
-        <div
+        <button
+          type="button"
+          onClick={onOpenManual}
           className={cn(
-            "rounded-2xl border-2 border-dashed border-muted-foreground/25 px-4 py-4",
-            "bg-transparent dark:border-white/18"
+            "flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-4 py-8",
+            "border-muted-foreground/30 bg-transparent transition-colors",
+            "hover:border-primary/45 hover:bg-primary/5",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            "dark:border-white/22"
           )}
         >
-          <p className="text-center text-xs font-medium leading-relaxed text-muted-foreground">
-            자주 먹는 식단을 등록하면 클릭 한 번으로 기록할 수 있어요.
-          </p>
-        </div>
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/15 text-primary">
+            <Plus className="h-6 w-6" strokeWidth={2.5} aria-hidden />
+          </span>
+          <span className="text-sm font-bold text-foreground">
+            + 자주 먹는 메뉴 등록하기
+          </span>
+          <span className="text-center text-[11px] leading-relaxed text-muted-foreground">
+            수동 입력으로 저장하면 여기에서 원탭으로 다시 기록할 수 있어요
+          </span>
+        </button>
         <div className="mt-3 flex gap-2.5">
           <button
             type="button"
@@ -94,11 +104,11 @@ export function QuickLogSlider({
     <section className="px-4 pb-2 pt-1">
       <h2 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
         <Sparkles className="h-4 w-4 text-primary" aria-hidden />
-        자주 찾는 식단
+        퀵 로그 · 자주 찾는 식단
       </h2>
       <div
         className={cn(
-          "scrollbar-hide flex gap-3 overflow-x-auto overflow-y-visible pb-1.5 pl-0.5 pr-3",
+          "scrollbar-hide flex gap-2.5 overflow-x-auto overflow-y-visible pb-1.5 pl-0.5 pr-3",
           "snap-x snap-mandatory scroll-pl-0.5 [-ms-overflow-style:none] [scrollbar-width:none]",
           "[&::-webkit-scrollbar]:hidden"
         )}
@@ -113,16 +123,18 @@ export function QuickLogSlider({
               disabled={busy}
               onClick={() => onPick(m)}
               className={cn(
-                "group flex w-[4.5rem] shrink-0 snap-start flex-col items-center gap-1.5 text-center",
-                "transition-transform active:scale-[0.97]",
-                "disabled:pointer-events-none disabled:opacity-50",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-full"
+                "group flex min-w-[9.75rem] max-w-[11rem] shrink-0 snap-start items-center gap-2.5 rounded-2xl border border-border bg-card px-3 py-2.5 text-left shadow-sm",
+                "transition-[transform,box-shadow,border-color] active:scale-[0.98]",
+                "hover:border-primary/35 hover:shadow-md hover:shadow-primary/8",
+                "disabled:pointer-events-none disabled:opacity-55",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                "dark:border-white/12"
               )}
             >
               <div
                 className={cn(
-                  "relative h-16 w-16 shrink-0 overflow-hidden rounded-full bg-muted ring-2 ring-offset-2 ring-offset-background transition-[box-shadow,ring-color]",
-                  "ring-border group-hover:ring-primary/45",
+                  "relative h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-muted",
+                  "ring-1 ring-border group-hover:ring-primary/40",
                   busy && "ring-primary/50"
                 )}
               >
@@ -134,20 +146,25 @@ export function QuickLogSlider({
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/15 to-scanner/18 px-1 text-center font-data text-[9px] font-semibold text-primary leading-tight">
-                    {m.food_name.slice(0, 5)}
-                    {m.food_name.length > 5 ? "…" : ""}
+                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/18 to-scanner/16 text-lg">
+                    🍽️
                   </div>
                 )}
                 {busy ? (
-                  <div className="absolute inset-0 flex items-center justify-center rounded-full bg-background/55 text-[10px] font-medium">
+                  <div className="absolute inset-0 flex items-center justify-center bg-background/60 text-xs font-medium">
                     …
                   </div>
                 ) : null}
               </div>
-              <p className="line-clamp-2 w-full text-[10px] font-medium leading-tight text-foreground">
-                {m.food_name}
-              </p>
+              <div className="min-w-0 flex-1">
+                <p className="line-clamp-2 text-xs font-semibold leading-tight text-foreground">
+                  {m.food_name}
+                </p>
+                <p className="mt-1 font-data text-[11px] font-bold tabular-nums text-muted-foreground">
+                  {m.cal.toLocaleString()}
+                  <span className="ml-0.5 text-[10px] font-semibold">kcal</span>
+                </p>
+              </div>
             </button>
           );
         })}

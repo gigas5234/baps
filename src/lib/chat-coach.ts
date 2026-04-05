@@ -1,4 +1,13 @@
 import { SchemaType, type Schema } from "@google/generative-ai";
+import {
+  coachMeta,
+  DEFAULT_COACH_PERSONA_ID,
+  parseCoachPersonaId,
+  type CoachPersonaId,
+} from "@/lib/coach-personas";
+export type EmergencyNutritionTrigger =
+  | "low_intake_today"
+  | "low_intake_3d_avg";
 
 /** 클라이언트 → API 공통 컨텍스트 */
 export type CoachApiContext = {
@@ -21,6 +30,16 @@ export type CoachApiContext = {
   water_cup_ml: number;
   /** 로컬 시간 힌트 (0–23) */
   local_hour: number;
+  /** BMR 대비 섭취 과소 시 서버가 켜는 저섭취/ED 방어 모드 */
+  emergency_nutrition_mode: boolean;
+  /** 보호 모드 발동 이유 (프롬프트 톤 분기) */
+  emergency_triggers: EmergencyNutritionTrigger[];
+  /** 선택일 포함 역삼일 일일 섭취 합산의 산술평균 (kcal/일) */
+  recent_three_day_cal_average: number | null;
+  /** price_won이 있는 오늘 식사만 */
+  priced_meal_lines: { food_name: string; cal: number; price_won: number }[];
+  /** 위 항목 합계(원). 없으면 null */
+  meal_spend_won_total: number | null;
 };
 
 export type QuickChip = { label: string; prompt: string };
@@ -34,17 +53,25 @@ export type DataCardPayload = {
   actions: DataCardAction[];
 };
 
-/** 턴 응답 — [분석][경고][미션] 구조 (UI·히스토리 공통) */
+/** 오케스트레이터가 고른 코치 1인분(최대 3명) */
+export type CoachQuip = {
+  persona_id: CoachPersonaId;
+  zinger: string;
+};
+
+/** 턴 응답 — 분석 + (단톡 코치들) + 미션 (+ 레거시 roast) */
 export type CoachStrategicTurn = {
   analysis: string;
   roast: string;
   mission: string;
+  coach_quips?: CoachQuip[];
 };
 
 export type CoachChatReply = {
   analysis: string;
   roast: string;
   mission: string;
+  coach_quips: CoachQuip[];
   data_card: DataCardPayload;
   quick_chips: QuickChip[];
 };
@@ -109,7 +136,24 @@ export function formatContextBlock(ctx: CoachApiContext): string {
       2
     ),
     `[local_hour] ${ctx.local_hour} (0–23, 사용자 기기 로컬)`,
+    `[emergency_nutrition_mode] ${ctx.emergency_nutrition_mode}`,
+    `[emergency_triggers]`,
+    JSON.stringify(ctx.emergency_triggers, null, 2),
+    `[recent_three_day_cal_average_kcal] ${ctx.recent_three_day_cal_average ?? "null"}`,
   ];
+  if (ctx.priced_meal_lines.length > 0 || ctx.meal_spend_won_total != null) {
+    lines.push(
+      `[meal_spend_optional — 유저가 입력한 식비만, 없으면 가성비 코치는 가격 숫자 언급 금지]`,
+      JSON.stringify(
+        {
+          priced_meals: ctx.priced_meal_lines,
+          total_won: ctx.meal_spend_won_total,
+        },
+        null,
+        2
+      )
+    );
+  }
   return lines.join("\n");
 }
 
@@ -156,6 +200,23 @@ export const bootstrapResponseSchema: Schema = {
   required: ["opening", "quick_chips"],
 };
 
+const coachQuipItemSchema: Schema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    persona_id: {
+      type: SchemaType.STRING,
+      description:
+        "반드시 다음 중 하나: diet, nutrition, exercise, mental, roi",
+    },
+    zinger: {
+      type: SchemaType.STRING,
+      description:
+        "해당 코치가 유저에게 던지는 팩폭 **한 문장**만. 이모지·코치 이름 접두어 금지. 숫자는 ** 감싸기.",
+    },
+  },
+  required: ["persona_id", "zinger"],
+};
+
 export const chatResponseSchema: Schema = {
   type: SchemaType.OBJECT,
   properties: {
@@ -167,12 +228,18 @@ export const chatResponseSchema: Schema = {
     roast: {
       type: SchemaType.STRING,
       description:
-        "[경고] 팩폭 1~2문장. ** 로 감싼 수치 인용.",
+        "레거시. coach_quips가 있으면 빈 문자열 \"\" 로 둬도 됨.",
     },
     mission: {
       type: SchemaType.STRING,
       description:
         "[미션] 명령조 대안 1~2문장. 추천 행동·음식·핵심 수치는 ** 감싸기.",
+    },
+    coach_quips: {
+      type: SchemaType.ARRAY,
+      description:
+        "오케스트레이터: 상황에 맞는 코치 **1~3명**만. 각 zinger는 한 문장. 코치끼리 대화 없음.",
+      items: coachQuipItemSchema,
     },
     data_card: dataCardSchema,
     quick_chips: {
@@ -182,11 +249,49 @@ export const chatResponseSchema: Schema = {
         "후속 칩 3개. 단백 보충·야식·물 등 **현재 컨텍스트**에 맞춤.",
     },
   },
-  required: ["analysis", "roast", "mission", "data_card", "quick_chips"],
+  required: ["analysis", "mission", "coach_quips", "data_card", "quick_chips"],
 };
 
 /** 키 없거나 장애 시 클라이언트도 쓸 수 있는 규칙 기반 부트스트랩 */
 export function fallbackBootstrap(ctx: CoachApiContext): CoachBootstrapReply {
+  if (ctx.emergency_nutrition_mode) {
+    const avg = ctx.recent_three_day_cal_average;
+    const parts: string[] = [];
+    if (ctx.emergency_triggers.includes("low_intake_3d_avg") && avg != null) {
+      parts.push(
+        `최근 3일 평균 **${Math.round(avg)}kcal/일**로 에너지 여유가 데이터상 빡빡해—의도적 감량인지 기록 누락인지 함께 봐야 해. **근손실·대사 저하** 신호일 수 있어서, 무리한 결식보다 **균형·수면·전문가 상담**을 권해.`
+      );
+    }
+    if (ctx.emergency_triggers.includes("low_intake_today")) {
+      parts.push(
+        `오늘 기록만 보면 **${ctx.user_profile.current_cal}kcal**야. **소량이라도 균형 있는 식사**를 먼저 고려해 줘.`
+      );
+    }
+    const opening =
+      parts.join(" ") ||
+      `데이터가 **저섭취 구간**처럼 보여. **의료·영양 전문가** 상담도 함께 알아보는 게 안전해.`;
+    return {
+      opening,
+      quick_chips: [
+        {
+          label: "가벼운 한 끼 예시",
+          prompt:
+            "지금 기록 기준으로 부담이 적은 소량 한 끼 예시를 두 가지 말해줘.",
+        },
+        {
+          label: "수분·소금은 어떻게",
+          prompt:
+            "저섭취 구간에서 수분이랑 나트륨은 어떻게 챙기면 좋은지 짧게 말해줘.",
+        },
+        {
+          label: "기록 점검",
+          prompt:
+            "기록을 빠뜨려서 칼로리가 낮게 보였을 수 있어. 기록 점검 팁을 짧게 알려줘.",
+        },
+      ],
+    };
+  }
+
   const { macros_g, user_profile, water_intake_ml, local_hour } = ctx;
   const rem = Math.max(
     user_profile.target_cal - user_profile.current_cal,
@@ -310,11 +415,71 @@ export function emptyDataCard(): DataCardPayload {
 
 type RawCoachReply = Partial<CoachChatReply> & { reply?: string };
 
+function dedupeCoachQuips(quips: CoachQuip[]): CoachQuip[] {
+  const seen = new Set<CoachPersonaId>();
+  const out: CoachQuip[] = [];
+  for (const q of quips) {
+    if (!q.zinger?.trim()) continue;
+    if (seen.has(q.persona_id)) continue;
+    seen.add(q.persona_id);
+    out.push({
+      persona_id: q.persona_id,
+      zinger: q.zinger.trim(),
+    });
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
 export function encodeCoachTurnForHistory(turn: CoachStrategicTurn): string {
   const a = (turn.analysis ?? "").trim();
-  const r = (turn.roast ?? "").trim();
   const m = (turn.mission ?? "").trim();
-  return `[분석] ${a}\n[경고] ${r}\n[미션] ${m}`;
+  const quips = dedupeCoachQuips(turn.coach_quips ?? []);
+  let middle: string;
+  if (quips.length > 0) {
+    middle = quips
+      .map((q) => {
+        const meta = coachMeta(q.persona_id);
+        return `${meta.emoji} ${meta.label}: ${q.zinger}`;
+      })
+      .join("\n");
+  } else {
+    middle = (turn.roast ?? "").trim() || "—";
+  }
+  return `[분석] ${a}\n[단톡]\n${middle}\n[미션] ${m}`;
+}
+
+function normalizeCoachQuipsRaw(
+  raw: unknown,
+  fallbackZinger: string
+): CoachQuip[] {
+  if (!Array.isArray(raw)) {
+    return [
+      {
+        persona_id: DEFAULT_COACH_PERSONA_ID,
+        zinger: fallbackZinger || "데이터를 다시 확인해.",
+      },
+    ];
+  }
+  const parsed: CoachQuip[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const rec = item as Record<string, unknown>;
+    const id = parseCoachPersonaId(rec.persona_id);
+    const z =
+      typeof rec.zinger === "string" ? rec.zinger.trim() : "";
+    if (z) parsed.push({ persona_id: id, zinger: z });
+  }
+  let quips = dedupeCoachQuips(parsed);
+  if (quips.length === 0) {
+    quips = [
+      {
+        persona_id: DEFAULT_COACH_PERSONA_ID,
+        zinger: fallbackZinger || "기록을 더 쌓아야 코칭 밀도가 나온다.",
+      },
+    ];
+  }
+  return quips;
 }
 
 export function normalizeCoachReply(raw: RawCoachReply): CoachChatReply {
@@ -331,13 +496,16 @@ export function normalizeCoachReply(raw: RawCoachReply): CoachChatReply {
     mission = mission || "구체적으로 다시 질문해.";
   }
   if (!analysis) analysis = "컨텍스트만으로는 판단이 불완전하다.";
-  if (!roast) roast = "기록을 더 쌓아야 코칭 밀도가 나온다.";
   if (!mission) mission = "다음 식사를 기록한 뒤 같은 질문을 반복해.";
+  if (!roast) roast = "";
+
+  const coach_quips = normalizeCoachQuipsRaw(raw.coach_quips, roast);
 
   return {
     analysis,
     roast,
     mission,
+    coach_quips,
     data_card: {
       headline: card.headline ?? "",
       summary: card.summary ?? "",

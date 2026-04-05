@@ -27,7 +27,23 @@ export interface Meal {
   carbs: number;
   protein: number;
   fat: number;
+  /** 선택: 해당 끼니 식비(원) */
+  price_won?: number | null;
   created_at: string;
+}
+
+/** 공용 영양 캐시 (텍스트 분석) */
+export interface NutritionDictionaryRow {
+  id: string;
+  normalized_key: string;
+  food_name_display: string;
+  cal: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+  source: string;
+  created_at: string;
+  updated_at: string;
 }
 
 /** 자주 먹는 메뉴 (Quick Log) */
@@ -110,9 +126,35 @@ export type Database = {
         Update: Partial<Omit<ChatMessage, "id">>;
         Relationships: [];
       };
+      nutrition_dictionary: {
+        Row: NutritionDictionaryRow;
+        Insert: Omit<NutritionDictionaryRow, "id" | "created_at" | "updated_at"> &
+          Partial<Pick<NutritionDictionaryRow, "source">>;
+        Update: Partial<Omit<NutritionDictionaryRow, "id">>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      confirm_meal_and_optional_frequent: {
+        Args: {
+          p_food_name: string;
+          p_cal: number;
+          p_carbs: number;
+          p_protein: number;
+          p_fat: number;
+          p_image_url: string | null;
+          p_price_won: number | null;
+          p_save_frequent: boolean;
+          p_frequent_cal: number;
+          p_frequent_carbs: number;
+          p_frequent_protein: number;
+          p_frequent_fat: number;
+          p_frequent_image_url: string | null;
+        };
+        Returns: string;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

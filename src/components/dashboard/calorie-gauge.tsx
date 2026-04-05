@@ -4,19 +4,61 @@ import { useId } from "react";
 import { motion } from "framer-motion";
 import { Flame } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getCalorieZone } from "@/lib/calorie-zone";
+import { getCalorieZone, type CalorieZone } from "@/lib/calorie-zone";
 import type { MacroTotals } from "@/lib/meal-macros";
-import { MacroMiniBars } from "@/components/dashboard/macro-mini-bars";
+import { MacroTargetMicroBars } from "@/components/dashboard/macro-target-micro-bars";
+import {
+  buildDashboardNextAction,
+  buildLiveSignalLine,
+} from "@/lib/dashboard-coach";
 
 interface CalorieGaugeProps {
   current: number;
   target: number;
   macros?: MacroTotals | null;
-  /** 상단 히어로: 작은 호·간격 축소·탄단지 카드 생략 */
+  /** 상단 히어로용 축소 레이아웃 (배지·코칭·탄단지 스트립 생략) */
   compact?: boolean;
+  mealCount?: number;
 }
 
-function zoneStyle(zone: ReturnType<typeof getCalorieZone>): {
+function statusBadge(zone: CalorieZone): {
+  label: string;
+  emoji: string;
+  className: string;
+} {
+  switch (zone) {
+    case "empty":
+      return {
+        label: "STANDBY",
+        emoji: "⚪",
+        className:
+          "border-muted-foreground/35 bg-background/70 text-muted-foreground",
+      };
+    case "safe":
+      return {
+        label: "SAFE",
+        emoji: "🟢",
+        className:
+          "border-gauge-safe/40 bg-gauge-safe/10 text-gauge-safe dark:border-gauge-safe/35 dark:bg-gauge-safe/12",
+      };
+    case "caution":
+      return {
+        label: "CAUTION",
+        emoji: "🟡",
+        className:
+          "border-gauge-caution/45 bg-gauge-caution/10 text-gauge-caution dark:border-gauge-caution/40 dark:bg-gauge-caution/12",
+      };
+    case "danger":
+      return {
+        label: "OVER-LIMIT",
+        emoji: "🔴",
+        className:
+          "border-gauge-danger/50 bg-gauge-danger/12 text-gauge-danger dark:border-gauge-danger/45 dark:bg-gauge-danger/14",
+      };
+  }
+}
+
+function zoneStyle(zone: CalorieZone): {
   message: string;
   textClass: string;
   accent: string;
@@ -87,12 +129,14 @@ export function CalorieGauge({
   target,
   macros = null,
   compact = false,
+  mealCount = 0,
 }: CalorieGaugeProps) {
   const gradId = `gg${useId().replace(/:/g, "")}`;
   const percentage = target > 0 ? (current / target) * 100 : 0;
   const clampedPct = Math.min(percentage, 100);
   const zone = getCalorieZone(current, target);
   const style = zoneStyle(zone);
+  const badge = statusBadge(zone);
   const isDanger = zone === "danger";
   const isEmpty = zone === "empty";
 
@@ -109,9 +153,28 @@ export function CalorieGauge({
   const bgArc = describeArc(cx, cy, radius, startAngle, endAngle);
   const progressOffset = arcLength - (clampedPct / 100) * arcLength;
 
-  const macroBlock =
-    macros != null && !compact ? (
-      <MacroMiniBars macros={macros} totalMealCalories={current} />
+  const macroTotals: MacroTotals = macros ?? {
+    carbsG: 0,
+    proteinG: 0,
+    fatG: 0,
+  };
+
+  const nextAction = buildDashboardNextAction(
+    zone,
+    current,
+    target,
+    macros
+  );
+  const liveSignal = buildLiveSignalLine(
+    zone,
+    current,
+    mealCount,
+    macros
+  );
+
+  const macroStrip =
+    !compact && target > 0 ? (
+      <MacroTargetMicroBars current={macroTotals} targetKcal={target} />
     ) : null;
 
   return (
@@ -132,6 +195,20 @@ export function CalorieGauge({
       }}
     >
       <div className="flex flex-col items-center">
+        {!compact ? (
+          <div className="mb-1 flex w-full justify-center">
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-data text-[11px] font-bold tracking-widest",
+                badge.className
+              )}
+            >
+              <span aria-hidden>{badge.emoji}</span>
+              {badge.label}
+            </span>
+          </div>
+        ) : null}
+
         <div className="relative">
           <svg
             width={size}
@@ -193,7 +270,7 @@ export function CalorieGauge({
             <motion.p
               className={cn(
                 "font-data font-bold tabular-nums",
-                compact ? "text-2xl" : "text-3xl",
+                compact ? "text-2xl" : "text-4xl",
                 isEmpty
                   ? "text-foreground/80 dark:text-foreground/90"
                   : style.textClass
@@ -227,10 +304,10 @@ export function CalorieGauge({
         {!compact ? (
           <motion.p
             className={cn(
-              "mt-3 text-sm font-medium",
+              "mt-2 text-center text-xs font-medium text-muted-foreground",
               isEmpty
-                ? "text-foreground/85 dark:text-foreground/90"
-                : style.textClass
+                ? "text-foreground/80 dark:text-foreground/88"
+                : "text-muted-foreground"
             )}
             key={style.message}
             initial={{ opacity: 0, y: 4 }}
@@ -242,27 +319,38 @@ export function CalorieGauge({
         ) : null}
 
         {!compact && current > 0 ? (
-          <div className="mt-4 flex gap-6 text-xs text-muted-foreground">
+          <div className="mt-3 flex gap-6 text-xs text-muted-foreground">
             <div className="text-center">
               <p
-                className="font-data text-sm font-semibold tabular-nums"
+                className="font-data text-base font-bold tabular-nums text-foreground"
                 style={{ color: zone === "empty" ? undefined : style.accent }}
               >
                 {Math.round(percentage)}%
               </p>
-              <p>달성률</p>
+              <p className="text-[10px]">달성률</p>
             </div>
             <div className="w-px bg-border/80" />
             <div className="text-center">
-              <p className="font-data text-sm font-semibold text-foreground">
+              <p className="font-data text-base font-bold tabular-nums text-foreground">
                 {Math.max(target - current, 0).toLocaleString()}
               </p>
-              <p>남은 kcal</p>
+              <p className="text-[10px]">남은 kcal</p>
             </div>
           </div>
         ) : null}
 
-        {macroBlock}
+        {macroStrip}
+
+        {!compact ? (
+          <>
+            <p className="mt-4 w-full text-center text-[11px] font-medium leading-snug text-foreground">
+              {nextAction}
+            </p>
+            <p className="mt-2 w-full text-center text-[10px] leading-relaxed text-muted-foreground">
+              {liveSignal}
+            </p>
+          </>
+        ) : null}
       </div>
     </motion.div>
   );
@@ -271,13 +359,13 @@ export function CalorieGauge({
 function describeArc(
   cx: number,
   cy: number,
-  r: number,
+  radius: number,
   startAngle: number,
   endAngle: number
 ): string {
-  const x1 = cx + r * Math.cos(startAngle);
-  const y1 = cy - r * Math.sin(startAngle);
-  const x2 = cx + r * Math.cos(endAngle);
-  const y2 = cy - r * Math.sin(endAngle);
-  return `M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`;
+  const x1 = cx + radius * Math.cos(startAngle);
+  const y1 = cy - radius * Math.sin(startAngle);
+  const x2 = cx + radius * Math.cos(endAngle);
+  const y2 = cy - radius * Math.sin(endAngle);
+  return `M ${x1} ${y1} A ${radius} ${radius} 0 0 1 ${x2} ${y2}`;
 }
