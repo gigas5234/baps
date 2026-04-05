@@ -125,7 +125,9 @@ export function QuickLogSlider({
             )}
           >
             <Pencil className="h-4 w-4 text-muted-foreground" aria-hidden />
-            수동 입력
+            {onAddFrequent != null
+              ? "자주 먹는 메뉴 등록하기"
+              : "수동 입력"}
           </button>
         </div>
       </section>
