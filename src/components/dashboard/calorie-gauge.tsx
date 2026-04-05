@@ -1,12 +1,13 @@
 "use client";
 
-import { useId } from "react";
-import { motion } from "framer-motion";
-import { Flame } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { motion, animate as fmAnimate } from "framer-motion";
+import { Flame, TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getCalorieZone, type CalorieZone } from "@/lib/calorie-zone";
 import type { MacroTotals } from "@/lib/meal-macros";
-import { MacroTargetMicroBars } from "@/components/dashboard/macro-target-micro-bars";
+import { isFatHeavy } from "@/lib/meal-macros";
+import { macroGramTargetsFromCalorieTarget } from "@/lib/macro-targets";
 import {
   buildDashboardNextAction,
   buildLiveSignalLine,
@@ -16,112 +17,117 @@ interface CalorieGaugeProps {
   current: number;
   target: number;
   macros?: MacroTotals | null;
-  /** 상단 히어로용 축소 레이아웃 (배지·코칭·탄단지 스트립 생략) */
   compact?: boolean;
   mealCount?: number;
 }
 
-function statusBadge(zone: CalorieZone): {
-  label: string;
+function statusReadout(zone: CalorieZone): {
+  line: string;
+  hint: string;
   emoji: string;
-  className: string;
+  badgeClass: string;
 } {
   switch (zone) {
     case "empty":
       return {
-        label: "STANDBY",
-        emoji: "⚪",
-        className:
-          "border-muted-foreground/35 bg-background/70 text-muted-foreground",
+        line: "🟢 시스템 대기",
+        hint: "기록이 연결되면 관제가 시작됩니다.",
+        emoji: "☁️",
+        badgeClass:
+          "border-muted-foreground/30 bg-background/55 text-muted-foreground shadow-none",
       };
     case "safe":
       return {
-        label: "SAFE",
-        emoji: "🟢",
-        className:
-          "border-gauge-safe/40 bg-gauge-safe/10 text-gauge-safe dark:border-gauge-safe/35 dark:bg-gauge-safe/12",
+        line: "🟢 시스템 정상",
+        hint: "✨ 상쾌한 상태예요!",
+        emoji: "✨",
+        badgeClass:
+          "border-chart-2/45 bg-chart-2/10 text-chart-2 shadow-[0_0_12px_color-mix(in_srgb,var(--chart-2)_40%,transparent)] dark:border-chart-2/40 dark:bg-chart-2/12",
       };
     case "caution":
       return {
-        label: "CAUTION",
-        emoji: "🟡",
-        className:
-          "border-gauge-caution/45 bg-gauge-caution/10 text-gauge-caution dark:border-gauge-caution/40 dark:bg-gauge-caution/12",
+        line: "🟡 과부하 주의",
+        hint: "목표 에너지에 거의 도달했습니다.",
+        emoji: "🌤️",
+        badgeClass:
+          "border-chart-3/50 bg-chart-3/12 text-chart-3 shadow-[0_0_14px_color-mix(in_srgb,var(--chart-3)_35%,transparent)] dark:border-chart-3/45 dark:bg-chart-3/14",
       };
     case "danger":
       return {
-        label: "OVER-LIMIT",
-        emoji: "🔴",
-        className:
-          "border-gauge-danger/50 bg-gauge-danger/12 text-gauge-danger dark:border-gauge-danger/45 dark:bg-gauge-danger/14",
-      };
+        line: "🚨 심각 · 한도 초과",
+        hint: "일일 한도를 넘었습니다.",
+        emoji: "🚨",
+        badgeClass:
+          "border-gauge-danger/55 bg-gauge-danger/14 text-gauge-danger shadow-[0_0_16px_color-mix(in_srgb,var(--gauge-danger)_45%,transparent)] dark:border-gauge-danger/50 dark:bg-gauge-danger/16",
+ };
   }
 }
 
-function zoneStyle(zone: CalorieZone): {
-  message: string;
-  textClass: string;
-  accent: string;
-  trackStroke: string;
-  cardBg: string;
-  cardRing: string;
-  glassGradient: string;
-} {
+function zoneBackdrop(zone: CalorieZone, fatMist: boolean): string {
+  if (fatMist) {
+    return `
+      radial-gradient(ellipse 120% 80% at 50% 100%,
+        color-mix(in srgb, var(--gauge-danger) 14%, transparent) 0%,
+        transparent 52%),
+      radial-gradient(ellipse 90% 60% at 50% 0%,
+        color-mix(in srgb, var(--chart-1) 10%, transparent) 0%,
+        transparent 45%),
+      radial-gradient(ellipse 80% 70% at 80% 40%,
+        color-mix(in srgb, var(--chart-3) 8%, transparent) 0%,
+        transparent 55%)
+    `;
+  }
   switch (zone) {
     case "empty":
-      return {
-        message: "오늘의 식단을 기록해보세요!",
-        textClass: "text-muted-foreground",
-        accent: "color-mix(in srgb, var(--muted-foreground) 90%, transparent)",
-        trackStroke: "color-mix(in srgb, var(--border) 60%, transparent)",
-        cardBg:
-          "color-mix(in srgb, var(--card) 90%, var(--muted) 10%)",
-        cardRing: "color-mix(in srgb, var(--border) 38%, transparent)",
-        glassGradient:
-          "linear-gradient(145deg, color-mix(in srgb, var(--card) 96%, transparent) 0%, color-mix(in srgb, var(--muted) 14%, var(--card)) 100%)",
-      };
+      return `
+        radial-gradient(ellipse 100% 80% at 50% -10%,
+          color-mix(in srgb, var(--muted-foreground) 8%, transparent) 0%,
+          transparent 55%),
+        radial-gradient(ellipse 90% 70% at 100% 100%,
+          color-mix(in srgb, var(--primary) 6%, transparent) 0%,
+          transparent 50%)
+      `;
     case "safe":
-      return {
-        message: "좋아요! 여유 있어요 🙂",
-        textClass: "text-gauge-safe",
-        accent: "var(--gauge-safe)",
-        trackStroke: "color-mix(in srgb, var(--gauge-safe) 38%, transparent)",
-        cardBg:
-          "color-mix(in srgb, var(--gauge-safe) 12%, var(--card))",
-        cardRing:
-          "color-mix(in srgb, var(--gauge-safe) 28%, transparent)",
-        glassGradient:
-          "linear-gradient(145deg, color-mix(in srgb, var(--gauge-safe) 16%, var(--card)) 0%, color-mix(in srgb, var(--gauge-safe) 10%, transparent) 55%, var(--card) 100%)",
-      };
+      return `
+        radial-gradient(ellipse 110% 85% at 50% 0%,
+          color-mix(in srgb, var(--chart-2) 12%, transparent) 0%,
+          transparent 50%),
+        radial-gradient(ellipse 100% 80% at 0% 100%,
+          color-mix(in srgb, var(--chart-1) 8%, transparent) 0%,
+          transparent 52%)
+      `;
     case "caution":
-      return {
-        message: "목표에 거의 도달했어요. 조금만 조절해요 👀",
-        textClass: "text-gauge-caution",
-        accent: "var(--gauge-caution)",
-        trackStroke:
-          "color-mix(in srgb, var(--gauge-caution) 42%, transparent)",
-        cardBg:
-          "color-mix(in srgb, var(--gauge-caution) 11%, var(--card))",
-        cardRing:
-          "color-mix(in srgb, var(--gauge-caution) 30%, transparent)",
-        glassGradient:
-          "linear-gradient(145deg, color-mix(in srgb, var(--gauge-caution) 18%, var(--card)) 0%, color-mix(in srgb, var(--gauge-caution) 12%, transparent) 50%, var(--card) 100%)",
-      };
+      return `
+        radial-gradient(ellipse 100% 75% at 50% 0%,
+          color-mix(in srgb, var(--chart-3) 14%, transparent) 0%,
+          transparent 48%),
+        radial-gradient(ellipse 85% 70% at 100% 90%,
+          color-mix(in srgb, var(--gauge-caution) 10%, transparent) 0%,
+          transparent 50%)
+      `;
     case "danger":
-      return {
-        message: "목표를 넘겼어요! 내일은 가볍게 가볼까요 🔥",
-        textClass: "text-gauge-danger",
-        accent: "var(--gauge-danger)",
-        trackStroke:
-          "color-mix(in srgb, var(--gauge-danger) 45%, transparent)",
-        cardBg:
-          "color-mix(in srgb, var(--gauge-danger) 11%, var(--card))",
-        cardRing:
-          "color-mix(in srgb, var(--gauge-danger) 32%, transparent)",
-        glassGradient:
-          "linear-gradient(145deg, color-mix(in srgb, var(--gauge-danger) 20%, var(--card)) 0%, color-mix(in srgb, var(--gauge-danger) 14%, transparent) 48%, var(--card) 100%)",
-      };
+      return `
+        radial-gradient(ellipse 100% 80% at 50% 110%,
+          color-mix(in srgb, var(--gauge-danger) 18%, transparent) 0%,
+          transparent 50%),
+        radial-gradient(ellipse 90% 60% at 10% 0%,
+          color-mix(in srgb, var(--gauge-danger) 8%, transparent) 0%,
+          transparent 55%)
+      `;
   }
+}
+
+/** 목표 대비 비율 (1 초과 가능 — 링 경고용) */
+function macroRatiosOpen(
+  current: MacroTotals,
+  target: MacroTotals
+): { carb: number; protein: number; fat: number } {
+  const r = (c: number, t: number) => (t > 0.001 ? c / t : 0);
+  return {
+    carb: r(current.carbsG, target.carbsG),
+    protein: r(current.proteinG, target.proteinG),
+    fat: r(current.fatG, target.fatG),
+  };
 }
 
 export function CalorieGauge({
@@ -131,33 +137,48 @@ export function CalorieGauge({
   compact = false,
   mealCount = 0,
 }: CalorieGaugeProps) {
-  const gradId = `gg${useId().replace(/:/g, "")}`;
+  const [displayKcal, setDisplayKcal] = useState(current);
+  const kcalAnimRef = useRef(current);
+
+  useEffect(() => {
+    const from = kcalAnimRef.current;
+    const c = fmAnimate(from, current, {
+      duration: 0.55,
+      ease: [0.22, 1, 0.36, 1],
+      onUpdate: (v) => setDisplayKcal(Math.round(v)),
+    });
+    kcalAnimRef.current = current;
+    return () => c.stop();
+  }, [current]);
+
   const percentage = target > 0 ? (current / target) * 100 : 0;
-  const clampedPct = Math.min(percentage, 100);
+  const clampedCalPct = Math.min(percentage, 100);
   const zone = getCalorieZone(current, target);
-  const style = zoneStyle(zone);
-  const badge = statusBadge(zone);
-  const isDanger = zone === "danger";
+  const readout = statusReadout(zone);
+  const isDangerCal = zone === "danger";
   const isEmpty = zone === "empty";
-
-  const size = compact ? 168 : 220;
-  const strokeWidth = compact ? 11 : 14;
-  const radius = (size - strokeWidth) / 2 - (compact ? 8 : 10);
-  const cx = size / 2;
-  const cy = size / 2 + (compact ? 7 : 10);
-
-  const startAngle = Math.PI;
-  const endAngle = 0;
-  const arcLength = Math.PI * radius;
-
-  const bgArc = describeArc(cx, cy, radius, startAngle, endAngle);
-  const progressOffset = arcLength - (clampedPct / 100) * arcLength;
 
   const macroTotals: MacroTotals = macros ?? {
     carbsG: 0,
     proteinG: 0,
     fatG: 0,
   };
+  const macroTargets = useMemo(
+    () => macroGramTargetsFromCalorieTarget(target),
+    [target]
+  );
+  const macroR = useMemo(
+    () => macroRatiosOpen(macroTotals, macroTargets),
+    [macroTotals, macroTargets]
+  );
+
+  const fatHeavy = !isEmpty && isFatHeavy(macroTotals) && current > 0;
+  const fatMist =
+    fatHeavy ||
+    macroR.fat > 1 ||
+    macroR.carb > 1 ||
+    macroR.protein > 1 ||
+    isDangerCal;
 
   const nextAction = buildDashboardNextAction(
     zone,
@@ -172,125 +193,222 @@ export function CalorieGauge({
     macros
   );
 
-  const macroStrip =
-    !compact && target > 0 ? (
-      <MacroTargetMicroBars current={macroTotals} targetKcal={target} />
-    ) : null;
+  const vbW = compact ? 200 : 248;
+  const vbH = compact ? 118 : 132;
+  const cx = vbW / 2;
+  /** 중심을 살짝 아래로 — 반원이 위로 열리게 */
+  const cy = compact ? 104 : 112;
+  const stroke = compact ? 4.5 : 5.5;
+  const ringStep = stroke + (compact ? 5 : 6);
+  const rFat = compact ? 72 : 86;
+  const rProtein = rFat - ringStep;
+  const rCarb = rProtein - ringStep;
+
+  const ringMeta = [
+    {
+      key: "carb",
+      r: rCarb,
+      ratio: macroR.carb,
+      stop:
+        "color-mix(in srgb, var(--chart-1) 88%, white 12%)",
+      glow:
+        "drop-shadow(0 0 5px color-mix(in srgb, var(--chart-1) 45%, transparent))",
+    },
+    {
+      key: "protein",
+      r: rProtein,
+      ratio: macroR.protein,
+      stop:
+        "color-mix(in srgb, var(--chart-2) 88%, white 10%)",
+      glow:
+        "drop-shadow(0 0 6px color-mix(in srgb, var(--chart-2) 50%, transparent))",
+    },
+    {
+      key: "fat",
+      r: rFat,
+      ratio: macroR.fat,
+      stop:
+        "color-mix(in srgb, var(--chart-3) 85%, white 8%)",
+      glow:
+        "drop-shadow(0 0 6px color-mix(in srgb, var(--chart-3) 48%, transparent))",
+    },
+  ] as const;
+
+  const startAngle = Math.PI;
+  const endAngle = 0;
+
+  const macroBars = target > 0 &&
+    !isEmpty && [
+      {
+        k: "c",
+        ratio: Math.min(macroR.carb, 1.25),
+        over: macroR.carb > 1,
+        label: "탄",
+        fill: "bg-chart-1/90",
+        glow:
+          "shadow-[0_0_12px_color-mix(in_srgb,var(--chart-1)_40%,transparent)]",
+      },
+      {
+        k: "p",
+        ratio: Math.min(macroR.protein, 1.25),
+        over: macroR.protein > 1,
+        label: "단",
+        fill: "bg-chart-2/90",
+        glow:
+          "shadow-[0_0_12px_color-mix(in_srgb,var(--chart-2)_42%,transparent)]",
+      },
+      {
+        k: "f",
+        ratio: Math.min(macroR.fat, 1.25),
+        over: macroR.fat > 1,
+        label: "지",
+        fill: "bg-chart-3/90",
+        glow:
+          "shadow-[0_0_12px_color-mix(in_srgb,var(--chart-3)_40%,transparent)]",
+      },
+    ];
 
   return (
     <motion.div
       className={cn(
-        "rounded-3xl border shadow-lg transition-[background-color,box-shadow,backdrop-filter] duration-500",
-        "backdrop-blur-xl dark:shadow-black/20",
-        compact ? "rounded-2xl p-4" : "p-6",
-        isDanger && "animate-gauge-wobble"
+        "relative overflow-hidden rounded-[1.75rem] border transition-[box-shadow,background-color] duration-500 sm:rounded-[28px]",
+        "backdrop-blur-[12px]",
+        "bg-white/55 shadow-lg dark:bg-white/[0.07] dark:shadow-black/25",
+        "border-black/[0.06] dark:border-white/[0.1]",
+        compact ? "p-4" : "p-6"
       )}
       style={{
-        background: `${style.glassGradient}, ${style.cardBg}`,
-        backgroundBlendMode: "normal",
-        borderColor: style.cardRing,
-        boxShadow: isEmpty
-          ? `0 4px 24px -4px ${style.cardRing}`
-          : `0 4px 24px -4px ${style.cardRing}, 0 1px 0 0 rgba(255,255,255,0.5) inset`,
+        backgroundImage: `${zoneBackdrop(zone, fatMist)}, color-mix(in srgb, var(--card) 88%, transparent)`,
       }}
     >
-      <div className="flex flex-col items-center">
+      {/* 은은한 붉은 안개(초과·지방 비중) */}
+      {fatMist ? (
+        <div
+          className="pointer-events-none absolute inset-0 rounded-[inherit] opacity-90 dark:opacity-100"
+          style={{
+            background: `radial-gradient(ellipse 95% 65% at 50% 105%, color-mix(in srgb, var(--gauge-danger) 22%, transparent) 0%, transparent 58%)`,
+            boxShadow:
+              "inset 0 0 40px color-mix(in srgb, var(--gauge-danger) 8%, transparent)",
+          }}
+          aria-hidden
+        />
+      ) : null}
+
+      <div className="relative z-[1] flex flex-col items-center">
         {!compact ? (
-          <div className="mb-1 flex w-full justify-center">
+          <div className="mb-3 flex w-full flex-col items-center gap-1">
             <span
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-data text-[11px] font-bold tracking-widest",
-                badge.className
+                "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 font-data text-[11px] font-bold tracking-wide",
+                readout.badgeClass
               )}
             >
-              <span aria-hidden>{badge.emoji}</span>
-              {badge.label}
+              <span aria-hidden>{readout.emoji}</span>
+              <span className="text-center">{readout.line}</span>
+            </span>
+            <span className="text-center text-[10px] font-medium text-muted-foreground">
+              {readout.hint}
             </span>
           </div>
         ) : null}
 
-        <div className="relative">
+        <div className="relative w-full max-w-[17.5rem]">
           <svg
-            width={size}
-            height={size / 2 + (compact ? 16 : 20)}
-            viewBox={`0 0 ${size} ${size / 2 + (compact ? 24 : 30)}`}
+            width="100%"
+            height={compact ? 112 : 128}
+            viewBox={`0 0 ${vbW} ${vbH}`}
+            className="mx-auto block overflow-visible"
+            aria-hidden
           >
-            <defs>
-              <linearGradient
-                id={gradId}
-                x1="0%"
-                y1="0%"
-                x2="100%"
-                y2="0%"
-              >
-                <stop offset="0%" stopColor="var(--gauge-safe)" />
-                <stop offset="52%" stopColor="var(--gauge-caution)" />
-                <stop offset="100%" stopColor="var(--gauge-danger)" />
-              </linearGradient>
-            </defs>
-            <path
-              d={bgArc}
-              fill="none"
-              strokeWidth={strokeWidth}
-              strokeLinecap="round"
-              style={{ stroke: style.trackStroke }}
-            />
-            <motion.path
-              d={bgArc}
-              fill="none"
-              strokeWidth={strokeWidth}
-              strokeLinecap="round"
-              strokeDasharray={arcLength}
-              stroke={`url(#${gradId})`}
-              initial={{ strokeDashoffset: arcLength }}
-              animate={{ strokeDashoffset: progressOffset }}
-              transition={{ duration: 0.85, ease: "easeOut" }}
-              style={{
-                opacity: zone === "empty" ? 0.35 : 1,
-              }}
-            />
+            {ringMeta.map(({ key, r, ratio, stop, glow }) => {
+              const arc = describeArc(cx, cy, r, startAngle, endAngle);
+              const arcLen = Math.PI * r;
+              const fillPortion = Math.min(Math.max(ratio, 0), 1);
+              const offset = arcLen - fillPortion * arcLen;
+              const over = ratio > 1;
+              const dangerStroke = "var(--gauge-danger)";
+              const strokeColor = over ? dangerStroke : stop;
+              return (
+                <g key={key}>
+                  <path
+                    d={arc}
+                    fill="none"
+                    strokeWidth={stroke}
+                    strokeLinecap="round"
+                    className="transition-colors duration-300"
+                    style={{
+                      stroke: "color-mix(in srgb, var(--border) 55%, transparent)",
+                    }}
+                  />
+                  <motion.path
+                    d={arc}
+                    fill="none"
+                    strokeWidth={stroke}
+                    strokeLinecap="round"
+                    strokeDasharray={arcLen}
+                    initial={false}
+                    animate={{
+                      strokeDashoffset: isEmpty ? arcLen : offset,
+                    }}
+                    transition={{
+                      type: "spring",
+                      stiffness: 95,
+                      damping: 17,
+                      mass: 0.85,
+                    }}
+                    style={{
+                      stroke: strokeColor,
+                      filter: over
+                        ? "drop-shadow(0 0 8px color-mix(in srgb, var(--gauge-danger) 55%, transparent))"
+                        : glow,
+                    }}
+                  />
+                </g>
+              );
+            })}
           </svg>
 
           <div
             className={cn(
-              "absolute inset-0 flex flex-col items-center justify-end",
-              compact ? "pb-1" : "pb-2"
+              "pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center justify-end",
+              compact ? "pb-0" : "pb-1"
             )}
           >
             <Flame
               className={cn(
-                "mb-0.5",
-                compact ? "h-4 w-4" : "mb-1 h-5 w-5",
-                isEmpty &&
-                  "text-foreground/70 dark:text-foreground/85"
+                "mb-0.5 text-chart-3/90 dark:text-chart-3",
+                compact ? "h-4 w-4" : "h-5 w-5",
+                isEmpty && "text-muted-foreground"
               )}
-              style={!isEmpty ? { color: style.accent } : undefined}
               strokeWidth={2}
+              aria-hidden
             />
             <motion.p
               className={cn(
-                "font-data font-bold tabular-nums",
-                compact ? "text-2xl" : "text-4xl",
+                "font-data font-bold tabular-nums tracking-tight",
+                compact ? "text-2xl" : "text-[2.15rem] sm:text-4xl",
                 isEmpty
-                  ? "text-foreground/80 dark:text-foreground/90"
-                  : style.textClass
+                  ? "text-foreground/85"
+                  : isDangerCal
+                    ? "text-gauge-danger"
+                    : "text-foreground"
               )}
-              key={current}
-              initial={{ scale: 1.08, opacity: 0.85 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.28 }}
+              style={{
+                textShadow: isEmpty
+                  ? undefined
+                  : "0 0 24px color-mix(in srgb, var(--foreground) 12%, transparent)",
+              }}
             >
-              {current.toLocaleString()}
+              {displayKcal.toLocaleString()}
             </motion.p>
             <p
               className={cn(
-                compact ? "mt-0 text-[11px]" : "mt-0.5 text-xs",
-                isEmpty
-                  ? "text-foreground/65 dark:text-foreground/75"
-                  : "text-muted-foreground"
+                "font-data text-muted-foreground",
+                compact ? "text-[10px]" : "text-xs"
               )}
             >
-              / {target.toLocaleString()} kcal
+              / {target.toLocaleString()}{" "}
+              <span className="text-[0.92em] font-semibold">kcal</span>
             </p>
             {compact && current > 0 ? (
               <p className="mt-0.5 text-[10px] tabular-nums text-muted-foreground">
@@ -301,51 +419,176 @@ export function CalorieGauge({
           </div>
         </div>
 
+        {/* 코어: 수직 매크로 바 (가로로 나열) */}
+        {macroBars ? (
+          <div
+            className={cn(
+              "mt-4 flex h-[3.25rem] items-end justify-center gap-3 px-2",
+              compact && "mt-2 h-10 gap-2"
+            )}
+          >
+            {macroBars.map((b) => (
+              <div
+                key={b.k}
+                className="flex flex-col items-center gap-1"
+                title={b.label}
+              >
+                <div
+                  className={cn(
+                    "flex h-11 w-2 items-end overflow-hidden rounded-full bg-muted/70 dark:bg-muted/40",
+                    compact && "h-9 w-1.5"
+                  )}
+                >
+                  <motion.div
+                    className={cn(
+                      "w-full rounded-full",
+                      b.fill,
+                      b.over &&
+                        "bg-gauge-danger shadow-[0_0_14px_color-mix(in_srgb,var(--gauge-danger)_55%,transparent)]"
+                    )}
+                    initial={false}
+                    animate={{
+                      height: `${Math.min(b.ratio * 100, 100)}%`,
+                    }}
+                    transition={{
+                      type: "spring",
+                      stiffness: 120,
+                      damping: 16,
+                    }}
+                  />
+                </div>
+                <span className="font-data text-[9px] font-bold tabular-nums text-muted-foreground">
+                  {b.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        {/* 칼로리 에너지 바 */}
+        <div
+          className={cn(
+            "relative mt-4 w-full overflow-hidden rounded-full border border-border/50 bg-muted/45 dark:border-white/10 dark:bg-muted/30",
+            compact ? "mt-3 h-1" : "h-1.5"
+          )}
+        >
+          <motion.div
+            className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-chart-1 via-chart-2 to-chart-3"
+            initial={false}
+            animate={{
+              width: `${isEmpty ? 0 : clampedCalPct}%`,
+            }}
+            transition={{
+              type: "spring",
+              stiffness: 110,
+              damping: 18,
+            }}
+            style={{
+              boxShadow:
+                "0 0 12px color-mix(in srgb, var(--chart-2) 35%, transparent)",
+            }}
+          />
+          {!isEmpty ? <div className="gauge-energy-scan-line" /> : null}
+        </div>
+        {!compact && current > 0 ? (
+          <p className="mt-1.5 font-data text-[10px] tabular-nums text-muted-foreground">
+            일일 에너지 소진{" "}
+            <span className="font-semibold text-foreground">
+              {Math.round(percentage)}%
+            </span>
+          </p>
+        ) : null}
+
         {!compact ? (
           <motion.p
             className={cn(
-              "mt-2 text-center text-xs font-medium text-muted-foreground",
-              isEmpty
-                ? "text-foreground/80 dark:text-foreground/88"
-                : "text-muted-foreground"
+              "mt-3 text-center text-xs font-medium text-muted-foreground",
+              isEmpty && "text-foreground/80"
             )}
-            key={style.message}
+            key={readout.hint + zone}
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.28 }}
+            transition={{ type: "spring", stiffness: 280, damping: 22 }}
           >
-            {style.message}
+            {zone === "empty"
+              ? "오늘의 식단을 기록해보세요!"
+              : zone === "safe"
+                ? "좋아요! 여유 있어요 🙂"
+                : zone === "caution"
+                  ? "목표에 거의 도달했어요. 조금만 조절해요 👀"
+                  : "목표를 넘겼어요! 내일은 가볍게 가볼까요 🔥"}
           </motion.p>
         ) : null}
 
         {!compact && current > 0 ? (
-          <div className="mt-3 flex gap-6 text-xs text-muted-foreground">
+          <div className="mt-3 flex gap-6 font-data text-xs text-muted-foreground">
             <div className="text-center">
               <p
-                className="font-data text-base font-bold tabular-nums text-foreground"
-                style={{ color: zone === "empty" ? undefined : style.accent }}
+                className={cn(
+                  "text-base font-bold tabular-nums text-foreground",
+                  isDangerCal && "text-gauge-danger"
+                )}
               >
                 {Math.round(percentage)}%
               </p>
-              <p className="text-[10px]">달성률</p>
+              <p className="text-[10px] font-medium">달성률</p>
             </div>
             <div className="w-px bg-border/80" />
             <div className="text-center">
-              <p className="font-data text-base font-bold tabular-nums text-foreground">
+              <p className="text-base font-bold tabular-nums text-foreground">
                 {Math.max(target - current, 0).toLocaleString()}
               </p>
-              <p className="text-[10px]">남은 kcal</p>
+              <p className="text-[10px] font-medium">남은 kcal</p>
             </div>
           </div>
         ) : null}
 
-        {macroStrip}
-
         {!compact ? (
           <>
-            <p className="mt-4 w-full text-center text-[11px] font-medium leading-snug text-foreground">
-              {nextAction}
-            </p>
+            <div
+              className={cn(
+                "relative mt-4 w-full rounded-2xl border px-3 py-2.5 text-center",
+                fatHeavy
+                  ? "border-amber-500/35 bg-amber-500/5 shadow-[0_0_20px_color-mix(in_srgb,var(--gauge-danger)_18%,transparent)] dark:border-amber-400/30 dark:bg-amber-500/10"
+                  : "border-border/60 bg-white/25 dark:border-white/[0.08] dark:bg-white/[0.04]"
+              )}
+            >
+              {fatHeavy ? (
+                <div
+                  className="pointer-events-none absolute inset-0 rounded-2xl opacity-80"
+                  style={{
+                    boxShadow:
+                      "inset 0 0 22px color-mix(in srgb, var(--gauge-danger) 12%, transparent)",
+                  }}
+                  aria-hidden
+                />
+              ) : null}
+              <p
+                className={cn(
+                  "relative z-[1] flex items-start justify-center gap-1.5 text-[11px] font-semibold leading-snug",
+                  fatHeavy
+                    ? "text-amber-700 dark:text-amber-300"
+                    : "text-foreground"
+                )}
+                style={
+                  fatHeavy
+                    ? {
+                        textShadow:
+                          "0 0 12px color-mix(in srgb, var(--chart-3) 45%, transparent)",
+                      }
+                    : undefined
+                }
+              >
+                {fatHeavy ? (
+                  <TriangleAlert
+                    className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400"
+                    strokeWidth={2.25}
+                    aria-hidden
+                  />
+                ) : null}
+                <span>{nextAction}</span>
+              </p>
+            </div>
             <p className="mt-2 w-full text-center text-[10px] leading-relaxed text-muted-foreground">
               {liveSignal}
             </p>

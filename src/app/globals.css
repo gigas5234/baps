@@ -225,6 +225,79 @@
   animation: gauge-wobble 0.45s ease-in-out infinite;
 }
 
+/* 영양 지표 히어로: 한도 초과 시 아주 미세한 HUD 글리치 */
+@keyframes gauge-hud-glitch {
+  0%,
+  100% {
+    clip-path: inset(0 0 0 0);
+    transform: translate(0, 0);
+  }
+  15% {
+    clip-path: inset(0 3% 0 0);
+    transform: translate(-0.75px, 0.25px);
+  }
+  35% {
+    clip-path: inset(0 0 2% 1%);
+    transform: translate(0.75px, -0.25px);
+  }
+  55% {
+    clip-path: inset(1% 0 0 1%);
+    transform: translate(-0.5px, 0);
+  }
+  75% {
+    clip-path: inset(0 1% 0 2%);
+    transform: translate(0.5px, 0.35px);
+  }
+}
+
+.animate-gauge-hud-glitch {
+  animation: gauge-hud-glitch 2.8s steps(2, end) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-gauge-hud-glitch {
+    animation: none;
+    clip-path: none;
+    transform: none;
+  }
+}
+
+/* 칼로리 에너지 바 스캔 하이라이트 */
+@keyframes gauge-energy-scan {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateX(220%);
+    opacity: 0;
+  }
+}
+
+.gauge-energy-scan-line {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 36%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--foreground) 35%, transparent),
+    transparent
+  );
+  pointer-events: none;
+  animation: gauge-energy-scan 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gauge-energy-scan-line {
+    animation: none;
+    display: none;
+  }
+}
+
 /* Landing hero: analysis HUD & CTA ring */
 @keyframes landing-scan-beam {
   0% {
