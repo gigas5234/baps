@@ -59,7 +59,7 @@ export function QuickLogSlider({
           {[1, 2, 3].map((k) => (
             <div
               key={k}
-              className="h-[4.25rem] min-w-[9.5rem] shrink-0 rounded-2xl bg-muted animate-pulse"
+              className="h-[4.25rem] min-w-[9.5rem] shrink-0 rounded-xl bg-muted animate-pulse"
             />
           ))}
         </div>
@@ -83,8 +83,8 @@ export function QuickLogSlider({
         <button
           type="button"
           onClick={onAddFrequent ?? onOpenManual}
-          className={cn(
-            "flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-4 py-8",
+            className={cn(
+              "flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-8",
             "border-muted-foreground/30 bg-transparent transition-colors",
             "hover:border-primary/45 hover:bg-primary/5",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
@@ -126,7 +126,7 @@ export function QuickLogSlider({
           >
             <Pencil className="h-4 w-4 text-muted-foreground" aria-hidden />
             {onAddFrequent != null
-              ? "자주 먹는 메뉴 등록하기"
+              ? "자주 먹는 메뉴 등록"
               : "수동 입력"}
           </button>
         </div>
@@ -164,7 +164,7 @@ export function QuickLogSlider({
               disabled={busy}
               onClick={() => onPick(m)}
               className={cn(
-                "group relative flex min-w-[9.75rem] max-w-[11rem] shrink-0 snap-start items-center gap-2.5 rounded-2xl border border-border bg-card px-3 py-2.5 text-left shadow-sm",
+                "group relative flex min-w-[9.75rem] max-w-[11rem] shrink-0 snap-start items-center gap-2.5 rounded-xl border border-border bg-card px-3 py-2.5 text-left shadow-sm",
                 "transition-[transform,box-shadow,border-color] active:scale-[0.98]",
                 "hover:border-primary/35 hover:shadow-md hover:shadow-primary/8",
                 "disabled:pointer-events-none disabled:opacity-55",
@@ -190,7 +190,7 @@ export function QuickLogSlider({
                       }
                     }}
                     className={cn(
-                      "flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg",
+                      "flex h-7 w-7 cursor-pointer items-center justify-center rounded-xl",
                       "border border-border/80 bg-background/90 text-muted-foreground shadow-sm",
                       "transition-colors hover:border-destructive/45 hover:text-destructive",
                       "dark:border-white/12 dark:bg-zinc-900/95"

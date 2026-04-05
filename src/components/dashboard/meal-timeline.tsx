@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   DndContext,
@@ -154,12 +155,134 @@ function MealSlotSurface({
     <div
       ref={setNodeRef}
       className={cn(
-        "rounded-2xl transition-[box-shadow,background-color,min-height] duration-300 ease-in-out",
+        "rounded-xl transition-[box-shadow,background-color,min-height] duration-300 ease-in-out",
         isOver &&
           "bg-primary/8 ring-2 ring-primary/40 ring-offset-2 ring-offset-background"
       )}
     >
       {children}
+    </div>
+  );
+}
+
+/** 같은 슬롯에 트레이가 여러 개일 때 가로 스냅·인디케이터로 모두 접근 가능하게 */
+function MealTrayStrip({
+  slot,
+  trays,
+  renderTray,
+}: {
+  slot: MealSlot;
+  trays: Meal[][];
+  renderTray: (tray: Meal[], slot: MealSlot) => ReactNode;
+}) {
+  const scrollerRef = useRef<HTMLUListElement>(null);
+  const [dotIdx, setDotIdx] = useState(0);
+  const multi = trays.length > 1;
+
+  const updateDot = useCallback(() => {
+    const root = scrollerRef.current;
+    if (!root) return;
+    const items = root.querySelectorAll<HTMLElement>("[data-tray-slide]");
+    if (items.length === 0) return;
+    const rootRect = root.getBoundingClientRect();
+    const center = rootRect.left + rootRect.width / 2;
+    let best = 0;
+    let bestDelta = Infinity;
+    items.forEach((el, i) => {
+      const r = el.getBoundingClientRect();
+      const c = r.left + r.width / 2;
+      const d = Math.abs(c - center);
+      if (d < bestDelta) {
+        bestDelta = d;
+        best = i;
+      }
+    });
+    setDotIdx(best);
+  }, []);
+
+  useEffect(() => {
+    const root = scrollerRef.current;
+    if (!root) return;
+    updateDot();
+    root.addEventListener("scroll", updateDot, { passive: true });
+    window.addEventListener("resize", updateDot);
+    return () => {
+      root.removeEventListener("scroll", updateDot);
+      window.removeEventListener("resize", updateDot);
+    };
+  }, [trays.length, updateDot]);
+
+  return (
+    <div className="space-y-2">
+      <ul
+        ref={scrollerRef}
+        className={cn(
+          "flex list-none gap-3 overflow-x-auto overscroll-x-contain pb-1 pl-0.5 pr-2 scrollbar-hide",
+          "snap-x snap-mandatory scroll-pl-1 sm:scroll-pl-0.5",
+          multi ? "pt-0.5" : ""
+        )}
+        role="list"
+      >
+        {trays.map((tray) => (
+          <li
+            key={tray[0]?.meal_group_id ?? tray[0]?.id}
+            data-tray-slide
+            className={cn(
+              "snap-center shrink-0",
+              multi
+                ? "w-[min(86vw,15.85rem)] sm:w-[15.25rem]"
+                : "w-full min-w-0 max-w-[20rem]"
+            )}
+          >
+            <motion.div
+              layout
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className={cn(multi && "max-sm:origin-top max-sm:scale-[0.98]")}
+            >
+              {renderTray(tray, slot)}
+            </motion.div>
+          </li>
+        ))}
+      </ul>
+      {multi ? (
+        <div className="flex flex-col items-center gap-1 px-1">
+          <div
+            className="flex items-center gap-2"
+            role="tablist"
+            aria-label={`${MEAL_SLOT_SECTION[slot].title} 슬롯 기록 선택`}
+          >
+            {trays.map((tray, i) => (
+              <button
+                key={tray[0]?.meal_group_id ?? `tab-${i}`}
+                type="button"
+                role="tab"
+                aria-selected={i === dotIdx}
+                className={cn(
+                  "h-2 rounded-full transition-all duration-200",
+                  i === dotIdx
+                    ? "w-6 bg-primary"
+                    : "w-2 bg-muted-foreground/30 hover:bg-muted-foreground/50"
+                )}
+                onClick={() => {
+                  const root = scrollerRef.current;
+                  const slide = root?.querySelectorAll<HTMLElement>(
+                    "[data-tray-slide]"
+                  )[i];
+                  slide?.scrollIntoView({
+                    behavior: "smooth",
+                    inline: "center",
+                    block: "nearest",
+                  });
+                }}
+              />
+            ))}
+          </div>
+          <p className="text-[10px] font-medium tabular-nums text-muted-foreground">
+            {dotIdx + 1}번째 기록 · 총 {trays.length}개 · 옆으로 넘기기
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -245,7 +368,7 @@ export function MealTimeline({
 
   if (meals.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-muted-foreground/20 py-12 text-muted-foreground">
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-muted-foreground/20 py-12 text-muted-foreground">
         <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
           <UtensilsCrossed className="h-7 w-7" />
         </div>
@@ -271,11 +394,43 @@ export function MealTimeline({
     const busy = isDeletingGroupId === groupId;
     const img = tray.find((m) => m.image_url?.trim())?.image_url ?? null;
     const meta = MEAL_SLOT_SECTION[slot];
+    const carbsG = tray.reduce((s, m) => s + (Number(m.carbs) || 0), 0);
+    const proteinG = tray.reduce((s, m) => s + (Number(m.protein) || 0), 0);
+    const fatG = tray.reduce((s, m) => s + (Number(m.fat) || 0), 0);
+
+    const macroPills = (
+      <div className="mt-1 flex flex-wrap gap-1.5">
+        <span
+          className={cn(
+            "rounded-lg border border-primary/30 bg-primary/10 px-1.5 py-0.5 font-data text-[11px] font-semibold tabular-nums text-primary",
+            "dark:border-primary/35 dark:bg-primary/15"
+          )}
+        >
+          탄 {carbsG}g
+        </span>
+        <span
+          className={cn(
+            "rounded-lg border border-scanner/35 bg-scanner/10 px-1.5 py-0.5 font-data text-[11px] font-semibold tabular-nums text-scanner",
+            "dark:border-scanner/40 dark:bg-scanner/15"
+          )}
+        >
+          단 {proteinG}g
+        </span>
+        <span
+          className={cn(
+            "rounded-lg border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 font-data text-[11px] font-semibold tabular-nums text-amber-800",
+            "dark:border-amber-400/40 dark:bg-amber-400/12 dark:text-amber-200"
+          )}
+        >
+          지 {fatG}g
+        </span>
+      </div>
+    );
 
     const inner = (
       <div
         className={cn(
-          "relative rounded-2xl border p-3 pr-10 shadow-sm transition-[box-shadow,border-color]",
+          "relative rounded-xl border p-3 pr-10 shadow-sm transition-[box-shadow,border-color]",
           night
             ? "border-red-500/35 bg-card shadow-[0_0_20px_-4px_rgba(239,68,68,0.42)] dark:border-red-400/28 dark:shadow-[0_0_22px_-4px_rgba(248,113,113,0.35)]"
             : "border-border bg-card",
@@ -289,7 +444,7 @@ export function MealTimeline({
             onPointerDown={(e) => e.stopPropagation()}
             onClick={() => onDeleteMealGroup(groupId)}
             className={cn(
-              "absolute right-2 top-2 rounded-lg p-1.5 text-muted-foreground/40 transition-colors hover:bg-destructive/12 hover:text-destructive",
+              "absolute right-2 top-2 rounded-xl p-1.5 text-muted-foreground/40 transition-colors hover:bg-destructive/12 hover:text-destructive",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             )}
             aria-label="이 끼니 기록 전체 삭제"
@@ -344,19 +499,18 @@ export function MealTimeline({
                 : tray[0].food_name}
             </p>
             {multi ? (
-              <ul className="mt-1.5 space-y-0.5 text-[11px] text-muted-foreground">
-                {tray.map((m) => (
-                  <li key={m.id} className="tabular-nums">
-                    • {m.food_name} ({m.cal}kcal)
-                  </li>
-                ))}
-              </ul>
+              <>
+                {macroPills}
+                <ul className="mt-1.5 space-y-0.5 text-[11px] text-muted-foreground">
+                  {tray.map((m) => (
+                    <li key={m.id} className="tabular-nums">
+                      • {m.food_name} ({m.cal}kcal)
+                    </li>
+                  ))}
+                </ul>
+              </>
             ) : (
-              <div className="mt-1 flex flex-wrap gap-x-2 font-data text-[11px] font-semibold tabular-nums text-foreground/85">
-                <span>탄 {Number(tray[0].carbs)}g</span>
-                <span>단 {Number(tray[0].protein)}g</span>
-                <span>지 {Number(tray[0].fat)}g</span>
-              </div>
+              macroPills
             )}
           </div>
         </div>
@@ -414,22 +568,11 @@ export function MealTimeline({
           selectedDateYmd={selectedDateYmd}
         >
           {list.length === 0 ? null : (
-            <ul
-              className="flex list-none gap-2.5 overflow-x-auto pb-1 pl-0.5 pr-1 scrollbar-hide"
-              role="list"
-            >
-              {list.map((tray) => (
-                <motion.li
-                  key={tray[0]?.meal_group_id ?? tray[0]?.id}
-                  layout
-                  className="w-[min(100%,20rem)] min-w-[min(100%,18.5rem)] shrink-0 sm:min-w-[18.5rem]"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                >
-                  {renderTrayCard(tray, slot, { drag: true })}
-                </motion.li>
-              ))}
-            </ul>
+            <MealTrayStrip
+              slot={slot}
+              trays={list}
+              renderTray={(tray) => renderTrayCard(tray, slot, { drag: true })}
+            />
           )}
         </MealSlotSurface>
       </motion.div>
@@ -456,7 +599,7 @@ export function MealTimeline({
       {timelineBody}
       <DragOverlay dropAnimation={null}>
         {activeTray && activeTray[0] ? (
-          <div className="w-[min(100%,20rem)] scale-[1.02] shadow-xl">
+          <div className="w-[min(100%,16.25rem)] scale-[1.02] shadow-xl">
             {renderTrayCard(activeTray, activeFromSlot ?? slotForTray(activeTray), {
               drag: false,
             })}
