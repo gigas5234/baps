@@ -209,7 +209,9 @@ export async function POST(request: Request) {
             prompt: "물 섭취가 목표 대비 얼마나 부족한지 말해줘.",
           },
         ],
-      } satisfies CoachChatReply);
+      } satisfies CoachChatReply,
+        { status: 503 }
+      );
     }
   } catch (error) {
     console.error("Chat route error:", error);
