@@ -8,6 +8,10 @@ import {
   macroCaloriePercents,
   macroKcalBreakdown,
 } from "@/lib/meal-macros";
+import {
+  FAT_SWAP_CHIPS,
+  PROTEIN_BOOST_CHIPS,
+} from "@/lib/macro-alternative-chips";
 
 interface MacroMiniBarsProps {
   macros: MacroTotals;
@@ -68,14 +72,40 @@ export function MacroMiniBars({ macros, totalMealCalories }: MacroMiniBarsProps)
         <span className="text-foreground/80">(섭취 kcal 비중)</span>
       </p>
       {fatWarn ? (
-        <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
-          지방 비중이 높아요 · 가공육·튀김 한 번 체크
-        </p>
+        <div className="space-y-2">
+          <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
+            지방 비중이 높아요 · 가공육·튀김 한 번 체크
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {FAT_SWAP_CHIPS.map((c) => (
+              <span
+                key={c.label}
+                className="inline-flex items-center gap-0.5 rounded-full border border-amber-500/35 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-900 dark:border-amber-400/40 dark:bg-amber-500/12 dark:text-amber-100"
+              >
+                <span aria-hidden>{c.emoji}</span>
+                {c.label}
+              </span>
+            ))}
+          </div>
+        </div>
       ) : null}
       {proteinWarn ? (
-        <p className="text-[11px] font-medium text-primary dark:text-primary">
-          단백질이 조금 부족해 보여요
-        </p>
+        <div className="space-y-2">
+          <p className="text-[11px] font-medium text-primary dark:text-primary">
+            단백질이 조금 부족해 보여요
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {PROTEIN_BOOST_CHIPS.map((c) => (
+              <span
+                key={c.label}
+                className="inline-flex items-center gap-0.5 rounded-full border border-primary/35 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary dark:bg-primary/15 dark:text-primary"
+              >
+                <span aria-hidden>{c.emoji}</span>
+                {c.label}
+              </span>
+            ))}
+          </div>
+        </div>
       ) : null}
       <ul className="list-none space-y-2.5 p-0" role="list">
         {rows.map((r) => (

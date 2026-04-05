@@ -71,6 +71,8 @@ import { normalizeWaterCupMl } from "@/lib/water-cup";
 import { createClient } from "@/lib/supabase-browser";
 import { ThemeToggleIcons } from "@/components/theme-toggle-icons";
 import { cn } from "@/lib/utils";
+import { useWaterTopBarNudge } from "@/hooks/use-water-topbar-nudge";
+import { touchWaterLastAdjust } from "@/lib/water-reminder-storage";
 
 interface AnalyzeResult {
   food_name: string;
@@ -211,6 +213,15 @@ export default function HomePage() {
     [waterRecommendedMl, cupMl]
   );
 
+  const showWaterTopBarNudge = useWaterTopBarNudge({
+    userId,
+    selectedDate,
+    mealCount: meals.length,
+    waterCups: waterLog?.cups ?? 0,
+    cupMl,
+    recommendedMl: waterRecommendedMl,
+  });
+
   const showDashboardSkeleton =
     authLoading ||
     (!!userId &&
@@ -266,6 +277,9 @@ export default function HomePage() {
         { currentCups: cur, delta },
         {
           onSuccess: (newCups) => {
+            if (userId) {
+              touchWaterLastAdjust(userId, selectedDateRef.current);
+            }
             if (delta > 0 && tc > 0 && newCups >= tc && cur < tc) {
               void requestMainInsight("water_goal");
             }
@@ -273,7 +287,7 @@ export default function HomePage() {
         }
       );
     },
-    [adjustWater, waterLog?.cups, waterTargetCups, requestMainInsight]
+    [adjustWater, waterLog?.cups, waterTargetCups, requestMainInsight, userId]
   );
 
   useEffect(() => {
@@ -337,7 +351,7 @@ export default function HomePage() {
     const ro = new ResizeObserver(sync);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [topBarCompact, userId]);
+  }, [topBarCompact, userId, showWaterTopBarNudge]);
 
   useEffect(() => {
     const THRESHOLD = 32;
@@ -814,6 +828,14 @@ export default function HomePage() {
             </>
           )}
           </div>
+          {showWaterTopBarNudge ? (
+            <p
+              className="px-4 pb-1.5 pt-0 text-center text-[10px] font-medium leading-snug text-sky-700/75 dark:text-sky-400/55"
+              role="status"
+            >
+              💧 수분 보충이 필요한 시간입니다
+            </p>
+          ) : null}
           <div
             className="pointer-events-none absolute bottom-0 left-0 right-0 z-[1] h-px overflow-hidden"
             aria-hidden
