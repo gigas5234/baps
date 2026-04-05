@@ -430,9 +430,11 @@ export function ChatFab({
     };
   }, [isOpen, messages.length, coachPersona, selectedDate]);
 
-  /** 유저 턴 없이 코칭만 바꿀 때 opening 재생성 */
+  /** 유저 턴 없이 코칭만 바꿀 때 opening·빠른 요청 재생성.
+   * bootLoading 을 의존성/가드에 넣으면 setBootLoading(true) 직후 effect가 재실행되며
+   * 이전 fetch cleanup 으로 요청이 취소되는 버그가 난다. */
   useEffect(() => {
-    if (!isOpen || bootLoading || isLoading) return;
+    if (!isOpen || isLoading) return;
     const m = messagesRef.current;
     const onlyOpening =
       m.length === 1 && m[0].is_ai && !m[0].coachTurn;
@@ -527,7 +529,7 @@ export function ChatFab({
     return () => {
       cancelled = true;
     };
-  }, [coachPersona, isOpen, bootLoading, isLoading, selectedDate]);
+  }, [coachPersona, isOpen, isLoading, selectedDate]);
 
   /**
    * @param source chip | card — 입력창을 거치지 않고 곧바로 API만 호출. 보내기 버튼은 직접 입력용.
@@ -846,7 +848,7 @@ export function ChatFab({
               <CoachPersonaPicker
                 value={coachPersona}
                 onChange={setCoachPersona}
-                disabled={isLoading}
+                disabled={isLoading || bootLoading}
               />
               <QuickChipRow
                 chips={quickChips}

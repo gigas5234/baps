@@ -295,10 +295,10 @@ export function FrequentMealEditorModal({
                 type="number"
                 inputMode="numeric"
                 min={0}
-                placeholder="대표 식비 — 퀵 로그 시 기본 적용"
+                placeholder="예: 8000 (비우면 미적용)"
                 value={priceWonInput}
                 onChange={(e) => setPriceWonInput(e.target.value)}
-                className="font-data w-full rounded-xl border px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full rounded-xl border px-4 py-3 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
 

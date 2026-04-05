@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, Minus, Pencil, Plus, Sparkles } from "lucide-react";
+import { Camera, Minus, Pencil, Plus, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { foodEmojiForName } from "@/lib/food-emoji";
 import type { FrequentMeal } from "@/types/database";
@@ -72,7 +72,7 @@ export function QuickLogSlider({
       <section className="px-4 pb-[1.4rem] pt-[1.05rem]">
         <div className="mb-[1.05rem] flex items-center justify-between gap-2 pr-1">
           <h2 className="flex min-w-0 items-center gap-2 text-lg font-bold tracking-tight text-foreground">
-            <Sparkles
+            <Zap
               className="h-6 w-6 shrink-0 text-primary"
               strokeWidth={2}
               aria-hidden
@@ -137,7 +137,7 @@ export function QuickLogSlider({
     <section className="px-4 pb-[1.05rem] pt-[1.05rem]">
       <div className="mb-[1.05rem] flex items-center justify-between gap-2 pr-1">
         <h2 className="flex min-w-0 items-center gap-2 text-lg font-bold tracking-tight text-foreground">
-          <Sparkles
+          <Zap
             className="h-6 w-6 shrink-0 text-primary"
             strokeWidth={2}
             aria-hidden
