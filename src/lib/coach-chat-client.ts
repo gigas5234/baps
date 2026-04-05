@@ -3,6 +3,30 @@ import {
   parseCoachDelimitedStream,
 } from "@/lib/coach-delimited-stream";
 import { parseCoachJson } from "@/lib/coach-json-parse";
+import { mealUtcBoundsForCoachApi } from "@/lib/local-date";
+
+const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function enrichCoachChatBody(
+  body: Record<string, unknown>
+): Record<string, unknown> {
+  const raw =
+    typeof body.date === "string" ? body.date.trim() : "";
+  const date = YMD_RE.test(raw) ? raw : null;
+  const tz =
+    typeof Intl !== "undefined"
+      ? Intl.DateTimeFormat().resolvedOptions().timeZone
+      : undefined;
+
+  const next = { ...body };
+  if (date && next.meal_utc_bounds == null) {
+    next.meal_utc_bounds = mealUtcBoundsForCoachApi(date);
+  }
+  if (next.time_zone == null && tz) {
+    next.time_zone = tz;
+  }
+  return next;
+}
 
 export type CoachApiResult =
   | { ok: true; status: number; data: unknown }
@@ -22,11 +46,12 @@ export async function postCoachChat(
   opts?: PostCoachChatOptions
 ): Promise<CoachApiResult> {
   const isBootstrap = body.bootstrap === true;
+  const payload = enrichCoachChatBody(body);
 
   const res = await fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify(payload),
   });
 
   const ct = res.headers.get("content-type") ?? "";

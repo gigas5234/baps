@@ -3,7 +3,11 @@ import { NextResponse } from "next/server";
 
 export const maxDuration = 60;
 import { getAuthenticatedSupabaseUser } from "@/lib/api-auth";
-import { buildCoachApiContext, isValidApiDate } from "@/lib/chat-context-server";
+import {
+  buildCoachApiContext,
+  isValidApiDate,
+  type MealUtcBounds,
+} from "@/lib/chat-context-server";
 import {
   fallbackBootstrap,
   emptyDataCard,
@@ -19,6 +23,31 @@ import { pickInterventionGuestsForChat } from "@/lib/coach-intervention-triggers
 
 const MAX_USER_MESSAGE_CHARS = 8_000;
 const MAX_HISTORY_LINE_CHARS = 6_000;
+
+function parseMealUtcBounds(
+  body: Record<string, unknown>
+): MealUtcBounds | null {
+  const b = body.meal_utc_bounds;
+  if (!b || typeof b !== "object") return null;
+  const o = b as Record<string, unknown>;
+  const range_start =
+    typeof o.range_start === "string" ? o.range_start.trim() : "";
+  const day_start =
+    typeof o.day_start === "string" ? o.day_start.trim() : "";
+  const day_end = typeof o.day_end === "string" ? o.day_end.trim() : "";
+  if (!range_start || !day_start || !day_end) return null;
+  return { range_start, day_start, day_end };
+}
+
+function parseTimeZone(body: Record<string, unknown>): string | null {
+  const t =
+    typeof body.time_zone === "string"
+      ? body.time_zone.trim()
+      : typeof (body as { timeZone?: unknown }).timeZone === "string"
+        ? String((body as { timeZone: string }).timeZone).trim()
+        : "";
+  return t || null;
+}
 
 function parseLocalHourHint(body: Record<string, unknown>): number | undefined {
   const lh =
@@ -81,7 +110,9 @@ export async function POST(request: Request) {
       supabase,
       user.id,
       date,
-      parseLocalHourHint(body)
+      parseLocalHourHint(body),
+      parseMealUtcBounds(body),
+      parseTimeZone(body)
     );
     if (!ctx) {
       return NextResponse.json(

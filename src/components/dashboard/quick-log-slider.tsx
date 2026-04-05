@@ -49,8 +49,8 @@ export function QuickLogSlider({
 
   if (isLoading) {
     return (
-      <section className="px-4 pb-2 pt-1">
-        <div className="mb-2 flex items-center justify-between gap-2 pr-1">
+      <section className="px-4 pb-3 pt-3">
+        <div className="mb-3 flex items-center justify-between gap-2 pr-1">
           <div className="h-4 w-36 rounded bg-muted animate-pulse" />
           <div className="h-8 w-8 shrink-0 rounded-xl bg-muted animate-pulse" />
         </div>
@@ -68,8 +68,8 @@ export function QuickLogSlider({
 
   if (visible.length === 0) {
     return (
-      <section className="px-4 pb-3 pt-1">
-        <div className="mb-2 flex items-center justify-between gap-2 pr-1">
+      <section className="px-4 pb-4 pt-3">
+        <div className="mb-3 flex items-center justify-between gap-2 pr-1">
           <h2 className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-foreground">
             <Sparkles className="h-4 w-4 shrink-0 text-primary" aria-hidden />
             퀵 로그 · 자주 찾는 식단
@@ -129,9 +129,9 @@ export function QuickLogSlider({
   }
 
   return (
-    <section className="px-4 pb-2 pt-1">
-      <div className="mb-2 flex items-center justify-between gap-2 pr-1">
-        <h2 className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-muted-foreground">
+    <section className="px-4 pb-3 pt-3">
+      <div className="mb-3 flex items-center justify-between gap-2 pr-1">
+        <h2 className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-foreground">
           <Sparkles className="h-4 w-4 shrink-0 text-primary" aria-hidden />
           퀵 로그 · 자주 찾는 식단
         </h2>

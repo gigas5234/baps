@@ -711,20 +711,20 @@ export function ChatFab({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            className="fixed inset-0 z-50 flex max-h-[100dvh] flex-col overflow-hidden bg-[#1b1d20] text-zinc-100 overscroll-none touch-pan-y"
+            className="fixed inset-0 z-50 flex max-h-[100dvh] flex-col overflow-hidden bg-background text-foreground overscroll-none touch-pan-y"
           >
-            <div className="flex items-center justify-between border-b border-zinc-800/90 bg-[#1b1d20] px-4 py-3">
+            <div className="flex items-center justify-between border-b border-border bg-background px-4 py-3">
               <div>
-                <h2 className="text-base font-bold text-zinc-100">감시 단톡</h2>
-                <p className="text-[9px] font-medium text-zinc-500">
+                <h2 className="text-base font-bold text-foreground">감시 단톡</h2>
+                <p className="text-[9px] font-medium text-muted-foreground">
                   카톡형 코칭 · 아래 추천 질문은 말풍선 밖 템플릿
                 </p>
-                <p className="mt-0.5 text-[10px] font-medium text-indigo-300">
+                <p className="mt-0.5 text-[10px] font-medium text-primary">
                   {coachMeta(coachPersona).emoji}{" "}
                   {coachMeta(coachPersona).label} 코치 ·{" "}
                   {coachMeta(coachPersona).description}
                 </p>
-                <p className="text-[10px] text-zinc-500">
+                <p className="text-[10px] text-muted-foreground">
                   오늘 {totalCal}kcal · 목표 {targetCal}kcal · 단백{" "}
                   {Math.round(macros.proteinG)}g ·{" "}
                   {formatKoreanChatTime(new Date())}
@@ -733,17 +733,17 @@ export function ChatFab({
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="rounded-full p-2 text-zinc-300 hover:bg-zinc-800"
+                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 aria-label="닫기"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 touch-pan-y space-y-3 overflow-y-auto overscroll-y-contain bg-[#1b1d20] p-4">
+            <div className="min-h-0 flex-1 touch-pan-y space-y-3 overflow-y-auto overscroll-y-contain bg-background p-4">
               {bootLoading && messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center gap-2 px-3 pt-16 text-sm text-zinc-500">
-                  <Loader2 className="h-6 w-6 animate-spin text-indigo-400" />
+                <div className="flex flex-col items-center justify-center gap-2 px-3 pt-16 text-sm text-muted-foreground">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
                   <span>코치가 데이터 보고 입 열 준비 중…</span>
                 </div>
               ) : null}
@@ -772,7 +772,7 @@ export function ChatFab({
                             {formatInlineBold(msg.message, "bubble")}
                           </span>
                         </div>
-                        <span className="mt-2 shrink-0 self-start text-[10px] tabular-nums text-zinc-500">
+                        <span className="mt-2 shrink-0 self-start text-[10px] tabular-nums text-muted-foreground">
                           {formatKoreanChatTime(receivedAt)}
                         </span>
                       </div>
@@ -816,33 +816,39 @@ export function ChatFab({
               })}
 
               {isLoading ? (
-                <div className="flex items-center gap-2 text-sm text-zinc-500">
-                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-indigo-400" />
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
                   <span>팩트 장전 중…</span>
                 </div>
               ) : null}
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="border-t border-zinc-800 bg-[#121316] pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <div className="border-t border-border bg-card pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               <button
                 type="button"
                 onClick={() => setAccessoryExpanded((e) => !e)}
-                className="flex w-full items-center justify-between gap-2 border-b border-zinc-800/80 px-3 py-2 text-left text-zinc-400 transition-colors hover:bg-zinc-900/80"
+                className="flex w-full items-center justify-between gap-2 border-b border-border px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-muted/70"
                 aria-expanded={accessoryExpanded}
               >
-                <span className="text-[11px] font-semibold text-zinc-400">
+                <span className="text-[11px] font-semibold text-muted-foreground">
                   담당 코치 · 추천 질문{" "}
                   {quickChips.length > 0 ? (
-                    <span className="font-normal text-zinc-500">
+                    <span className="font-normal text-muted-foreground/85">
                       ({quickChips.length})
                     </span>
                   ) : null}
                 </span>
                 {accessoryExpanded ? (
-                  <ChevronDown className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
+                  <ChevronDown
+                    className="h-4 w-4 shrink-0 text-muted-foreground"
+                    aria-hidden
+                  />
                 ) : (
-                  <ChevronUp className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
+                  <ChevronUp
+                    className="h-4 w-4 shrink-0 text-muted-foreground"
+                    aria-hidden
+                  />
                 )}
               </button>
               {accessoryExpanded ? (

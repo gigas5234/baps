@@ -7,6 +7,7 @@ import type {
   WaterLog,
 } from "@/types/database";
 import type { WeightEntry } from "@/lib/weight-local-storage";
+import { localYmdToUtcRangeIso } from "@/lib/local-date";
 
 function getSupabase() {
   return createClient();
@@ -40,15 +41,14 @@ export function useMeals(userId: string | undefined, date: string) {
     queryKey: ["meals", userId, date],
     queryFn: async () => {
       if (!userId) return [];
-      const startOfDay = `${date}T00:00:00`;
-      const endOfDay = `${date}T23:59:59`;
+      const { start, end } = localYmdToUtcRangeIso(date);
 
       const { data, error } = await getSupabase()
         .from("meals")
         .select("*")
         .eq("user_id", userId)
-        .gte("created_at", startOfDay)
-        .lte("created_at", endOfDay)
+        .gte("created_at", start)
+        .lte("created_at", end)
         .order("created_at", { ascending: true });
 
       if (error) throw error;

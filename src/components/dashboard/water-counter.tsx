@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Minus, Plus } from "lucide-react";
+import { Droplets, Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { WaterBottleVisual } from "@/components/dashboard/water-bottle-visual";
 
@@ -85,13 +85,22 @@ export function WaterCounter({
           "dark:border-white/10 dark:bg-card/40"
         )}
       >
-        <p className="text-center text-xs font-semibold leading-tight text-foreground">
-          물 섭취
-        </p>
-        <p className="text-[10px] text-center text-muted-foreground tabular-nums">
-          {safeTarget}잔 · {goalMl.toLocaleString()}ml
-        </p>
-        <div className="mt-1 flex min-h-0 flex-1 flex-col items-stretch justify-between gap-2 px-0.5">
+        <div className="flex items-start gap-1.5 px-0.5 pb-1.5">
+          <Droplets
+            className="h-4 w-4 shrink-0 text-primary"
+            strokeWidth={2}
+            aria-hidden
+          />
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold leading-tight tracking-tight text-foreground">
+              물 섭취
+            </h3>
+            <p className="mt-0.5 text-[11px] text-muted-foreground tabular-nums">
+              {safeTarget}잔 · {goalMl.toLocaleString()}ml
+            </p>
+          </div>
+        </div>
+        <div className="mt-0.5 flex min-h-0 flex-1 flex-col items-stretch justify-between gap-2 px-0.5">
           <div className="flex min-h-[11rem] flex-1 flex-col items-center justify-center">
             <WaterBottleVisual
               progress={fillProgress}
@@ -140,11 +149,11 @@ export function WaterCounter({
               <Plus className="h-4 w-4 stroke-[2.5]" aria-hidden />
             </button>
           </div>
-          <p className="text-[9px] leading-tight text-muted-foreground">
+          <p className="text-[11px] leading-snug text-muted-foreground">
             {totalMl}ml · 권장 {recommendedMl.toLocaleString()}ml
           </p>
           {readOnly ? (
-            <p className="text-[9px] text-muted-foreground">로그인 후 기록</p>
+            <p className="text-[11px] text-muted-foreground">로그인 후 기록</p>
           ) : null}
         </div>
 

@@ -29,7 +29,7 @@ function formatInlineBold(
 ): ReactNode {
   const strongCls =
     variant === "bubble"
-      ? "font-semibold text-zinc-900 tabular-nums"
+      ? "font-semibold text-foreground tabular-nums dark:text-zinc-900"
       : "font-bold text-rose-700 tabular-nums dark:text-rose-300";
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, i) => {
@@ -132,7 +132,7 @@ export function SingleKakaoCoachRow({
   children: ReactNode;
 }) {
   return (
-    <div className="flex max-w-[min(100%,20.5rem)] items-end gap-1.5">
+    <div className="flex max-w-[min(100%,20.5rem)] items-start gap-1.5">
       <div
         className={cn(
           "flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-full text-[15px]",
@@ -143,12 +143,12 @@ export function SingleKakaoCoachRow({
         {emoji}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="mb-0.5 max-w-[16.5rem] truncate pl-0.5 text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+        <p className="mb-0.5 max-w-[16.5rem] truncate pl-0.5 text-[11px] font-medium text-muted-foreground">
           {displayName}
         </p>
         <IncomingBubble showTail>{children}</IncomingBubble>
       </div>
-      <span className="mb-1 shrink-0 align-bottom text-[10px] tabular-nums text-zinc-500 dark:text-zinc-500">
+      <span className="mt-7 shrink-0 self-start text-[10px] tabular-nums text-muted-foreground">
         {timeLabel}
       </span>
     </div>
@@ -167,12 +167,12 @@ function IncomingBubble({
   return (
     <div
       className={cn(
-        "relative max-w-[min(100%,18rem)] rounded-[14px] border border-indigo-500/40",
-        "bg-white px-3 py-2 text-[13px] leading-snug text-zinc-900 shadow-sm",
-        "dark:border-violet-500/35 dark:bg-zinc-100 dark:text-zinc-900",
+        "relative max-w-[min(100%,18rem)] rounded-[14px] border border-border",
+        "bg-card px-3 py-2 text-[13px] leading-snug text-foreground shadow-sm",
+        "dark:border-white/12 dark:bg-zinc-100 dark:text-zinc-900",
         isPending && "border-dashed opacity-95",
         showTail &&
-          "before:pointer-events-none before:absolute before:left-[-7px] before:top-[11px] before:h-0 before:w-0 before:border-y-[6px] before:border-r-[8px] before:border-y-transparent before:border-r-white dark:before:border-r-zinc-100"
+          "before:pointer-events-none before:absolute before:left-[-7px] before:top-[11px] before:h-0 before:w-0 before:border-y-[6px] before:border-r-[8px] before:border-y-transparent before:border-r-card dark:before:border-r-zinc-100"
       )}
     >
       {children}
@@ -184,7 +184,7 @@ function SystemMetaRow({ seg }: { seg: CoachStreamSegment }) {
   const label = seg.tag === "QUICK_CHIPS" ? "추천 질문 동기화" : "데이터 카드";
   return (
     <div className="flex justify-center py-1">
-      <p className="rounded-full border border-indigo-500/25 bg-indigo-950/40 px-3 py-1 text-[10px] text-zinc-400">
+      <p className="rounded-full border border-border bg-muted px-3 py-1 text-[10px] text-muted-foreground">
         {label} · 서식 정리 중…
       </p>
     </div>
@@ -220,8 +220,8 @@ export function KakaoDelimitedCoachStream({
               key={`inv-${gi}-${code}`}
               className="flex justify-center py-0.5"
             >
-              <div className="rounded-full border border-dashed border-indigo-500/35 bg-indigo-950/30 px-3 py-1.5 text-center dark:bg-indigo-950/45">
-                <p className="text-[10px] font-medium text-indigo-200/90">
+              <div className="rounded-full border border-dashed border-primary/35 bg-primary/10 px-3 py-1.5 text-center dark:bg-primary/15">
+                <p className="text-[10px] font-medium text-foreground">
                   <span aria-hidden>{emoji}</span> 시스템 ·{" "}
                   <span className="font-mono">{title}</span>님이 대화에 참여했습니다
                 </p>
@@ -234,7 +234,7 @@ export function KakaoDelimitedCoachStream({
         return (
           <div
             key={`grp-${gi}`}
-            className="flex max-w-[min(100%,20.5rem)] items-end gap-1.5"
+            className="flex max-w-[min(100%,20.5rem)] items-start gap-1.5"
           >
             <div
               className={cn(
@@ -246,7 +246,7 @@ export function KakaoDelimitedCoachStream({
               {meta.emoji}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="mb-0.5 max-w-[16.5rem] truncate pl-0.5 text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+              <p className="mb-0.5 max-w-[16.5rem] truncate pl-0.5 text-[11px] font-medium text-muted-foreground">
                 {meta.displayName}
               </p>
               <div className="flex flex-col gap-1">
@@ -267,7 +267,7 @@ export function KakaoDelimitedCoachStream({
                 ))}
               </div>
             </div>
-            <span className="mb-1 shrink-0 align-bottom text-[10px] tabular-nums text-zinc-500 dark:text-zinc-500">
+            <span className="mt-7 shrink-0 self-start text-[10px] tabular-nums text-muted-foreground">
               {timeLabel}
             </span>
           </div>

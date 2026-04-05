@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
-import { Menu } from "lucide-react";
+import { Activity, Menu, UtensilsCrossed } from "lucide-react";
 import { GoogleSignInButtonBlock } from "@/components/common/google-sign-in-button-block";
 import { QuickActionButton } from "@/components/common/quick-action-button";
 import { ChatFab } from "@/components/common/chat-fab";
@@ -190,6 +190,21 @@ export default function HomePage() {
     const t = window.setTimeout(() => setToast(null), 2200);
     return () => window.clearTimeout(t);
   }, [toast]);
+
+  /** 탑바: 스크롤 시 글래스 + 잔여 칼로리 중앙 */
+  const [topBarCompact, setTopBarCompact] = useState(false);
+  useEffect(() => {
+    const THRESHOLD = 32;
+    const onScroll = () => {
+      const y = window.scrollY || document.documentElement.scrollTop;
+      setTopBarCompact(y > THRESHOLD);
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const remainingKcal = Math.round(target - totalCalories);
 
   const openCameraPicker = () => {
     cameraInputRef.current?.click();
@@ -503,53 +518,110 @@ export default function HomePage() {
         onChange={handleFileChange}
       />
 
-      {/* Header */}
-      <header className="px-4 pt-6 pb-2 flex items-center justify-between gap-3">
-        {authLoading ? (
-          <div className="flex w-full items-center justify-between gap-3">
-            <div className="min-w-0 space-y-2">
-              <div className="h-6 w-20 rounded-md bg-muted animate-pulse" />
-              <div className="h-4 w-48 max-w-[70%] rounded bg-muted/80 animate-pulse" />
-            </div>
-            <div className="h-11 w-11 shrink-0 rounded-xl bg-muted animate-pulse" />
-          </div>
-        ) : (
-          <>
-            <div className="min-w-0">
-              <h1 className="text-xl font-bold tracking-tight">
-                <Link
-                  href="/intro"
-                  className="rounded-md outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      {/* Fixed glass top bar — 스크롤 시 블러·슬림·중앙 잔여 kcal */}
+      <header
+        className={cn(
+          "fixed inset-x-0 top-0 z-40 transition-[box-shadow,border-color,background-color] duration-300 ease-out",
+          topBarCompact
+            ? "border-b border-border/35 bg-background/72 shadow-[0_1px_12px_-4px_rgba(0,0,0,0.12)] backdrop-blur-xl dark:border-white/10 dark:bg-background/58 dark:shadow-[0_1px_16px_-4px_rgba(0,0,0,0.45)]"
+            : "border-b border-transparent bg-transparent"
+        )}
+      >
+        <div
+          className={cn(
+            "mx-auto flex w-full max-w-md items-center px-4 transition-[padding] duration-300 ease-out",
+            topBarCompact
+              ? "min-h-11 justify-between gap-2 py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))]"
+              : "justify-between gap-3 pb-2 pt-[max(1.5rem,env(safe-area-inset-top))]"
+          )}
+        >
+          {!topBarCompact ? (
+            <>
+              <div className="min-w-0">
+                <h1 className="text-xl font-bold tracking-tight">
+                  <Link
+                    href="/intro"
+                    className="rounded-md outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  >
+                    BAPS
+                  </Link>
+                </h1>
+                <p className="truncate text-sm text-muted-foreground dark:text-foreground/75">
+                  {userId
+                    ? displayName
+                      ? `${displayName}님, 오늘도 건강하게!`
+                      : "오늘도 건강하게!"
+                    : "로그인하면 기록이 저장돼요"}
+                </p>
+              </div>
+              {userId ? (
+                <button
+                  type="button"
+                  onClick={() => setSettingsOpen(true)}
+                  className="shrink-0 rounded-xl border p-2.5 transition-colors hover:bg-muted"
+                  aria-label="개인 설정"
                 >
-                  BAPS
-                </Link>
-              </h1>
-              <p className="text-sm text-muted-foreground dark:text-foreground/75 truncate">
-                {userId
-                  ? displayName
-                    ? `${displayName}님, 오늘도 건강하게!`
-                    : "오늘도 건강하게!"
-                  : "로그인하면 기록이 저장돼요"}
+                  <Menu className="h-5 w-5" />
+                </button>
+              ) : (
+                <ThemeToggleIcons className="shrink-0" />
+              )}
+            </>
+          ) : userId ? (
+            <>
+              <div className="w-11 shrink-0" aria-hidden />
+              <p className="min-w-0 flex-1 text-center font-data text-xs font-semibold tabular-nums leading-tight text-foreground">
+                {remainingKcal >= 0 ? (
+                  <>
+                    남은{" "}
+                    <span className="text-sm text-teal-700 dark:text-teal-400">
+                      {remainingKcal.toLocaleString()}
+                    </span>{" "}
+                    kcal
+                  </>
+                ) : (
+                  <>
+                    <span className="text-sm text-amber-700 dark:text-amber-400">
+                      {Math.abs(remainingKcal).toLocaleString()}
+                    </span>{" "}
+                    kcal 초과
+                  </>
+                )}
               </p>
-            </div>
-            {userId ? (
               <button
                 type="button"
                 onClick={() => setSettingsOpen(true)}
-                className="shrink-0 rounded-xl border p-2.5 hover:bg-muted transition-colors"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-colors hover:bg-muted/80"
                 aria-label="개인 설정"
               >
-                <Menu className="w-5 h-5" />
+                <Menu className="h-5 w-5" />
               </button>
-            ) : (
+            </>
+          ) : (
+            <>
+              <Link
+                href="/intro"
+                className="min-w-0 text-sm font-bold tracking-tight text-foreground outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                BAPS
+              </Link>
               <ThemeToggleIcons className="shrink-0" />
-            )}
-          </>
-        )}
+            </>
+          )}
+        </div>
       </header>
+      <div
+        className="shrink-0 transition-[height] duration-300 ease-out"
+        style={{
+          height: topBarCompact
+            ? "calc(2.75rem + env(safe-area-inset-top, 0px))"
+            : "calc(5.5rem + env(safe-area-inset-top, 0px))",
+        }}
+        aria-hidden
+      />
 
       {/* Weekly Calendar */}
-      <section className="px-4 py-2">
+      <section className="px-4 pb-3 pt-1">
         <WeeklyCalendar />
       </section>
 
@@ -558,7 +630,7 @@ export default function HomePage() {
       ) : (
         <>
           {/* 최상단: AI 팩폭 + 콤팩트 칼로리 게이지 */}
-          <section className="px-4 pb-2 pt-1 space-y-2">
+          <section className="space-y-3 px-4 pb-4 pt-2">
             {!authLoading && userId ? (
               <DailyQuipBanner
                 displayName={displayName}
@@ -603,12 +675,17 @@ export default function HomePage() {
             />
           ) : null}
 
-          <section className="px-4 py-2">
-            <div className="mb-2">
-              <h2 className="text-sm font-semibold text-muted-foreground">
+          <section className="px-4 pb-4 pt-3">
+            <div className="mb-3">
+              <h2 className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-foreground">
+                <UtensilsCrossed
+                  className="h-4 w-4 shrink-0 text-primary"
+                  strokeWidth={2}
+                  aria-hidden
+                />
                 오늘 먹은 것
               </h2>
-              <p className="mt-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/80">
+              <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
                 식단 검거 · 타임라인
               </p>
             </div>
@@ -621,11 +698,21 @@ export default function HomePage() {
 
           {/* 물 + 체중: BAPS 감시본부 2컬럼 */}
           {userId ? (
-            <section className="px-4 pb-3 pt-1">
-              <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                BAPS 감시본부 · 수분·체중
-              </p>
-              <div className="grid grid-cols-2 gap-2.5 items-stretch">
+            <section className="px-4 pb-5 pt-3">
+              <div className="mb-3">
+                <h2 className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-foreground">
+                  <Activity
+                    className="h-4 w-4 shrink-0 text-primary"
+                    strokeWidth={2}
+                    aria-hidden
+                  />
+                  수분 · 체중
+                </h2>
+                <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+                  BAPS 감시본부 — 물 잔수와 체중 기록
+                </p>
+              </div>
+              <div className="grid grid-cols-2 items-stretch gap-3">
                 <WaterCounter
                   variant="paired"
                   cups={waterLog?.cups ?? 0}
@@ -654,6 +741,7 @@ export default function HomePage() {
                   profileKg={profile?.weight ?? null}
                   targetWeightKg={profile?.target_weight ?? null}
                   compact
+                  onNavigateToDate={setSelectedDate}
                   onSavedProfile={() =>
                     void queryClient.invalidateQueries({
                       queryKey: ["profile", userId],
@@ -663,7 +751,7 @@ export default function HomePage() {
               </div>
             </section>
           ) : (
-            <section className="px-4 py-2 pb-4">
+            <section className="px-4 pb-5 pt-3">
               <WaterCounter
                 cups={waterLog?.cups ?? 0}
                 cupMl={cupMl}

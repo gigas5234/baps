@@ -76,8 +76,15 @@ export function WeeklyCalendar() {
   return (
     <div className="space-y-3">
       {/* Month header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">{monthLabel}</h2>
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold">{monthLabel}</h2>
+          <p className="mt-0.5 text-[9px] leading-tight text-muted-foreground">
+            날짜는 기기 설정 시간대 기준 자정(00:00)에 바뀌어요. 새벽에 기록이
+            &quot;어제&quot;로 보이면 위 <strong className="text-foreground/90">오늘</strong>을
+            눌러 주세요.
+          </p>
+        </div>
         {todayStr && selectedDate !== todayStr && (
           <button
             onClick={() => {

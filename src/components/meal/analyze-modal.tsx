@@ -7,13 +7,13 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 import {
   PortionPctSlider,
-  type PortionStep,
+  type PortionPct,
 } from "@/components/meal/portion-pct-slider";
 
-function scaleCal(base: number, pct: PortionStep) {
+function scaleCal(base: number, pct: PortionPct) {
   return Math.round((base * pct) / 100);
 }
-function scaleMacro(base: number, pct: PortionStep) {
+function scaleMacro(base: number, pct: PortionPct) {
   return Math.round((base * pct) / 100 * 10) / 10;
 }
 
@@ -36,7 +36,7 @@ interface AnalyzeModalProps {
   error: string | null;
   onConfirm: (options: {
     saveAsFrequent: boolean;
-    portionPct: PortionStep;
+    portionPct: PortionPct;
     /** 이번에 기록하는 끼니 식비(원), 미입력 시 null */
     priceWon: number | null;
   }) => void | Promise<void>;
@@ -54,7 +54,7 @@ export function AnalyzeModal({
   isSaving,
 }: AnalyzeModalProps) {
   const [saveAsFrequent, setSaveAsFrequent] = useState(false);
-  const [portionPct, setPortionPct] = useState<PortionStep>(100);
+  const [portionPct, setPortionPct] = useState<PortionPct>(100);
   const [priceWonInput, setPriceWonInput] = useState("");
 
   useEffect(() => {
@@ -157,9 +157,10 @@ export function AnalyzeModal({
                     </span>
                   </div>
                   <p className="text-[10px] leading-snug text-muted-foreground dark:text-foreground/65">
-                    사진 기준 1회 섭취를 100%로 두고, 남김이면 줄이세요.{" "}
+                    0~100% · 1% 단위. 사진 추정 1인분을 100%로 두고 남김이면
+                    줄이세요.{" "}
                     <strong className="text-foreground">자주 먹는 저장</strong>은
-                    항상 100%(사진 추정 1인분)으로 등록돼요.
+                    항상 100%(1인분)으로 등록돼요.
                   </p>
                   <PortionPctSlider
                     value={portionPct}

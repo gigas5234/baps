@@ -29,23 +29,53 @@ function trimMealLabel(s: string, max = 200): string {
   return t.length <= max ? t : `${t.slice(0, max)}…`;
 }
 
+/** IANA 타임존 기준으로 ISO 시각의 달력 YMD */
+function isoToCalendarYmdInTimeZone(iso: string, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(iso));
+  const y = parts.find((p) => p.type === "year")?.value ?? "";
+  const mo = parts.find((p) => p.type === "month")?.value ?? "";
+  const d = parts.find((p) => p.type === "day")?.value ?? "";
+  if (!y || !mo || !d) return new Date(iso).toISOString().slice(0, 10);
+  return `${y}-${mo}-${d}`;
+}
+
+export type MealUtcBounds = {
+  range_start: string;
+  day_start: string;
+  day_end: string;
+};
+
 /**
  * 인증된 Supabase 클라이언트로 프로필·해당일 식사·물 기록을 읽어 코치 프롬프트 컨텍스트를 만든다.
- * 클라이언트가 보낸 수치는 신뢰하지 않는다.
+ * mealUtcBounds·timeZone 은 클라이언트가 로컬 달력에 맞게 보낸다( naive T00:00 스트링 필터 오류 방지 ).
  */
 export async function buildCoachApiContext(
   supabase: SupabaseClient,
   userId: string,
   date: string,
-  localHourHint?: number
+  localHourHint?: number,
+  mealUtcBounds?: MealUtcBounds | null,
+  timeZone?: string | null
 ): Promise<CoachApiContext | null> {
   if (!isValidApiDate(date)) return null;
 
-  const startOfDay = `${date}T00:00:00`;
-  const endOfDay = `${date}T23:59:59`;
   const dayM1 = ymdAddDays(date, -1);
   const dayM2 = ymdAddDays(date, -2);
-  const rangeStart = `${dayM2}T00:00:00`;
+  const startOfDay =
+    mealUtcBounds?.day_start ?? `${date}T00:00:00`;
+  const endOfDay = mealUtcBounds?.day_end ?? `${date}T23:59:59`;
+  const rangeStart =
+    mealUtcBounds?.range_start ?? `${dayM2}T00:00:00`;
+
+  const tz =
+    typeof timeZone === "string" && timeZone.trim() !== ""
+      ? timeZone.trim()
+      : "UTC";
 
   const [profileRes, mealsRangeRes, waterRes] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
@@ -68,9 +98,13 @@ export async function buildCoachApiContext(
 
   const profile = profileRes.data as Profile;
   const mealsRange = (mealsRangeRes.data ?? []) as Meal[];
-  const meals = mealsRange.filter(
-    (m) => m.created_at >= startOfDay && m.created_at <= endOfDay
-  );
+  const meals = mealsRange.filter((m) => {
+    const t = new Date(m.created_at).getTime();
+    return (
+      t >= new Date(startOfDay).getTime() &&
+      t <= new Date(endOfDay).getTime()
+    );
+  });
 
   const sums: Record<string, number> = {
     [date]: 0,
@@ -78,7 +112,7 @@ export async function buildCoachApiContext(
     [dayM2]: 0,
   };
   for (const m of mealsRange) {
-    const day = m.created_at.slice(0, 10);
+    const day = isoToCalendarYmdInTimeZone(m.created_at, tz);
     if (day in sums) sums[day] += Number(m.cal) || 0;
   }
   const recent_three_day_cal_average =

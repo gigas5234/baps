@@ -5,7 +5,7 @@ interface MealState {
   setSelectedDate: (date: string) => void;
 }
 
-/** SSR/첫 페인트와 수화 일치용 — UTC 날짜. 실제 포커스는 클라이언트에서 로컬 오늘로 덮어씀 */
+/** SSR·수화 일치용 UTC 일자. 실제 표시는 useLayoutEffect + syncSelectedDateToLocalTodayOnce */
 const initialYmdUtc = () => new Date().toISOString().split("T")[0];
 
 export const useMealStore = create<MealState>((set) => ({

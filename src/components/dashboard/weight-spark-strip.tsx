@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useId } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useId,
+} from "react";
 import { Scale } from "lucide-react";
 import { DigitalWheelColumn } from "@/components/dashboard/digital-wheel-column";
 import {
@@ -9,7 +16,10 @@ import {
   upsertWeightEntry,
   WEIGHT_STORAGE_KEY,
 } from "@/lib/weight-local-storage";
-import { layoutWeightChart } from "@/lib/weight-chart-geometry";
+import {
+  layoutWeightChart,
+  type ChartPoint,
+} from "@/lib/weight-chart-geometry";
 import { useUpsertWeightLog, useWeightLogs } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { getLocalYmd } from "@/lib/local-date";
@@ -50,12 +60,45 @@ const KG_DECS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
 /** 날짜·체중 휠 뷰포트 높이 통일 */
 const WHEEL_VIEWPORT_PX = 108;
 
+/** LCD 직접 입력: 소수 첫째 자리까지, 휠과 동일 한 자리 */
+function filterKgDraftInput(raw: string): string {
+  let v = raw.replace(/,/g, ".").replace(/[^\d.]/g, "");
+  const firstDot = v.indexOf(".");
+  if (firstDot !== -1) {
+    v =
+      v.slice(0, firstDot + 1) +
+      v
+        .slice(firstDot + 1)
+        .replace(/\./g, "")
+        .slice(0, 1);
+  }
+  return v;
+}
+
+function parseKgDraftToParts(
+  draft: string
+): { flo: number; dec: number } | null {
+  const t = draft.trim().replace(",", ".");
+  if (t === "" || t === ".") return null;
+  const n = parseFloat(t);
+  if (!Number.isFinite(n)) return null;
+  const clamped = Math.min(
+    KG_INT_MAX + 0.9,
+    Math.max(KG_INT_MIN, Math.round(n * 10) / 10)
+  );
+  const flo = Math.floor(clamped);
+  const dec = Math.min(9, Math.max(0, Math.round((clamped - flo) * 10)));
+  return { flo, dec };
+}
+
 interface WeightSparkStripProps {
   userId: string | undefined;
   selectedDate: string;
   profileKg: number | null | undefined;
   targetWeightKg: number | null | undefined;
   onSavedProfile?: () => void;
+  /** 차트 점 선택 시 메인 캘린더 등과 같은 날짜로 맞춤 */
+  onNavigateToDate?: (ymd: string) => void;
   compact?: boolean;
 }
 
@@ -65,6 +108,7 @@ export function WeightSparkStrip({
   profileKg,
   targetWeightKg,
   onSavedProfile,
+  onNavigateToDate,
   compact = false,
 }: WeightSparkStripProps) {
   const clipUid = useId().replace(/:/g, "");
@@ -79,6 +123,17 @@ export function WeightSparkStrip({
   const [kgInt, setKgInt] = useState("70");
   const [kgDec, setKgDec] = useState("0");
   const [saving, setSaving] = useState(false);
+  /** 차트 점 클릭으로 고른 포인트만 안내(휠로 날짜 바꾸면 해제) */
+  const [chartTap, setChartTap] = useState<{
+    date: string;
+    kg: number;
+  } | null>(null);
+
+  const [lcdEditing, setLcdEditing] = useState(false);
+  const [lcdDraft, setLcdDraft] = useState("");
+  const lcdInputRef = useRef<HTMLInputElement>(null);
+  const lcdPanelRef = useRef<HTMLDivElement>(null);
+  const lcdSkipBlurApply = useRef(false);
 
   const bumpEntries = useCallback(() => {
     setEntriesVersion((v) => v + 1);
@@ -105,6 +160,65 @@ export function WeightSparkStrip({
       setPickDate(getLocalYmd());
     }
   }, [selectedDate, dateOptions]);
+
+  useEffect(() => {
+    if (chartTap && chartTap.date !== pickDate) setChartTap(null);
+  }, [pickDate, chartTap]);
+
+  const handleChartPointPick = useCallback(
+    (p: ChartPoint) => {
+      setChartTap({ date: p.date, kg: p.kg });
+      setPickDate(p.date);
+      onNavigateToDate?.(p.date);
+    },
+    [onNavigateToDate]
+  );
+
+  const closeLcdEdit = useCallback(() => {
+    setLcdEditing(false);
+  }, []);
+
+  const applyLcdDraft = useCallback(() => {
+    const parts = parseKgDraftToParts(lcdDraft);
+    if (parts) {
+      setKgInt(String(parts.flo));
+      setKgDec(String(parts.dec));
+    }
+    closeLcdEdit();
+  }, [lcdDraft, closeLcdEdit]);
+
+  const handleLcdBlur = useCallback(() => {
+    if (lcdSkipBlurApply.current) {
+      lcdSkipBlurApply.current = false;
+      closeLcdEdit();
+      return;
+    }
+    applyLcdDraft();
+  }, [applyLcdDraft, closeLcdEdit]);
+
+  const openLcdKeyboard = useCallback(() => {
+    if (lcdEditing) return;
+    const cur =
+      Number.parseInt(kgInt, 10) + Number.parseInt(kgDec, 10) / 10;
+    const ok =
+      Number.isFinite(cur) &&
+      cur >= KG_INT_MIN &&
+      cur <= KG_INT_MAX + 0.9;
+    setLcdDraft(ok ? cur.toFixed(1) : "70.0");
+    setLcdEditing(true);
+    window.setTimeout(() => {
+      lcdPanelRef.current?.scrollIntoView({
+        block: "center",
+        behavior: "smooth",
+      });
+    }, 50);
+    requestAnimationFrame(() => {
+      const el = lcdInputRef.current;
+      if (!el) return;
+      el.focus();
+      el.select();
+    });
+  }, [kgInt, kgDec, lcdEditing]);
 
   /** 최근 기록 N개만 (7일 창이 아닌 “마지막 7포인트”) */
   const chartEntries = useMemo(() => {
@@ -206,18 +320,18 @@ export function WeightSparkStrip({
           "dark:border-white/10 dark:bg-muted/10"
         )}
       >
-        <div className="flex items-center justify-between gap-1.5 px-0.5 pb-1">
-          <div className="flex items-center gap-1 text-foreground">
+        <div className="flex items-start justify-between gap-1.5 px-0.5 pb-1.5">
+          <div className="flex min-w-0 items-center gap-1.5 text-foreground">
             <Scale
-              className="h-3 w-3 shrink-0 text-muted-foreground"
+              className="h-4 w-4 shrink-0 text-primary"
               strokeWidth={2}
               aria-hidden
             />
-            <h3 className="text-[11px] font-semibold tracking-tight">
+            <h3 className="text-sm font-semibold leading-tight tracking-tight">
               체중계
             </h3>
           </div>
-          <div className="flex flex-col items-end gap-0.5 text-right text-[8px] leading-tight text-muted-foreground tabular-nums">
+          <div className="flex flex-col items-end gap-0.5 text-right text-[11px] leading-tight text-muted-foreground tabular-nums">
             <span>
               목표:{" "}
               {targetWeightKg != null && targetWeightKg > 0
@@ -232,38 +346,123 @@ export function WeightSparkStrip({
         </div>
 
         <div
+          ref={lcdPanelRef}
           className={cn(
-            "relative overflow-hidden rounded-lg px-2 py-1.5",
+            "relative overflow-hidden rounded-lg px-2 py-1.5 outline-none",
             "bg-zinc-900/88 dark:bg-zinc-950/90",
-            "ring-1 ring-black/10 dark:ring-white/10"
+            "ring-1 ring-black/10 dark:ring-white/10",
+            !lcdEditing &&
+              "cursor-pointer transition-opacity active:opacity-90",
+            lcdEditing && "ring-2 ring-teal-500/55 dark:ring-teal-400/45"
           )}
           aria-live="polite"
+          role={lcdEditing ? undefined : "button"}
+          tabIndex={lcdEditing ? -1 : 0}
+          onClick={() => {
+            if (!lcdEditing) openLcdKeyboard();
+          }}
+          onKeyDown={(e) => {
+            if (lcdEditing) return;
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              openLcdKeyboard();
+            }
+          }}
+          aria-label="체중 표시 탭하여 숫자 직접 입력"
         >
-          <p className="relative text-[8px] font-medium tracking-wide text-zinc-400">
+          <p className="relative pointer-events-none text-[10px] font-medium tracking-wide text-zinc-400">
             {lcdTop}
           </p>
           <div
             className={cn(
-              "relative flex items-baseline justify-center gap-0.5 py-0.5",
+              "relative flex min-h-[2.25rem] items-baseline justify-center gap-0.5 py-0.5",
               "font-data tabular-nums text-zinc-50"
             )}
           >
-            <span
-              className={cn(
-                "text-xl font-semibold tracking-tight",
-                !kgValid && "opacity-45"
-              )}
-            >
-              {kgValid ? parsedKg.toFixed(1) : "--.-"}
-            </span>
-            <span className="text-xs font-medium text-zinc-400">kg</span>
+            {lcdEditing ? (
+              <>
+                <input
+                  type="text"
+                  name="weight-lcd-direct"
+                  inputMode="decimal"
+                  enterKeyHint="done"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  aria-label="체중 직접 입력(소수 한 자리)"
+                  ref={lcdInputRef}
+                  value={lcdDraft}
+                  onChange={(e) =>
+                    setLcdDraft(filterKgDraftInput(e.target.value))
+                  }
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      applyLcdDraft();
+                    }
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      lcdSkipBlurApply.current = true;
+                      lcdInputRef.current?.blur();
+                    }
+                  }}
+                  onBlur={handleLcdBlur}
+                  className={cn(
+                    "min-w-0 flex-1 bg-transparent text-center text-xl font-semibold tracking-tight",
+                    "text-zinc-50 placeholder:text-zinc-500",
+                    "caret-teal-400 outline-none"
+                  )}
+                />
+                <span className="pointer-events-none text-xs font-medium text-zinc-400">
+                  kg
+                </span>
+              </>
+            ) : (
+              <>
+                <span
+                  className={cn(
+                    "pointer-events-none text-xl font-semibold tracking-tight",
+                    !kgValid && "opacity-45"
+                  )}
+                >
+                  {kgValid ? parsedKg.toFixed(1) : "--.-"}
+                </span>
+                <span className="pointer-events-none text-xs font-medium text-zinc-400">
+                  kg
+                </span>
+              </>
+            )}
           </div>
         </div>
 
-        <p className="mt-1.5 px-0.5 text-[9px] text-muted-foreground">
+        <p className="mt-1.5 px-0.5 text-[11px] leading-snug text-muted-foreground">
           최근 기록 <span className="font-mono font-semibold">{CHART_POINTS}회</span>
           추이 · 목표선 점선
         </p>
+        {chartTap ? (
+          <div
+            className={cn(
+              "mt-1.5 rounded-lg border border-teal-600/30 bg-teal-500/10 px-2.5 py-2",
+              "dark:border-teal-500/35 dark:bg-teal-500/10"
+            )}
+            role="status"
+            aria-live="polite"
+          >
+            <p className="text-[11px] font-medium text-foreground">
+              <span className="font-mono tabular-nums">
+                {formatCompactMday(chartTap.date)}
+              </span>
+              <span className="mx-1 text-muted-foreground">·</span>
+              <span className="font-data tabular-nums font-semibold">
+                {chartTap.kg.toFixed(1)} kg
+              </span>
+            </p>
+            <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
+              아래 날짜·체중을 바꾼 뒤「측정 저장」하면 바로 반영됩니다.
+            </p>
+          </div>
+        ) : null}
 
         <div
           className={cn(
@@ -278,12 +477,12 @@ export function WeightSparkStrip({
                 <span>{minKg.toFixed(1)}</span>
               </div>
               <svg
-                className="h-full max-h-full w-full"
+                className="h-full max-h-full w-full touch-manipulation"
                 viewBox="0 0 100 100"
                 preserveAspectRatio="none"
                 overflow="hidden"
                 role="img"
-                aria-label="체중 최근 기록 추이"
+                aria-label="체중 최근 기록 추이 · 점을 누르면 해당 날짜로 이동"
               >
                 <defs>
                   <clipPath id={`wchart-clip-${clipUid}`}>
@@ -329,17 +528,42 @@ export function WeightSparkStrip({
                       className="text-teal-700/85 dark:text-teal-400/80"
                     />
                   ) : null}
-                  {pts.map((p) => (
-                    <circle
-                      key={p.date}
-                      cx={p.x}
-                      cy={p.y}
-                      r={2}
-                      fill="currentColor"
-                      className="text-teal-700 dark:text-teal-400"
-                      vectorEffect="non-scaling-stroke"
-                    />
-                  ))}
+                  {pts.map((p) => {
+                    const selectedDot = chartTap?.date === p.date;
+                    return (
+                      <g key={p.date}>
+                        <circle
+                          cx={p.x}
+                          cy={p.y}
+                          r={6}
+                          fill="transparent"
+                          className="cursor-pointer"
+                          onClick={() => handleChartPointPick(p)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              handleChartPointPick(p);
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`${p.date}, ${p.kg.toFixed(1)}킬로그램, 탭하여 이 날짜로 이동`}
+                        />
+                        <circle
+                          cx={p.x}
+                          cy={p.y}
+                          r={selectedDot ? 2.8 : 2}
+                          fill="currentColor"
+                          className={cn(
+                            "text-teal-700 pointer-events-none dark:text-teal-400",
+                            selectedDot &&
+                              "text-teal-600 dark:text-teal-300"
+                          )}
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      </g>
+                    );
+                  })}
                 </g>
               </svg>
             </div>
@@ -347,7 +571,7 @@ export function WeightSparkStrip({
             <div
               className={cn(
                 "flex h-full w-full items-center justify-center px-1 text-center text-muted-foreground",
-                "text-[9px]"
+                "text-[11px]"
               )}
             >
               기록이 쌓이면 최근 {CHART_POINTS}건 추이가 표시됩니다
@@ -359,9 +583,9 @@ export function WeightSparkStrip({
       <div className="mt-2 space-y-1 px-0.5">
         <div className="flex items-stretch gap-1.5">
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="pl-0.5 text-[9px] font-medium text-muted-foreground">
+            <span className="pl-0.5 text-[11px] font-medium text-muted-foreground">
               날짜{" "}
-              <span className="font-normal text-muted-foreground/80">(MM.DD)</span>
+              <span className="font-normal text-muted-foreground/85">(MM.DD)</span>
             </span>
             <DigitalWheelColumn
               values={dateOptions}
@@ -375,9 +599,9 @@ export function WeightSparkStrip({
             />
           </div>
           <div className="flex min-w-0 flex-[1.35] flex-col gap-0.5">
-            <span className="pl-0.5 text-[9px] font-medium text-muted-foreground">
+            <span className="pl-0.5 text-[11px] font-medium text-muted-foreground">
               체중{" "}
-              <span className="font-normal text-muted-foreground/80">(kg)</span>
+              <span className="font-normal text-muted-foreground/85">(kg)</span>
             </span>
             <div
               className="flex min-h-0 items-stretch gap-1"

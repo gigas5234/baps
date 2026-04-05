@@ -13,13 +13,56 @@ interface MealTimelineProps {
   isDeletingId?: string | null;
 }
 
-type DayPart = "morning" | "afternoon" | "night";
+/** 로컬 시각 기준 끼니 구간 (뱃지·그룹 헤더용) */
+type MealKind = "breakfast" | "lunch" | "snack" | "dinner" | "latenight";
 
-function dayPartForMeal(createdAt: string): DayPart {
+const KIND_ORDER: MealKind[] = [
+  "breakfast",
+  "lunch",
+  "snack",
+  "dinner",
+  "latenight",
+];
+
+const KIND_LABEL: Record<
+  MealKind,
+  { sectionTitle: string; sectionHint: string; badge: string }
+> = {
+  breakfast: {
+    sectionTitle: "아침",
+    sectionHint: "05:00–10:59",
+    badge: "아침",
+  },
+  lunch: {
+    sectionTitle: "점심",
+    sectionHint: "11:00–14:59",
+    badge: "점심",
+  },
+  snack: {
+    sectionTitle: "디저트 · 음료",
+    sectionHint: "15:00–16:59",
+    badge: "디저트·음료",
+  },
+  dinner: {
+    sectionTitle: "저녁",
+    sectionHint: "17:00–21:59",
+    badge: "저녁",
+  },
+  latenight: {
+    sectionTitle: "야식",
+    sectionHint: "22:00–04:59",
+    badge: "야식",
+  },
+};
+
+function mealKindFromCreatedAt(createdAt: string): MealKind {
   const h = new Date(createdAt).getHours();
-  if (h >= 22 || h < 5) return "night";
-  if (h < 12) return "morning";
-  return "afternoon";
+  if (h >= 22 || h < 5) return "latenight";
+  if (h < 11) return "breakfast";
+  if (h < 15) return "lunch";
+  if (h < 17) return "snack";
+  if (h < 22) return "dinner";
+  return "latenight";
 }
 
 function isLateNightGlow(createdAt: string): boolean {
@@ -27,23 +70,22 @@ function isLateNightGlow(createdAt: string): boolean {
   return h >= 22 || h < 5;
 }
 
-const PART_LABEL: Record<
-  DayPart,
-  { title: string; subtitle: string }
-> = {
-  morning: { title: "오전", subtitle: "05:00–11:59" },
-  afternoon: { title: "오후", subtitle: "12:00–21:59" },
-  night: { title: "심야", subtitle: "22:00–04:59" },
-};
-
-function groupMealsByPart(meals: Meal[]): Record<DayPart, Meal[]> {
-  const buckets: Record<DayPart, Meal[]> = {
-    morning: [],
-    afternoon: [],
-    night: [],
+function groupMealsByKind(meals: Meal[]): Record<MealKind, Meal[]> {
+  const buckets: Record<MealKind, Meal[]> = {
+    breakfast: [],
+    lunch: [],
+    snack: [],
+    dinner: [],
+    latenight: [],
   };
   for (const m of meals) {
-    buckets[dayPartForMeal(m.created_at)].push(m);
+    buckets[mealKindFromCreatedAt(m.created_at)].push(m);
+  }
+  for (const k of KIND_ORDER) {
+    buckets[k].sort(
+      (a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
   }
   return buckets;
 }
@@ -67,32 +109,32 @@ export function MealTimeline({
     );
   }
 
-  const grouped = groupMealsByPart(meals);
-  const order: DayPart[] = ["morning", "afternoon", "night"];
+  const grouped = groupMealsByKind(meals);
 
   return (
     <div className="space-y-6">
       <AnimatePresence mode="popLayout">
-        {order.map((part) => {
-          const partMeals = grouped[part];
+        {KIND_ORDER.map((kind) => {
+          const partMeals = grouped[kind];
           if (partMeals.length === 0) return null;
+          const meta = KIND_LABEL[kind];
 
           return (
             <motion.div
-              key={part}
+              key={kind}
               layout
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               className="space-y-2"
             >
               <div className="flex items-baseline gap-2 px-0.5">
-                <Radar className="h-3.5 w-3.5 text-primary shrink-0" aria-hidden />
+                <Radar className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-wider text-foreground">
-                    {PART_LABEL[part].title} 구간
+                    {meta.sectionTitle}
                   </p>
                   <p className="text-[10px] text-muted-foreground">
-                    {PART_LABEL[part].subtitle}
+                    {meta.sectionHint}
                   </p>
                 </div>
               </div>
@@ -133,7 +175,17 @@ export function MealTimeline({
                       </div>
 
                       <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-end gap-x-2 gap-y-0.5">
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span
+                            className={cn(
+                              "rounded-full px-2 py-0.5 text-[9px] font-bold tracking-wide",
+                              night
+                                ? "bg-red-500/15 text-red-700 dark:text-red-300"
+                                : "bg-primary/12 text-primary"
+                            )}
+                          >
+                            {meta.badge}
+                          </span>
                           <p className="font-data text-xl font-bold tabular-nums leading-none text-foreground">
                             {meal.cal}
                             <span className="ml-0.5 text-xs font-semibold text-muted-foreground">
