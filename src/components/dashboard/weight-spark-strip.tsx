@@ -34,11 +34,12 @@ function buildDateOptions(days: number): string[] {
   return out;
 }
 
-function formatKoreanDay(ymd: string): string {
-  const mo = Number(ymd.slice(5, 7));
-  const day = Number(ymd.slice(8, 10));
-  if (!Number.isFinite(mo) || !Number.isFinite(day)) return ymd;
-  return `${mo}월 ${day}일`;
+/** 휠·LCD 공통: 짧은 숫자만 (MM.DD) */
+function formatCompactMday(ymd: string): string {
+  if (ymd.length >= 10) {
+    return `${ymd.slice(5, 7)}.${ymd.slice(8, 10)}`;
+  }
+  return ymd;
 }
 
 const KG_INTS = Array.from({ length: KG_INT_MAX - KG_INT_MIN + 1 }, (_, i) =>
@@ -183,10 +184,10 @@ export function WeightSparkStrip({
     entryForPick != null
       ? isToday
         ? `오늘 기록: ${entryForPick.kg.toFixed(1)} kg`
-        : `${formatKoreanDay(pickDate)} 기록: ${entryForPick.kg.toFixed(1)} kg`
+        : `${formatCompactMday(pickDate)} 기록: ${entryForPick.kg.toFixed(1)} kg`
       : isToday
         ? "오늘은 아직 미기록"
-        : `${formatKoreanDay(pickDate)} · 기록 없음`;
+        : `${formatCompactMday(pickDate)} · 기록 없음`;
 
   const handleSave = async () => {
     if (!kgValid) return;
@@ -231,13 +232,17 @@ export function WeightSparkStrip({
               체중계
             </h3>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-x-1.5 text-[8px] text-muted-foreground">
-            {targetWeightKg != null && targetWeightKg > 0 ? (
-              <span className="tabular-nums">목표 {targetWeightKg}kg</span>
-            ) : null}
-            {profileKg != null ? (
-              <span className="tabular-nums">프로필 {profileKg}</span>
-            ) : null}
+          <div className="flex flex-col items-end gap-0.5 text-right text-[8px] leading-tight text-muted-foreground tabular-nums">
+            <span>
+              목표:{" "}
+              {targetWeightKg != null && targetWeightKg > 0
+                ? `${Number(targetWeightKg).toFixed(1)} kg`
+                : "—"}
+            </span>
+            <span>
+              프로필:{" "}
+              {profileKg != null ? `${Number(profileKg).toFixed(1)} kg` : "—"}
+            </span>
           </div>
         </div>
 
@@ -371,15 +376,13 @@ export function WeightSparkStrip({
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="pl-0.5 text-[9px] font-medium text-muted-foreground">
               날짜{" "}
-              <span className="font-normal text-muted-foreground/80">
-                (월·일)
-              </span>
+              <span className="font-normal text-muted-foreground/80">(MM.DD)</span>
             </span>
             <DigitalWheelColumn
               values={dateOptions}
               selected={pickDate}
               onSelect={setPickDate}
-              formatDisplay={(ymd) => formatKoreanDay(ymd)}
+              formatDisplay={(ymd) => formatCompactMday(ymd)}
               tone="date"
               ariaLabel="기록 날짜"
               className="min-w-0"

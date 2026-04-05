@@ -9,6 +9,8 @@ import {
   Loader2,
   Headset,
   ListTodo,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MacroTotals } from "@/lib/meal-macros";
@@ -247,6 +249,8 @@ export function ChatFab({
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [bootLoading, setBootLoading] = useState(false);
+  /** 코치·추천 질문 영역 접기 (대화 가리지 않도록) */
+  const [accessoryExpanded, setAccessoryExpanded] = useState(true);
   const wasChatOpenRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   /** send 직후에도 최신 대화로 history를 만들기 위함 (칩/카드는 입력 없이 즉시 API) */
@@ -260,6 +264,27 @@ export function ChatFab({
 
   useEffect(() => {
     if (!isOpen) openingCoachSynced.current = null;
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen) setAccessoryExpanded(true);
+  }, [isOpen]);
+
+  /** 채팅 패널이 열린 동안 뒤 메인 스크롤 차단 */
+  useEffect(() => {
+    if (!isOpen) return;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevPaddingRight = document.body.style.paddingRight;
+    const sbw = window.innerWidth - document.documentElement.clientWidth;
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+    if (sbw > 0) document.body.style.paddingRight = `${sbw}px`;
+    return () => {
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+      document.body.style.paddingRight = prevPaddingRight;
+    };
   }, [isOpen]);
 
   useEffect(() => {
@@ -655,7 +680,9 @@ export function ChatFab({
       const t = [...messagesRef.current, aiBubble];
       messagesRef.current = t;
       setMessages(t);
-      setQuickChips(normalized.quick_chips ?? []);
+      const chips = normalized.quick_chips ?? [];
+      setQuickChips(chips);
+      if (chips.length > 0) setAccessoryExpanded(true);
     } catch {
       const cleaned = messagesRef.current.filter((m) => m.id !== streamId);
       messagesRef.current = cleaned;
@@ -684,7 +711,7 @@ export function ChatFab({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            className="fixed inset-0 z-50 flex flex-col bg-[#1b1d20] text-zinc-100"
+            className="fixed inset-0 z-50 flex max-h-[100dvh] flex-col overflow-hidden bg-[#1b1d20] text-zinc-100 overscroll-none touch-pan-y"
           >
             <div className="flex items-center justify-between border-b border-zinc-800/90 bg-[#1b1d20] px-4 py-3">
               <div>
@@ -713,7 +740,7 @@ export function ChatFab({
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-3 bg-[#1b1d20] p-4">
+            <div className="min-h-0 flex-1 touch-pan-y space-y-3 overflow-y-auto overscroll-y-contain bg-[#1b1d20] p-4">
               {bootLoading && messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-2 px-3 pt-16 text-sm text-zinc-500">
                   <Loader2 className="h-6 w-6 animate-spin text-indigo-400" />
@@ -734,7 +761,7 @@ export function ChatFab({
                       key={msg.id}
                       className="flex justify-end"
                     >
-                      <div className="flex max-w-[min(100%,20rem)] flex-row-reverse items-end gap-1.5">
+                      <div className="flex max-w-[min(100%,20rem)] flex-row-reverse items-start gap-1.5">
                         <div
                           className={cn(
                             "rounded-[14px] bg-[#FEE500] px-3 py-2 text-[13px] leading-snug text-[#191919]",
@@ -745,7 +772,7 @@ export function ChatFab({
                             {formatInlineBold(msg.message, "bubble")}
                           </span>
                         </div>
-                        <span className="mb-1 shrink-0 text-[10px] tabular-nums text-zinc-500">
+                        <span className="mt-2 shrink-0 self-start text-[10px] tabular-nums text-zinc-500">
                           {formatKoreanChatTime(receivedAt)}
                         </span>
                       </div>
@@ -797,18 +824,42 @@ export function ChatFab({
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="border-t border-zinc-800 bg-[#121316] p-3 space-y-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <div className="border-t border-zinc-800 bg-[#121316] pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              <button
+                type="button"
+                onClick={() => setAccessoryExpanded((e) => !e)}
+                className="flex w-full items-center justify-between gap-2 border-b border-zinc-800/80 px-3 py-2 text-left text-zinc-400 transition-colors hover:bg-zinc-900/80"
+                aria-expanded={accessoryExpanded}
+              >
+                <span className="text-[11px] font-semibold text-zinc-400">
+                  담당 코치 · 추천 질문{" "}
+                  {quickChips.length > 0 ? (
+                    <span className="font-normal text-zinc-500">
+                      ({quickChips.length})
+                    </span>
+                  ) : null}
+                </span>
+                {accessoryExpanded ? (
+                  <ChevronDown className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
+                ) : (
+                  <ChevronUp className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
+                )}
+              </button>
+              {accessoryExpanded ? (
+                <div className="space-y-2.5 p-3">
               <CoachPersonaPicker
                 value={coachPersona}
                 onChange={setCoachPersona}
-                disabled={isLoading || bootLoading}
+                disabled={isLoading}
               />
               <QuickChipRow
                 chips={quickChips}
                 disabled={isLoading || bootLoading}
                 onPick={(prompt) => void sendWithText(prompt, "chip")}
               />
-              <div className="flex items-center gap-2">
+                </div>
+              ) : null}
+              <div className="flex items-center gap-2 px-3 pb-3 pt-1">
                 <input
                   type="text"
                   value={input}
@@ -839,7 +890,7 @@ export function ChatFab({
         <button
           type="button"
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-4 z-40 rounded-2xl bg-primary p-3.5 text-primary-foreground shadow-lg shadow-primary/50 ring-1 ring-primary/30 active:scale-95 transition-transform"
+          className="fixed right-4 z-40 rounded-2xl bg-primary p-3.5 text-primary-foreground shadow-lg shadow-primary/50 ring-1 ring-primary/30 transition-transform active:scale-95 max-[480px]:bottom-[7.5rem] min-[481px]:bottom-28"
           aria-label="전략 코칭 열기"
         >
           <MessageCircle className="w-5 h-5" />
