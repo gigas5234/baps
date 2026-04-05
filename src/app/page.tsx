@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { Menu } from "lucide-react";
@@ -14,6 +14,7 @@ import { WeightSparkStrip } from "@/components/dashboard/weight-spark-strip";
 import { MealTimeline } from "@/components/dashboard/meal-timeline";
 import { HomeDashboardSkeleton } from "@/components/dashboard/home-dashboard-skeleton";
 import { WaterCounter } from "@/components/dashboard/water-counter";
+import { HomeLanding } from "@/components/home/home-landing";
 import { AnalyzeModal } from "@/components/meal/analyze-modal";
 import { ManualInputModal } from "@/components/meal/manual-input-modal";
 import { useMealStore } from "@/store/use-meal-store";
@@ -26,10 +27,15 @@ import {
   useDailyCalories,
   useProfile,
 } from "@/lib/queries";
-import { uploadMealImage, fileToBase64 } from "@/lib/storage";
+import { compressImageForAnalysis } from "@/lib/image-compress";
+import { uploadMealImage } from "@/lib/storage";
 import { getCalorieZone } from "@/lib/calorie-zone";
 import { sumMealMacros } from "@/lib/meal-macros";
 import { syncSelectedDateToLocalTodayOnce } from "@/lib/local-date";
+import {
+  getRecommendedWaterMl,
+  getWaterTargetCups,
+} from "@/lib/water-goal";
 import { normalizeWaterCupMl } from "@/lib/water-cup";
 import { createClient } from "@/lib/supabase-browser";
 
@@ -98,6 +104,23 @@ export default function HomePage() {
     profile?.water_cup_ml ?? waterCupMl
   );
 
+  const waterRecommendedMl = useMemo(
+    () =>
+      getRecommendedWaterMl({
+        weightKg: profile?.weight ?? null,
+        gender: profile?.gender ?? null,
+        age: profile?.age ?? null,
+        bmr: profile?.bmr ?? null,
+        targetCal: target,
+      }),
+    [profile?.weight, profile?.gender, profile?.age, profile?.bmr, target]
+  );
+
+  const waterTargetCups = useMemo(
+    () => getWaterTargetCups(waterRecommendedMl, cupMl),
+    [waterRecommendedMl, cupMl]
+  );
+
   const showDashboardSkeleton =
     authLoading ||
     (!!userId &&
@@ -147,19 +170,22 @@ export default function HomePage() {
     setIsAnalyzing(true);
 
     try {
-      // 1. Base64로 변환해서 Gemini에 전송
-      const base64 = await fileToBase64(file);
+      // 1. 리사이즈·JPEG 압축 후 Base64 전송 (Vercel 413 본문 제한 대응)
+      const prepared = await compressImageForAnalysis(file);
 
       const res = await fetch("/api/analyze-meal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          imageBase64: base64,
-          mimeType: file.type,
+          imageBase64: prepared.base64,
+          mimeType: prepared.mimeType,
         }),
       });
 
-      const data = await res.json();
+      const data =
+        res.status === 413
+          ? { error: "전송 용량이 한도를 넘었어요. 다른 사진으로 시도해 주세요." }
+          : await res.json();
 
       if (!res.ok) {
         setAnalyzeError(data.error || "분석 실패");
@@ -168,13 +194,17 @@ export default function HomePage() {
 
       setAnalyzeResult(data);
 
-      // 2. Supabase Storage에 이미지 업로드 (분석과 병렬로 해도 되지만 순차로)
+      // 2. 스토리지에는 압축본 업로드(용량·일관성)
       if (userId) {
-        const url = await uploadMealImage(userId, file);
+        const url = await uploadMealImage(userId, prepared.file);
         setImageUrl(url);
       }
-    } catch {
-      setAnalyzeError("분석 중 오류가 발생했어요. 다시 시도해주세요.");
+    } catch (err) {
+      setAnalyzeError(
+        err instanceof Error
+          ? err.message
+          : "분석 중 오류가 발생했어요. 다시 시도해주세요."
+      );
     } finally {
       setIsAnalyzing(false);
       // input 초기화 (같은 파일 다시 선택 가능)
@@ -237,6 +267,14 @@ export default function HomePage() {
     }
   };
 
+  if (authLoading) {
+    return <HomeLanding phase="loading" />;
+  }
+
+  if (!userId) {
+    return <HomeLanding phase="guest" />;
+  }
+
   return (
     <main className="flex-1 pb-28 max-w-md mx-auto w-full">
       {/* 카메라: 촬영 우선 (모바일에서 후면 카메라) */}
@@ -270,14 +308,22 @@ export default function HomePage() {
         ) : (
           <>
             <div className="min-w-0">
-              <h1 className="text-xl font-bold tracking-tight">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <h1 className="text-xl font-bold tracking-tight">
+                  <Link
+                    href="/"
+                    className="rounded-md outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  >
+                    BAPS
+                  </Link>
+                </h1>
                 <Link
-                  href="/"
-                  className="rounded-md outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  href="/intro"
+                  className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors shrink-0"
                 >
-                  BAPS
+                  소개
                 </Link>
-              </h1>
+              </div>
               <p className="text-sm text-muted-foreground truncate">
                 {displayName
                   ? `${displayName}님, 오늘도 건강하게!`
@@ -313,6 +359,7 @@ export default function HomePage() {
             macros={macroTotals}
             waterCups={waterLog?.cups ?? 0}
             cupMl={cupMl}
+            waterRecommendedMl={waterRecommendedMl}
             zone={calorieZone}
           />
         </div>
@@ -334,6 +381,8 @@ export default function HomePage() {
             <WaterCounter
               cups={waterLog?.cups ?? 0}
               cupMl={cupMl}
+              targetCups={waterTargetCups}
+              recommendedMl={waterRecommendedMl}
               onIncrement={() =>
                 adjustWater.mutate({
                   currentCups: waterLog?.cups ?? 0,
@@ -356,6 +405,7 @@ export default function HomePage() {
                 userId={userId}
                 selectedDate={selectedDate}
                 profileKg={profile?.weight ?? null}
+                targetWeightKg={profile?.target_weight ?? null}
                 onSavedProfile={() =>
                   void queryClient.invalidateQueries({
                     queryKey: ["profile", userId],
@@ -387,6 +437,8 @@ export default function HomePage() {
             targetCal={target}
             waterCups={waterLog?.cups ?? 0}
             waterCupMl={cupMl}
+            waterTargetCups={waterTargetCups}
+            waterRecommendedMl={waterRecommendedMl}
           />
         </>
       ) : null}

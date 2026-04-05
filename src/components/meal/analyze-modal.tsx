@@ -98,15 +98,40 @@ export function AnalyzeModal({
                 </div>
 
                 {/* Nutrition grid */}
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-4 gap-2 rounded-2xl border border-grid-line bg-card/50 p-2">
                   {[
-                    { label: "칼로리", value: `${result.cal}`, unit: "kcal", color: "text-orange-500" },
-                    { label: "탄수화물", value: `${result.carbs}`, unit: "g", color: "text-blue-500" },
-                    { label: "단백질", value: `${result.protein}`, unit: "g", color: "text-red-500" },
-                    { label: "지방", value: `${result.fat}`, unit: "g", color: "text-yellow-500" },
+                    {
+                      label: "칼로리",
+                      value: `${result.cal}`,
+                      unit: "kcal",
+                      color: "text-gauge-caution",
+                    },
+                    {
+                      label: "탄수화물",
+                      value: `${result.carbs}`,
+                      unit: "g",
+                      color: "text-primary",
+                    },
+                    {
+                      label: "단백질",
+                      value: `${result.protein}`,
+                      unit: "g",
+                      color: "text-scanner",
+                    },
+                    {
+                      label: "지방",
+                      value: `${result.fat}`,
+                      unit: "g",
+                      color: "text-amber-600 dark:text-amber-400",
+                    },
                   ].map(({ label, value, unit, color }) => (
-                    <div key={label} className="bg-muted rounded-xl p-3 text-center">
-                      <p className={`text-lg font-bold ${color}`}>{value}</p>
+                    <div
+                      key={label}
+                      className="rounded-xl border border-grid-line bg-background/60 p-3 text-center"
+                    >
+                      <p className={`font-data text-lg font-bold ${color}`}>
+                        {value}
+                      </p>
                       <p className="text-[10px] text-muted-foreground">{unit}</p>
                       <p className="text-[10px] text-muted-foreground mt-0.5">{label}</p>
                     </div>

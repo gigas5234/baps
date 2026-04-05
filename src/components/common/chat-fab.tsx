@@ -18,6 +18,8 @@ interface ChatFabProps {
   targetCal: number;
   waterCups: number;
   waterCupMl?: number;
+  waterTargetCups?: number;
+  waterRecommendedMl?: number;
 }
 
 export function ChatFab({
@@ -26,6 +28,8 @@ export function ChatFab({
   targetCal,
   waterCups,
   waterCupMl = 250,
+  waterTargetCups,
+  waterRecommendedMl,
 }: ChatFabProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -64,6 +68,8 @@ export function ChatFab({
             targetCal,
             waterCups,
             waterCupMl,
+            waterTargetCups,
+            waterRecommendedMl,
           },
           history: messages.slice(-10), // 최근 10개 컨텍스트
         }),
@@ -184,7 +190,7 @@ export function ChatFab({
                 <button
                   onClick={sendMessage}
                   disabled={!input.trim() || isLoading}
-                  className="bg-violet-600 text-white rounded-full p-2.5 disabled:opacity-40 active:scale-95 transition-transform"
+                  className="rounded-2xl bg-primary p-2.5 text-primary-foreground shadow-lg shadow-primary/45 ring-1 ring-primary/25 disabled:opacity-40 active:scale-95 transition-transform"
                 >
                   <Send className="w-4 h-4" />
                 </button>
@@ -198,7 +204,7 @@ export function ChatFab({
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-6 right-4 z-40 bg-violet-600 text-white rounded-full p-3.5 shadow-xl active:scale-95 transition-transform"
+          className="fixed bottom-6 right-4 z-40 rounded-2xl bg-primary p-3.5 text-primary-foreground shadow-lg shadow-primary/50 ring-1 ring-primary/30 active:scale-95 transition-transform"
         >
           <MessageCircle className="w-5 h-5" />
         </button>

@@ -16,19 +16,19 @@ const actions = [
     id: "camera",
     icon: Camera,
     label: "사진 찍기",
-    color: "bg-blue-500 shadow-blue-500/30",
+    color: "bg-scanner text-scanner-foreground shadow-scanner/35",
   },
   {
     id: "gallery",
     icon: Images,
     label: "사진첩",
-    color: "bg-violet-500 shadow-violet-500/30",
+    color: "bg-primary text-primary-foreground shadow-primary/30",
   },
   {
     id: "manual",
     icon: Pencil,
     label: "직접 입력",
-    color: "bg-green-500 shadow-green-500/30",
+    color: "bg-action-manual text-white shadow-action-manual/30",
   },
 ] as const;
 

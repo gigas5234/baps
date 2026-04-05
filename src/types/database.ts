@@ -5,6 +5,8 @@ export interface Profile {
   user_name: string;
   height: number | null;
   weight: number | null;
+  /** 목표 몸무게 kg (선택, DB 마이그레이션 후) */
+  target_weight?: number | null;
   age: number | null;
   gender: Gender | null;
   bmr: number;

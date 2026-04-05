@@ -14,10 +14,6 @@ interface CalorieGaugeProps {
   macros?: MacroTotals | null;
 }
 
-const SAFE = "#4ADE80";
-const CAUTION = "#FB923C";
-const DANGER = "#F87171";
-
 function zoneStyle(zone: ReturnType<typeof getCalorieZone>): {
   message: string;
   textClass: string;
@@ -42,35 +38,43 @@ function zoneStyle(zone: ReturnType<typeof getCalorieZone>): {
     case "safe":
       return {
         message: "좋아요! 여유 있어요 🙂",
-        textClass: "text-[#16A34A]",
-        accent: SAFE,
-        trackStroke: "rgb(74 222 128 / 0.35)",
-        cardBg: "rgba(74, 222, 128, 0.08)",
-        cardRing: "rgba(74, 222, 128, 0.22)",
+        textClass: "text-gauge-safe",
+        accent: "var(--gauge-safe)",
+        trackStroke: "color-mix(in srgb, var(--gauge-safe) 38%, transparent)",
+        cardBg:
+          "color-mix(in srgb, var(--gauge-safe) 12%, var(--card))",
+        cardRing:
+          "color-mix(in srgb, var(--gauge-safe) 28%, transparent)",
         glassGradient:
-          "linear-gradient(145deg, rgba(240,253,244,0.7) 0%, rgba(74,222,128,0.12) 55%, rgba(255,255,255,0.35) 100%)",
+          "linear-gradient(145deg, color-mix(in srgb, var(--gauge-safe) 16%, var(--card)) 0%, color-mix(in srgb, var(--gauge-safe) 10%, transparent) 55%, var(--card) 100%)",
       };
     case "caution":
       return {
         message: "목표에 거의 도달했어요. 조금만 조절해요 👀",
-        textClass: "text-[#EA580C]",
-        accent: CAUTION,
-        trackStroke: "rgb(251 146 60 / 0.4)",
-        cardBg: "rgba(251, 146, 60, 0.09)",
-        cardRing: "rgba(251, 146, 60, 0.25)",
+        textClass: "text-gauge-caution",
+        accent: "var(--gauge-caution)",
+        trackStroke:
+          "color-mix(in srgb, var(--gauge-caution) 42%, transparent)",
+        cardBg:
+          "color-mix(in srgb, var(--gauge-caution) 11%, var(--card))",
+        cardRing:
+          "color-mix(in srgb, var(--gauge-caution) 30%, transparent)",
         glassGradient:
-          "linear-gradient(145deg, rgba(255,247,237,0.75) 0%, rgba(251,146,60,0.14) 50%, rgba(255,255,255,0.3) 100%)",
+          "linear-gradient(145deg, color-mix(in srgb, var(--gauge-caution) 18%, var(--card)) 0%, color-mix(in srgb, var(--gauge-caution) 12%, transparent) 50%, var(--card) 100%)",
       };
     case "danger":
       return {
         message: "목표를 넘겼어요! 내일은 가볍게 가볼까요 🔥",
-        textClass: "text-[#DC2626]",
-        accent: DANGER,
-        trackStroke: "rgb(248 113 113 / 0.45)",
-        cardBg: "rgba(248, 113, 113, 0.09)",
-        cardRing: "rgba(248, 113, 113, 0.3)",
+        textClass: "text-gauge-danger",
+        accent: "var(--gauge-danger)",
+        trackStroke:
+          "color-mix(in srgb, var(--gauge-danger) 45%, transparent)",
+        cardBg:
+          "color-mix(in srgb, var(--gauge-danger) 11%, var(--card))",
+        cardRing:
+          "color-mix(in srgb, var(--gauge-danger) 32%, transparent)",
         glassGradient:
-          "linear-gradient(145deg, rgba(254,242,242,0.8) 0%, rgba(248,113,113,0.16) 48%, rgba(255,255,255,0.28) 100%)",
+          "linear-gradient(145deg, color-mix(in srgb, var(--gauge-danger) 20%, var(--card)) 0%, color-mix(in srgb, var(--gauge-danger) 14%, transparent) 48%, var(--card) 100%)",
       };
   }
 }
@@ -134,9 +138,9 @@ export function CalorieGauge({
                 x2="100%"
                 y2="0%"
               >
-                <stop offset="0%" stopColor="#4ADE80" />
-                <stop offset="52%" stopColor="#FB923C" />
-                <stop offset="100%" stopColor="#F87171" />
+                <stop offset="0%" stopColor="var(--gauge-safe)" />
+                <stop offset="52%" stopColor="var(--gauge-caution)" />
+                <stop offset="100%" stopColor="var(--gauge-danger)" />
               </linearGradient>
             </defs>
             <path
@@ -173,7 +177,7 @@ export function CalorieGauge({
             />
             <motion.p
               className={cn(
-                "text-3xl font-bold tabular-nums",
+                "font-data text-3xl font-bold tabular-nums",
                 zone === "empty" ? "text-muted-foreground" : style.textClass
               )}
               key={current}
@@ -203,7 +207,7 @@ export function CalorieGauge({
           <div className="mt-4 flex gap-6 text-xs text-muted-foreground">
             <div className="text-center">
               <p
-                className="text-sm font-semibold tabular-nums"
+                className="font-data text-sm font-semibold tabular-nums"
                 style={{ color: zone === "empty" ? undefined : style.accent }}
               >
                 {Math.round(percentage)}%
@@ -212,7 +216,7 @@ export function CalorieGauge({
             </div>
             <div className="w-px bg-border/80" />
             <div className="text-center">
-              <p className="text-sm font-semibold text-foreground">
+              <p className="font-data text-sm font-semibold text-foreground">
                 {Math.max(target - current, 0).toLocaleString()}
               </p>
               <p>남은 kcal</p>

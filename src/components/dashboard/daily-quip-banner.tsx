@@ -15,6 +15,8 @@ interface DailyQuipBannerProps {
   macros: MacroTotals;
   waterCups: number;
   cupMl: number;
+  /** 프로필 기반 하루 권장 물(ml) */
+  waterRecommendedMl: number;
   zone: CalorieZone;
   className?: string;
 }
@@ -27,19 +29,24 @@ export function DailyQuipBanner({
   macros,
   waterCups,
   cupMl,
+  waterRecommendedMl,
   zone,
   className,
 }: DailyQuipBannerProps) {
   const line = useMemo(() => {
     const nick = displayName?.trim() || "님";
     const waterMl = waterCups * cupMl;
+    const lowWaterThreshold = Math.max(
+      400,
+      Math.round(Math.max(1, waterRecommendedMl) * 0.22)
+    );
 
     if (zone === "empty" && totalCal <= 0 && mealCount === 0) {
       return `${nick}, 아직 0kcal네요? 굶는 다이어트는 결국 폭식을 부릅니다. 한 끼라도 기록해 봐요.`;
     }
 
-    if (waterMl < 500 && mealCount > 0) {
-      return `물 ${waterMl}ml? 세포도 목말랐대요. 컵 한 잔부터 올려요.`;
+    if (waterMl < lowWaterThreshold && mealCount > 0) {
+      return `물 ${waterMl}ml? 오늘 권장 약 ${waterRecommendedMl.toLocaleString()}ml인데 아직 시작도 안 한 수준이에요. 컵 한 잔부터 올려요.`;
     }
 
     if (isFatHeavy(macros) && totalCal > 300) {
@@ -67,14 +74,23 @@ export function DailyQuipBanner({
     }
 
     return `${nick}, 오늘도 기록 한 줄이 미래의 나한테 쪽지예요.`;
-  }, [displayName, totalCal, mealCount, macros, waterCups, cupMl, zone]);
+  }, [
+    displayName,
+    totalCal,
+    mealCount,
+    macros,
+    waterCups,
+    cupMl,
+    waterRecommendedMl,
+    zone,
+  ]);
 
   return (
     <div
       className={cn(
         "relative mx-4 rounded-2xl border px-3.5 py-3 shadow-sm",
-        "border-primary/15 bg-gradient-to-br from-primary/6 via-background/80 to-violet-500/5",
-        "backdrop-blur-md dark:from-primary/15 dark:to-violet-500/10",
+        "border-primary/15 bg-gradient-to-br from-primary/6 via-background/80 to-scanner/8",
+        "backdrop-blur-md dark:from-primary/15 dark:to-scanner/12",
         className
       )}
     >

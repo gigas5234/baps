@@ -8,23 +8,28 @@ interface WaterCounterProps {
   cups: number;
   /** 1잔당 ml (설정에서 변경) */
   cupMl?: number;
+  /** 권장 기준으로 계산된 목표 잔 수 */
+  targetCups: number;
+  /** 계산에 쓴 권장 ml (표시용) */
+  recommendedMl: number;
   onIncrement: () => void;
   onDecrement: () => void;
   isUpdating?: boolean;
 }
 
-const TARGET_CUPS = 8; // 하루 목표 잔 수 (2L @ 250ml)
-
 export function WaterCounter({
   cups,
   cupMl = 250,
+  targetCups,
+  recommendedMl,
   onIncrement,
   onDecrement,
   isUpdating,
 }: WaterCounterProps) {
-  const percentage = Math.min((cups / TARGET_CUPS) * 100, 100);
+  const safeTarget = Math.max(1, targetCups);
+  const percentage = Math.min((cups / safeTarget) * 100, 100);
   const totalMl = cups * cupMl;
-  const targetMl = TARGET_CUPS * cupMl;
+  const goalMl = safeTarget * cupMl;
   const canDecrement = cups > 0 && !isUpdating;
 
   return (
@@ -35,13 +40,16 @@ export function WaterCounter({
       )}
     >
       <div className="flex items-start gap-3">
-        <div className="relative w-10 h-10 shrink-0 rounded-xl bg-cyan-50 flex items-center justify-center">
-          <Droplets className="w-5 h-5 text-cyan-500" />
+        <div className="relative w-10 h-10 shrink-0 rounded-xl bg-scanner/15 flex items-center justify-center dark:bg-scanner/20">
+          <Droplets className="w-5 h-5 text-scanner" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold">물 섭취</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            목표 {TARGET_CUPS}잔 · {targetMl}ml
+            목표 {safeTarget}잔 · {goalMl.toLocaleString()}ml
+          </p>
+          <p className="text-[10px] text-muted-foreground/90 mt-0.5 leading-snug">
+            권장 약 {recommendedMl.toLocaleString()}ml (체중·성별·나이·BMR·목표 칼로리)
           </p>
         </div>
       </div>
@@ -49,7 +57,7 @@ export function WaterCounter({
       {/* Progress bar */}
       <div className="mt-3 h-2 bg-muted rounded-full overflow-hidden">
         <motion.div
-          className="h-full bg-cyan-400 rounded-full"
+          className="h-full bg-scanner rounded-full"
           initial={{ width: 0 }}
           animate={{ width: `${percentage}%` }}
           transition={{ duration: 0.4, ease: "easeOut" }}
@@ -73,7 +81,7 @@ export function WaterCounter({
         </button>
 
         <div className="flex min-w-0 flex-1 flex-col items-center px-2 text-center">
-          <span className="text-2xl font-bold tabular-nums tracking-tight">
+          <span className="font-data text-2xl font-bold tabular-nums tracking-tight">
             {cups}
           </span>
           <span className="text-xs text-muted-foreground">
@@ -87,9 +95,9 @@ export function WaterCounter({
           disabled={isUpdating}
           aria-label="1잔 더하기"
           className={cn(
-            "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-cyan-500 text-white shadow-md shadow-cyan-500/25 transition-transform active:scale-95",
+            "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-scanner text-scanner-foreground shadow-md shadow-scanner/25 transition-transform active:scale-95",
             "disabled:opacity-50 disabled:pointer-events-none",
-            "hover:bg-cyan-600"
+            "hover:brightness-95 dark:hover:brightness-110"
           )}
         >
           <Plus className="w-5 h-5 stroke-[2.5]" aria-hidden />

@@ -7,8 +7,12 @@ function buildSystemPrompt(context: {
   targetCal: number;
   waterCups: number;
   waterCupMl?: number;
+  waterTargetCups?: number;
+  waterRecommendedMl?: number;
 }) {
   const cupMl = context.waterCupMl ?? 250;
+  const waterGoalCups = context.waterTargetCups ?? 8;
+  const waterGoalMl = context.waterRecommendedMl ?? waterGoalCups * cupMl;
   const mealList = context.todayMeals.length > 0
     ? context.todayMeals.map((m) => `- ${m.food_name} (${m.cal}kcal)`).join("\n")
     : "- 아직 기록 없음";
@@ -24,7 +28,8 @@ ${mealList}
 
 총 섭취: ${context.totalCal}kcal / 목표: ${context.targetCal}kcal
 남은 칼로리: ${remaining}kcal
-물 섭취: ${context.waterCups}잔 (${context.waterCups * cupMl}ml, 1잔 ${cupMl}ml 기준)`;
+물 섭취: ${context.waterCups}잔 (${context.waterCups * cupMl}ml, 1잔 ${cupMl}ml)
+오늘 물 목표: 약 ${waterGoalMl}ml (목표 ${waterGoalCups}잔 기준)`;
 }
 
 export async function POST(request: Request) {

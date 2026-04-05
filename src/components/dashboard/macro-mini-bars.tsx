@@ -41,14 +41,14 @@ export function MacroMiniBars({ macros, totalMealCalories }: MacroMiniBarsProps)
       label: "탄수화물",
       sub: `${macros.carbsG.toFixed(0)}g · ${Math.round(carbKcal)}kcal`,
       pct: carb,
-      fill: "bg-sky-500/85",
+      fill: "bg-primary/85",
     },
     {
       key: "protein",
       label: "단백질",
       sub: `${macros.proteinG.toFixed(0)}g · ${Math.round(proteinKcal)}kcal`,
       pct: protein,
-      fill: "bg-violet-500/85",
+      fill: "bg-scanner/85",
       warn: proteinWarn,
     },
     {
@@ -62,7 +62,7 @@ export function MacroMiniBars({ macros, totalMealCalories }: MacroMiniBarsProps)
   ];
 
   return (
-    <div className="mt-5 w-full space-y-2.5 rounded-2xl border border-border/50 bg-background/40 px-3 py-3 dark:bg-background/20">
+    <div className="mt-5 w-full space-y-2.5 rounded-2xl border border-grid-line bg-background/40 px-3 py-3 dark:bg-background/20">
       <p className="text-[11px] font-medium text-muted-foreground">
         오늘 3대 영양소{" "}
         <span className="text-foreground/80">(섭취 kcal 비중)</span>
@@ -73,7 +73,7 @@ export function MacroMiniBars({ macros, totalMealCalories }: MacroMiniBarsProps)
         </p>
       ) : null}
       {proteinWarn ? (
-        <p className="text-[11px] font-medium text-violet-700 dark:text-violet-300">
+        <p className="text-[11px] font-medium text-primary dark:text-primary">
           단백질이 조금 부족해 보여요
         </p>
       ) : null}
@@ -89,7 +89,7 @@ export function MacroMiniBars({ macros, totalMealCalories }: MacroMiniBarsProps)
               >
                 {r.label}
               </span>
-              <span className="tabular-nums text-muted-foreground">
+              <span className="font-data tabular-nums text-muted-foreground">
                 {Math.round(r.pct * 100)}%
               </span>
             </div>
