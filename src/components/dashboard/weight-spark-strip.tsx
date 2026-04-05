@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useId, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, useId } from "react";
 import { Scale } from "lucide-react";
 import { DigitalWheelColumn } from "@/components/dashboard/digital-wheel-column";
 import {
@@ -47,23 +47,8 @@ const KG_INTS = Array.from({ length: KG_INT_MAX - KG_INT_MIN + 1 }, (_, i) =>
 );
 const KG_DECS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
-function CoachFootnote({ children }: { children: ReactNode }) {
-  return (
-    <div
-      className={cn(
-        "mt-2 rounded-lg border border-border/70 bg-muted/25 px-2.5 py-2",
-        "dark:border-white/10 dark:bg-muted/15"
-      )}
-    >
-      <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-        관제 코멘트
-      </p>
-      <p className="mt-1 text-[10px] font-medium leading-relaxed text-foreground/90">
-        {children}
-      </p>
-    </div>
-  );
-}
+/** 날짜·체중 휠 뷰포트 높이 통일 */
+const WHEEL_VIEWPORT_PX = 108;
 
 interface WeightSparkStripProps {
   userId: string | undefined;
@@ -372,7 +357,7 @@ export function WeightSparkStrip({
       </div>
 
       <div className="mt-2 space-y-1 px-0.5">
-        <div className="flex gap-1.5">
+        <div className="flex items-stretch gap-1.5">
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="pl-0.5 text-[9px] font-medium text-muted-foreground">
               날짜{" "}
@@ -384,6 +369,7 @@ export function WeightSparkStrip({
               onSelect={setPickDate}
               formatDisplay={(ymd) => formatCompactMday(ymd)}
               tone="date"
+              heightPx={WHEEL_VIEWPORT_PX}
               ariaLabel="기록 날짜"
               className="min-w-0"
             />
@@ -393,16 +379,23 @@ export function WeightSparkStrip({
               체중{" "}
               <span className="font-normal text-muted-foreground/80">(kg)</span>
             </span>
-            <div className="flex gap-1">
+            <div
+              className="flex min-h-0 items-stretch gap-1"
+              style={{ minHeight: WHEEL_VIEWPORT_PX }}
+            >
               <DigitalWheelColumn
                 values={KG_INTS}
                 selected={kgInt}
                 onSelect={setKgInt}
                 tone="weight"
+                heightPx={WHEEL_VIEWPORT_PX}
                 ariaLabel="체중 정수 kg"
                 className="min-w-0 flex-1"
               />
-              <div className="flex w-4 shrink-0 flex-col items-center justify-end pb-2">
+              <div
+                className="flex w-4 shrink-0 items-center justify-center self-stretch"
+                style={{ minHeight: WHEEL_VIEWPORT_PX }}
+              >
                 <span className="font-data text-sm font-semibold text-muted-foreground">
                   .
                 </span>
@@ -412,6 +405,7 @@ export function WeightSparkStrip({
                 selected={kgDec}
                 onSelect={setKgDec}
                 tone="weight"
+                heightPx={WHEEL_VIEWPORT_PX}
                 ariaLabel="체중 소수 첫째 자리"
                 className="w-12 shrink-0"
               />
@@ -433,10 +427,6 @@ export function WeightSparkStrip({
       >
         {saving ? "저장 중…" : "측정 저장"}
       </button>
-
-      <CoachFootnote>
-        정확한 측정이 결과를 만듭니다. 같은 조건·같은 시간대를 유지하십시오.
-      </CoachFootnote>
     </section>
   );
 }

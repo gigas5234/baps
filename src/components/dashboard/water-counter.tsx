@@ -1,26 +1,12 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { WaterBottleVisual } from "@/components/dashboard/water-bottle-visual";
 
-function waterCoachCopy(opts: {
-  pctTowardRecommended: number;
-  cups: number;
-}): string {
-  const { pctTowardRecommended, cups } = opts;
-  if (cups === 0 || pctTowardRecommended < 42) {
-    return "수분이 부족하면 신진대사가 느려집니다. 마시십시오.";
-  }
-  if (pctTowardRecommended < 78) {
-    return "흐름이 안정적입니다. 권장량까지 한 잔씩 밀어 넣으십시오.";
-  }
-  if (pctTowardRecommended < 100) {
-    return "거의 도달했습니다. 가짜 갈증을 경계하고 마무리만 정확히.";
-  }
-  return "목표를 넘겼습니다. 내일 분석 신뢰도를 위해 과다는 피하십시오.";
-}
+const WATER_100_STORAGE_PREFIX = "baps-water-100-done:";
 
 interface WaterCounterProps {
   cups: number;
@@ -37,6 +23,10 @@ interface WaterCounterProps {
   readOnly?: boolean;
   /** 체중 카드와 한 줄에 넣을 때 세로 공간 축소 */
   variant?: "default" | "paired";
+  /**
+   * 권장량 100% 달성 축하(날짜당 1회). 물 기록과 같은 캘린더 날짜 키를 넘기세요.
+   */
+  celebrationDateKey?: string;
 }
 
 export function WaterCounter({
@@ -49,6 +39,7 @@ export function WaterCounter({
   isUpdating,
   readOnly = false,
   variant = "default",
+  celebrationDateKey = "",
 }: WaterCounterProps) {
   const paired = variant === "paired";
   const safeTarget = Math.max(1, targetCups);
@@ -63,11 +54,34 @@ export function WaterCounter({
   const canDecrement = !readOnly && cups > 0 && !isUpdating;
   const canIncrement = !readOnly && !isUpdating;
 
+  const prevPctRef = useRef<number | null>(null);
+  const [celebrate, setCelebrate] = useState(false);
+
+  useEffect(() => {
+    prevPctRef.current = null;
+  }, [celebrationDateKey]);
+
+  useEffect(() => {
+    if (!paired || readOnly || !celebrationDateKey) return;
+    const storageKey = `${WATER_100_STORAGE_PREFIX}${celebrationDateKey}`;
+    const already =
+      typeof window !== "undefined" && localStorage.getItem(storageKey) === "1";
+    const prev = prevPctRef.current;
+    prevPctRef.current = pctTowardRecommended;
+    if (already || pctTowardRecommended < 100) return;
+    const crossed = prev !== null && prev < 100;
+    if (!crossed) return;
+    localStorage.setItem(storageKey, "1");
+    setCelebrate(true);
+    const t = window.setTimeout(() => setCelebrate(false), 3200);
+    return () => window.clearTimeout(t);
+  }, [paired, readOnly, celebrationDateKey, pctTowardRecommended]);
+
   if (paired) {
     return (
       <div
         className={cn(
-          "flex min-h-[22rem] flex-col rounded-2xl border border-border/80 bg-card/80 p-2.5 shadow-sm",
+          "relative flex min-h-[22rem] flex-col overflow-hidden rounded-2xl border border-border/80 bg-card/80 p-2.5 shadow-sm",
           "dark:border-white/10 dark:bg-card/40"
         )}
       >
@@ -77,14 +91,16 @@ export function WaterCounter({
         <p className="text-[10px] text-center text-muted-foreground tabular-nums">
           {safeTarget}잔 · {goalMl.toLocaleString()}ml
         </p>
-        <div className="mt-1 flex flex-1 flex-col items-center justify-between gap-2">
-          <WaterBottleVisual
-            progress={fillProgress}
-            size="compact"
-            centerPercentLabel={centerLabel}
-            className="shrink-0 opacity-95"
-          />
-          <div className="flex w-full max-w-[11.5rem] items-center justify-between gap-1">
+        <div className="mt-1 flex min-h-0 flex-1 flex-col items-stretch justify-between gap-2 px-0.5">
+          <div className="flex min-h-[11rem] flex-1 flex-col items-center justify-center">
+            <WaterBottleVisual
+              progress={fillProgress}
+              size="paired"
+              centerPercentLabel={centerLabel}
+              className="w-full max-w-[11rem] opacity-95"
+            />
+          </div>
+          <div className="flex w-full max-w-[13rem] items-center justify-between gap-1 self-center">
             <button
               type="button"
               onClick={onDecrement}
@@ -131,19 +147,59 @@ export function WaterCounter({
             <p className="text-[9px] text-muted-foreground">로그인 후 기록</p>
           ) : null}
         </div>
-        <div
-          className={cn(
-            "mt-2 rounded-lg border border-border/70 bg-muted/25 px-2.5 py-2",
-            "dark:border-white/10 dark:bg-muted/15"
-          )}
-        >
-          <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-            관제 코멘트
-          </p>
-          <p className="mt-1 text-[10px] font-medium leading-relaxed text-foreground/90">
-            {waterCoachCopy({ pctTowardRecommended, cups })}
-          </p>
-        </div>
+
+        <AnimatePresence>
+          {celebrate ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center bg-background/55 px-3 backdrop-blur-[2px] dark:bg-zinc-950/50"
+            >
+              <motion.div
+                initial={{ scale: 0.88, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                transition={{ type: "spring", stiffness: 420, damping: 28 }}
+                className="relative max-w-[14rem] rounded-2xl border border-teal-500/35 bg-teal-700 px-4 py-3 text-center text-white shadow-xl shadow-teal-900/30 dark:bg-teal-800"
+              >
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-teal-100/90">
+                  권장량 달성
+                </p>
+                <p className="mt-1 text-sm font-bold leading-snug">
+                  오늘 물 섭취 완료!
+                </p>
+                <p className="mt-1.5 text-[10px] font-medium text-teal-100/85">
+                  잠깐만 축하할게요 — 내일도 정직하게 기록합시다.
+                </p>
+              </motion.div>
+              <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+                {[...Array(14)].map((_, i) => (
+                  <motion.span
+                    key={i}
+                    className="absolute text-lg"
+                    initial={{
+                      opacity: 0.85,
+                      x: `${35 + (i % 5) * 12}%`,
+                      y: "72%",
+                      scale: 0.7,
+                    }}
+                    animate={{
+                      opacity: 0,
+                      y: `${8 + (i % 3) * 6}%`,
+                      x: `${30 + (i % 7) * 8}%`,
+                      scale: 1.25,
+                      rotate: i % 2 === 0 ? 12 : -10,
+                    }}
+                    transition={{ duration: 1.8 + (i % 4) * 0.12, ease: "easeOut" }}
+                  >
+                    {i % 3 === 0 ? "✨" : i % 3 === 1 ? "·" : "★"}
+                  </motion.span>
+                ))}
+              </div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
       </div>
     );
   }

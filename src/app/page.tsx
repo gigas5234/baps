@@ -22,6 +22,10 @@ import {
   ManualInputModal,
   type ManualMealSubmitPayload,
 } from "@/components/meal/manual-input-modal";
+import {
+  FrequentMealEditorModal,
+  type FrequentMealEditorPayload,
+} from "@/components/meal/frequent-meal-editor-modal";
 import { useMealStore } from "@/store/use-meal-store";
 import { useProfileStore } from "@/store/use-profile-store";
 import { useAuth } from "@/lib/use-auth";
@@ -171,6 +175,11 @@ export default function HomePage() {
   // Manual input state
   const [manualOpen, setManualOpen] = useState(false);
   const [isManualSaving, setIsManualSaving] = useState(false);
+
+  const [frequentEditorOpen, setFrequentEditorOpen] = useState(false);
+  const [frequentEditorInitial, setFrequentEditorInitial] =
+    useState<FrequentMeal | null>(null);
+  const [frequentEditorSaving, setFrequentEditorSaving] = useState(false);
 
   const [toast, setToast] = useState<string | null>(null);
   const [quickLogBusyId, setQuickLogBusyId] = useState<string | null>(null);
@@ -359,11 +368,77 @@ export default function HomePage() {
     }
   };
 
+  const saveFrequentMealFromEditor = async (data: FrequentMealEditorPayload) => {
+    if (!userId) throw new Error("로그인이 필요해요");
+    setFrequentEditorSaving(true);
+    try {
+      const supabase = createClient();
+      const price =
+        data.price_won != null && data.price_won > 0 ? data.price_won : null;
+      if (data.id) {
+        const { error } = await supabase
+          .from("frequent_meals")
+          .update({
+            food_name: data.food_name,
+            cal: data.cal,
+            carbs: data.carbs,
+            protein: data.protein,
+            fat: data.fat,
+            price_won: price,
+          })
+          .eq("id", data.id)
+          .eq("user_id", userId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("frequent_meals").insert({
+          user_id: userId,
+          food_name: data.food_name,
+          cal: data.cal,
+          carbs: data.carbs,
+          protein: data.protein,
+          fat: data.fat,
+          image_url: null,
+          count: 1,
+          last_eaten_at: new Date().toISOString(),
+          price_won: price,
+        });
+        if (error) throw error;
+      }
+      queryClient.invalidateQueries({ queryKey: ["frequentMeals", userId] });
+      setFrequentEditorOpen(false);
+      setToast(
+        data.id ? "자주 먹는 식단을 수정했어요" : "자주 먹는 식단에 등록했어요"
+      );
+    } catch (e: unknown) {
+      const raw =
+        e && typeof e === "object" && "message" in e
+          ? String((e as { message: string }).message)
+          : "";
+      const dup =
+        raw.toLowerCase().includes("duplicate") ||
+        (e &&
+          typeof e === "object" &&
+          "code" in e &&
+          String((e as { code: string }).code) === "23505");
+      throw new Error(
+        dup
+          ? "같은 이름의 자주 먹는 식단이 이미 있어요"
+          : raw || "저장에 실패했어요"
+      );
+    } finally {
+      setFrequentEditorSaving(false);
+    }
+  };
+
   const handleQuickLogPick = async (item: FrequentMeal) => {
     if (!userId || quickLogBusyId) return;
     setQuickLogBusyId(item.id);
     try {
       const supabase = createClient();
+      const mealPrice =
+        item.price_won != null && Number(item.price_won) > 0
+          ? Math.round(Number(item.price_won))
+          : null;
       const { error: mealErr } = await supabase.from("meals").insert({
         user_id: userId,
         food_name: item.food_name,
@@ -372,6 +447,7 @@ export default function HomePage() {
         protein: Number(item.protein),
         fat: Number(item.fat),
         image_url: item.image_url,
+        price_won: mealPrice,
       });
       if (mealErr) throw mealErr;
       await bumpFrequentMealLog(supabase, item.id);
@@ -516,6 +592,14 @@ export default function HomePage() {
               onPick={handleQuickLogPick}
               onOpenCamera={openCameraPicker}
               onOpenManual={() => setManualOpen(true)}
+              onAddFrequent={() => {
+                setFrequentEditorInitial(null);
+                setFrequentEditorOpen(true);
+              }}
+              onEditFrequent={(item) => {
+                setFrequentEditorInitial(item);
+                setFrequentEditorOpen(true);
+              }}
             />
           ) : null}
 
@@ -548,6 +632,7 @@ export default function HomePage() {
                   cupMl={cupMl}
                   targetCups={waterTargetCups}
                   recommendedMl={waterRecommendedMl}
+                  celebrationDateKey={selectedDate}
                   readOnly={false}
                   onIncrement={() =>
                     adjustWater.mutate({
@@ -645,6 +730,14 @@ export default function HomePage() {
           currentCal: totalCalories,
           fatGToday: macroTotals.fatG,
         }}
+      />
+
+      <FrequentMealEditorModal
+        isOpen={frequentEditorOpen}
+        onClose={() => setFrequentEditorOpen(false)}
+        initial={frequentEditorInitial}
+        isSaving={frequentEditorSaving}
+        onSave={saveFrequentMealFromEditor}
       />
 
       <ProfileSettingsSheet

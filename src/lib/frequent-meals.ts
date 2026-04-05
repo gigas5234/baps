@@ -7,6 +7,7 @@ export type FrequentMealUpsertInput = {
   protein: number;
   fat: number;
   image_url: string | null;
+  price_won?: number | null;
 };
 
 /**
@@ -41,6 +42,9 @@ export async function upsertFrequentMealRow(
         protein: input.protein,
         fat: input.fat,
         image_url: input.image_url,
+        ...(input.price_won !== undefined
+          ? { price_won: input.price_won }
+          : {}),
         count: Number(existing.count ?? 0) + 1,
         last_eaten_at: nowIso,
       })
@@ -58,6 +62,7 @@ export async function upsertFrequentMealRow(
     protein: input.protein,
     fat: input.fat,
     image_url: input.image_url,
+    price_won: input.price_won ?? null,
     count: 1,
     last_eaten_at: nowIso,
   });

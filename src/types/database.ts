@@ -56,6 +56,8 @@ export interface FrequentMeal {
   protein: number;
   fat: number;
   image_url: string | null;
+  /** 선택: 대표 식비(원), 퀵 로그 시 기본값 */
+  price_won?: number | null;
   count: number;
   last_eaten_at: string;
   created_at: string;

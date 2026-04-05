@@ -3,18 +3,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Loader2, Sparkles } from "lucide-react";
-import { MEAL_QUICK_PRESETS } from "@/lib/meal-presets";
+import {
+  MEAL_QUICK_PRESETS,
+  type MealQuickPreset,
+} from "@/lib/meal-presets";
 import { cn } from "@/lib/utils";
 import {
   PortionPctSlider,
-  type PortionStep,
+  type PortionPct,
 } from "@/components/meal/portion-pct-slider";
 
-function scaleCal(base: number, pct: PortionStep) {
+function scaleCal(base: number, pct: PortionPct) {
   return Math.round((base * pct) / 100);
 }
 
-function scaleMacro(base: number, pct: PortionStep) {
+function scaleMacro(base: number, pct: PortionPct) {
   return Math.round((base * pct) / 100 * 10) / 10;
 }
 
@@ -63,7 +66,7 @@ export function ManualInputModal({
     protein: 0,
     fat: 0,
   });
-  const [portionPct, setPortionPct] = useState<PortionStep>(100);
+  const [portionPct, setPortionPct] = useState<PortionPct>(100);
   const [description, setDescription] = useState("");
   const [clarification, setClarification] = useState<string | null>(null);
   const [saveAsFrequent, setSaveAsFrequent] = useState(false);
@@ -181,7 +184,7 @@ export function ManualInputModal({
     }
   };
 
-  const applyPreset = (p: (typeof MEAL_QUICK_PRESETS)[number]) => {
+  const applyPreset = (p: MealQuickPreset) => {
     setFoodName(p.food_name);
     setBase({
       cal: p.cal,
@@ -248,19 +251,21 @@ export function ManualInputModal({
               </button>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              {MEAL_QUICK_PRESETS.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  title={p.hint}
-                  onClick={() => applyPreset(p)}
-                  className="rounded-full border border-dashed border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
+            {MEAL_QUICK_PRESETS.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {MEAL_QUICK_PRESETS.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    title={p.hint}
+                    onClick={() => applyPreset(p)}
+                    className="rounded-full border border-dashed border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
 
             <div className="space-y-1.5">
               <label className="text-sm font-medium">음식 이름 *</label>
@@ -348,7 +353,7 @@ export function ManualInputModal({
                 </span>
               </div>
               <p className="text-[10px] leading-snug text-muted-foreground dark:text-foreground/65">
-                25% 단위. 남김·일부만 먹었을 때 줄이세요.{" "}
+                0~100% · 1% 단위. 남김·일부만 먹었을 때 조절하세요.{" "}
                 <strong className="text-foreground">자주 먹는 등록</strong>은
                 항상 100%·1인분 기준으로 저장돼요.
               </p>

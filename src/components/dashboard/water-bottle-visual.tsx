@@ -12,8 +12,8 @@ interface WaterBottleVisualProps {
   /** 0–100, 목표 잔수 대비 충만도(액면 높이) */
   progress: number;
   className?: string;
-  /** 페어링 카드 등 작은 사이즈 */
-  size?: "default" | "compact";
+  /** compact: 작은 카드 · paired: 체중계 카드와 나란히일 때 세로를 크게 */
+  size?: "default" | "compact" | "paired";
   /** 병 중앙에 표시할 퍼센트 (예: 권장 ml 대비) */
   centerPercentLabel?: string | null;
 }
@@ -36,9 +36,11 @@ export function WaterBottleVisual({
   const surfaceY = 150 - fillH;
 
   const svgClass =
-    size === "compact"
-      ? "h-24 w-[4.75rem] drop-shadow-md"
-      : "h-[11.5rem] w-[7.25rem] drop-shadow-md sm:h-[12.5rem] sm:w-32";
+    size === "paired"
+      ? "h-[min(52dvh,14rem)] w-auto max-h-[14rem] min-h-[11rem] max-w-[92%] aspect-[100/150] drop-shadow-md"
+      : size === "compact"
+        ? "h-[7.25rem] w-[5.5rem] drop-shadow-md sm:h-32 sm:w-[6rem]"
+        : "h-[11.5rem] w-[7.25rem] drop-shadow-md sm:h-[12.5rem] sm:w-32";
 
   return (
     <div

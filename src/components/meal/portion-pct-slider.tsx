@@ -1,48 +1,34 @@
 "use client";
 
-import { useCallback, useRef, type CSSProperties } from "react";
+import { useCallback, useRef } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export const PORTION_STEPS = [0, 25, 50, 75, 100] as const;
-export type PortionStep = (typeof PORTION_STEPS)[number];
+/** 0–100 정수 (1단위) */
+export type PortionPct = number;
 
-function snapToStep(raw: number, steps: readonly number[]): number {
-  const p = Math.max(0, Math.min(100, raw));
-  let best = steps[0] ?? 0;
-  let bestDist = Infinity;
-  for (const s of steps) {
-    const d = Math.abs(s - p);
-    if (d < bestDist) {
-      bestDist = d;
-      best = s;
-    }
-  }
-  return best;
-}
+/** w-7 h-7 — 트랙 좌우 inset으로 0·100에서도 중앙 정렬 */
+const THUMB_PX = 28;
 
-function labelStyle(step: number): CSSProperties {
-  if (step === 0) return { left: "0%", transform: "translateX(0)" };
-  if (step === 100)
-    return { left: "100%", transform: "translateX(-100%)" };
-  return { left: `${step}%`, transform: "translateX(-50%)" };
+function clampPct(n: number): PortionPct {
+  return Math.max(0, Math.min(100, Math.round(n))) as PortionPct;
 }
 
 interface PortionPctSliderProps {
-  value: PortionStep;
-  onChange: (pct: PortionStep) => void;
+  value: PortionPct;
+  onChange: (pct: PortionPct) => void;
   className?: string;
-  steps?: readonly number[];
 }
 
 /**
- * 25% 단위 스냅 · 트랙/썸 드래그 + 눈금 라벨 탭
+ * 0~100% · 1단위 — 트랙 드래그 + 좌우 이동 버튼
  */
 export function PortionPctSlider({
   value,
   onChange,
   className,
-  steps = PORTION_STEPS,
 }: PortionPctSliderProps) {
+  const v = clampPct(value);
   const trackRef = useRef<HTMLDivElement>(null);
 
   const setFromClientX = useCallback(
@@ -50,13 +36,12 @@ export function PortionPctSlider({
       const el = trackRef.current;
       if (!el) return;
       const r = el.getBoundingClientRect();
-      const w = r.width;
-      const x = clientX - r.left;
-      const ratio = w > 0 ? Math.max(0, Math.min(1, x / w)) : 0;
-      const next = snapToStep(ratio * 100, steps) as PortionStep;
-      onChange(next);
+      const innerW = r.width - THUMB_PX;
+      const x = clientX - r.left - THUMB_PX / 2;
+      const ratio = innerW > 0 ? Math.max(0, Math.min(1, x / innerW)) : 0;
+      onChange(clampPct(ratio * 100));
     },
-    [onChange, steps]
+    [onChange]
   );
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -76,110 +61,97 @@ export function PortionPctSlider({
     }
   };
 
+  const pad = THUMB_PX / 2;
+
   return (
     <div
       className={cn(
-        "touch-none select-none px-1",
+        "flex touch-none select-none items-center gap-2",
         className
       )}
     >
-      <div
-        ref={trackRef}
-        role="slider"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={value}
-        aria-valuetext={`${value}%`}
-        aria-label="섭취 비율"
-        tabIndex={0}
+      <button
+        type="button"
+        aria-label="비율 1% 감소"
+        disabled={v <= 0}
+        onClick={() => onChange(clampPct(v - 1))}
         className={cn(
-          "relative mt-1 h-11 cursor-grab py-1 active:cursor-grabbing",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scanner/50 focus-visible:ring-offset-2 rounded-full"
+          "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/40",
+          "text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-35",
+          "dark:border-white/12 dark:bg-zinc-800/80"
         )}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={endPointer}
-        onPointerCancel={endPointer}
-        onKeyDown={(e) => {
-          const idx = steps.indexOf(value as number);
-          if (idx < 0) return;
-          if (e.key === "ArrowRight" || e.key === "ArrowUp") {
-            e.preventDefault();
-            const n = steps[Math.min(idx + 1, steps.length - 1)];
-            onChange(n as PortionStep);
-          } else if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
-            e.preventDefault();
-            const n = steps[Math.max(idx - 1, 0)];
-            onChange(n as PortionStep);
-          }
-        }}
       >
-        <div className="pointer-events-none absolute top-1/2 right-0 left-0 h-3 -translate-y-1/2 rounded-full bg-muted/90 dark:bg-muted/45" />
+        <ChevronLeft className="h-5 w-5" aria-hidden />
+      </button>
+
+      <div className="min-w-0 flex-1 px-0.5">
         <div
-          className="pointer-events-none absolute top-1/2 left-0 h-3 -translate-y-1/2 rounded-l-full bg-scanner/35 dark:bg-scanner/30"
-          style={{
-            width: `${value}%`,
-            borderRadius: value >= 100 ? "9999px" : undefined,
-          }}
-        />
-        {steps.map((s) => {
-          const active = value === s;
-          const pos: CSSProperties =
-            s === 0
-              ? { left: 0, transform: "translateY(-50%)" }
-              : s === 100
-                ? { left: "100%", transform: "translate(-100%, -50%)" }
-                : { left: `${s}%`, transform: "translate(-50%, -50%)" };
-          return (
-            <div
-              key={s}
-              className={cn(
-                "pointer-events-none absolute top-1/2 w-1 rounded-full",
-                active
-                  ? "h-5 bg-scanner dark:bg-scanner"
-                  : "h-4 bg-muted-foreground/35 dark:bg-white/30"
-              )}
-              style={pos}
-            />
-          );
-        })}
-        <div
+          ref={trackRef}
+          role="slider"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={v}
+          aria-valuetext={`${v}%`}
+          aria-label="섭취 비율 0~100%"
+          tabIndex={0}
           className={cn(
-            "absolute top-1/2 z-[1] h-7 w-7 -translate-y-1/2 rounded-full border-[2.5px] border-scanner",
-            "bg-background shadow-md dark:bg-card",
-            "ring-2 ring-scanner/25"
+            "relative h-10 cursor-grab py-1 active:cursor-grabbing",
+            "rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scanner/50 focus-visible:ring-offset-2"
           )}
-          style={
-            value === 0
-              ? { left: 0, transform: "translate(0, -50%)" }
-              : value === 100
-                ? {
-                    left: "100%",
-                    transform: "translate(-100%, -50%)",
-                  }
-                : { left: `${value}%`, transform: "translate(-50%, -50%)" }
-          }
-        />
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={endPointer}
+          onPointerCancel={endPointer}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowRight" || e.key === "ArrowUp") {
+              e.preventDefault();
+              onChange(clampPct(v + 1));
+            } else if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
+              e.preventDefault();
+              onChange(clampPct(v - 1));
+            }
+          }}
+        >
+          <div
+            className="pointer-events-none absolute top-1/2 right-[14px] left-[14px] h-2.5 -translate-y-1/2 rounded-full bg-muted/90 dark:bg-muted/45"
+          />
+          <div
+            className={cn(
+              "pointer-events-none absolute top-1/2 left-[14px] h-2.5 -translate-y-1/2 rounded-l-full bg-scanner/40 dark:bg-scanner/35",
+              v >= 100 && "rounded-r-full"
+            )}
+            style={{
+              width:
+                v <= 0
+                  ? 0
+                  : `max(0px, calc((100% - ${THUMB_PX}px) * ${v} / 100))`,
+            }}
+          />
+          <div
+            className={cn(
+              "absolute top-1/2 z-[1] h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border-[2.5px] border-scanner",
+              "bg-background shadow-md ring-2 ring-scanner/20 dark:bg-card"
+            )}
+            style={{
+              left: `calc(${pad}px + (100% - ${THUMB_PX}px) * ${v} / 100)`,
+            }}
+          />
+        </div>
       </div>
 
-      <div className="relative mt-2 min-h-9">
-        {steps.map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => onChange(s as PortionStep)}
-            className={cn(
-              "absolute top-0 min-h-9 min-w-[2.75rem] px-1 text-center text-sm font-bold tabular-nums transition-colors",
-              value === s
-                ? "text-scanner"
-                : "text-muted-foreground hover:text-foreground/90"
-            )}
-            style={labelStyle(s)}
-          >
-            {s}%
-          </button>
-        ))}
-      </div>
+      <button
+        type="button"
+        aria-label="비율 1% 증가"
+        disabled={v >= 100}
+        onClick={() => onChange(clampPct(v + 1))}
+        className={cn(
+          "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/40",
+          "text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-35",
+          "dark:border-white/12 dark:bg-zinc-800/80"
+        )}
+      >
+        <ChevronRight className="h-5 w-5" aria-hidden />
+      </button>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 const ITEM_H = 36;
@@ -15,12 +15,12 @@ interface DigitalWheelColumnProps {
   ariaLabel?: string;
   /** 화면에만 다른 포맷 (값 비교는 `values` 원본) */
   formatDisplay?: (value: string) => string;
-  /** 날짜·체중 휠 시각 구분 */
+  /** 날짜·체중 칼럼 테두리 스타일만 구분 (선택 줄은 동일한 타이포로 통일) */
   tone?: "date" | "weight";
 }
 
 /**
- * 세로 스크롤 + 스냆 중앙 정렬. Apple Watch 스타일 숫자/날짜 택.
+ * 세로 스크롤 + 스냅 중앙 정렬. 선택 강조는 슬롯 박스 없이 타이포만 사용.
  */
 export function DigitalWheelColumn({
   values,
@@ -33,9 +33,7 @@ export function DigitalWheelColumn({
   tone = "weight",
 }: DigitalWheelColumnProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  /** 브라우저 setTimeout 반환형(number) — Node Timeout과 이원화 방지 */
   const settleRef = useRef<number | undefined>(undefined);
-  const [settledBurst, setSettledBurst] = useState(false);
 
   const padTop = heightPx / 2 - ITEM_H / 2;
 
@@ -63,12 +61,6 @@ export function DigitalWheelColumn({
     []
   );
 
-  useEffect(() => {
-    if (!settledBurst) return;
-    const t = window.setTimeout(() => setSettledBurst(false), 320);
-    return () => window.clearTimeout(t);
-  }, [settledBurst]);
-
   const flushSelect = useCallback(() => {
     const el = scrollRef.current;
     if (!el || values.length === 0) return;
@@ -81,7 +73,6 @@ export function DigitalWheelColumn({
     }
     const next = values[clamped];
     if (next !== selected) onSelect(next);
-    if (aligned) setSettledBurst(true);
   }, [onSelect, selected, values]);
 
   const handleScroll = useCallback(() => {
@@ -104,21 +95,6 @@ export function DigitalWheelColumn({
       ? "rounded-lg border border-dashed border-zinc-400/45 bg-zinc-100/80 dark:border-zinc-500/40 dark:bg-zinc-900/65"
       : "rounded-xl border border-zinc-300/80 bg-zinc-100/90 dark:border-zinc-600/50 dark:bg-zinc-900/80";
 
-  const slotRing =
-    tone === "date"
-      ? "border-zinc-400/55 bg-zinc-200/35 dark:border-zinc-400/55 dark:bg-zinc-800/45"
-      : "border-teal-600/35 bg-teal-800/18 dark:border-teal-400/35 dark:bg-teal-950/40";
-
-  const slotRingBurst =
-    tone === "date"
-      ? "ring-2 ring-zinc-500/65 shadow-[0_0_16px_-4px_rgba(113,113,122,0.55)] dark:ring-zinc-400/55"
-      : "ring-2 ring-teal-400/80 shadow-[0_0_18px_-4px_rgba(45,212,191,0.55)] dark:ring-teal-400/70";
-
-  const selText =
-    tone === "date"
-      ? "font-semibold text-zinc-900 dark:text-zinc-100"
-      : "font-bold text-teal-800 dark:text-teal-200";
-
   const fadeTop =
     tone === "date"
       ? "from-zinc-100 dark:from-zinc-900"
@@ -128,7 +104,7 @@ export function DigitalWheelColumn({
   return (
     <div
       className={cn(
-        "relative flex min-w-0 flex-1 flex-col shadow-inner",
+        "relative flex min-h-0 min-w-0 flex-1 flex-col shadow-inner",
         shell,
         className
       )}
@@ -146,14 +122,6 @@ export function DigitalWheelColumn({
           "pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[calc(50%-18px)] rounded-b-[inherit] bg-gradient-to-t to-transparent",
           fadeTop,
           fadeMid
-        )}
-        aria-hidden
-      />
-      <div
-        className={cn(
-          "pointer-events-none absolute left-2 right-2 top-1/2 z-20 h-9 -translate-y-1/2 rounded-md border-2 transition-[box-shadow,ring-color] duration-200",
-          slotRing,
-          settledBurst && slotRingBurst
         )}
         aria-hidden
       />
@@ -185,7 +153,9 @@ export function DigitalWheelColumn({
                 aria-selected={isSel}
                 className={cn(
                   "flex h-9 w-full shrink-0 snap-center snap-always items-center justify-center whitespace-nowrap font-mono text-[13px] tabular-nums transition-colors",
-                  isSel ? selText : "text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-400"
+                  isSel
+                    ? "font-semibold text-teal-800 dark:text-teal-300"
+                    : "text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-400"
                 )}
                 onClick={() => onSelect(v)}
               >
