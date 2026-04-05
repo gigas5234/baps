@@ -2,6 +2,9 @@
 
 import { createClient } from "@/lib/supabase-browser";
 
+/** Supabase에 Kakao OAuth 연동 후 `true`로 전환 */
+const ENABLE_KAKAO_LOGIN = false;
+
 export default function LoginPage() {
   const handleSocialLogin = async (provider: "kakao" | "google") => {
     const supabase = createClient();
@@ -26,21 +29,25 @@ export default function LoginPage() {
 
         {/* Social Login Buttons */}
         <div className="space-y-3">
-          <button
-            onClick={() => handleSocialLogin("kakao")}
-            className="w-full flex items-center justify-center gap-3 rounded-xl py-3.5 px-4 font-medium text-sm transition-colors"
-            style={{ backgroundColor: "#FEE500", color: "#191919" }}
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18">
-              <path
-                fill="#191919"
-                d="M9 1C4.58 1 1 3.79 1 7.21c0 2.17 1.45 4.08 3.64 5.18-.16.57-.58 2.07-.66 2.4-.11.4.14.39.3.29.12-.08 1.95-1.32 2.74-1.86.63.09 1.28.14 1.98.14 4.42 0 8-2.79 8-6.21S13.42 1 9 1z"
-              />
-            </svg>
-            카카오로 시작하기
-          </button>
+          {ENABLE_KAKAO_LOGIN ? (
+            <button
+              type="button"
+              onClick={() => handleSocialLogin("kakao")}
+              className="w-full flex items-center justify-center gap-3 rounded-xl py-3.5 px-4 font-medium text-sm transition-colors"
+              style={{ backgroundColor: "#FEE500", color: "#191919" }}
+            >
+              <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+                <path
+                  fill="#191919"
+                  d="M9 1C4.58 1 1 3.79 1 7.21c0 2.17 1.45 4.08 3.64 5.18-.16.57-.58 2.07-.66 2.4-.11.4.14.39.3.29.12-.08 1.95-1.32 2.74-1.86.63.09 1.28.14 1.98.14 4.42 0 8-2.79 8-6.21S13.42 1 9 1z"
+                />
+              </svg>
+              카카오로 시작하기
+            </button>
+          ) : null}
 
           <button
+            type="button"
             onClick={() => handleSocialLogin("google")}
             className="w-full flex items-center justify-center gap-3 rounded-xl py-3.5 px-4 font-medium text-sm border bg-white text-gray-700 hover:bg-gray-50 transition-colors"
           >

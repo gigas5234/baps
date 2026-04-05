@@ -1,9 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Menu } from "lucide-react";
 import { QuickActionButton } from "@/components/common/quick-action-button";
 import { ChatFab } from "@/components/common/chat-fab";
+import { ProfileSettingsSheet } from "@/components/common/profile-settings-sheet";
 import { WeeklyCalendar } from "@/components/dashboard/weekly-calendar";
 import { CalorieGauge } from "@/components/dashboard/calorie-gauge";
 import { MealTimeline } from "@/components/dashboard/meal-timeline";
@@ -13,7 +15,13 @@ import { ManualInputModal } from "@/components/meal/manual-input-modal";
 import { useMealStore } from "@/store/use-meal-store";
 import { useProfileStore } from "@/store/use-profile-store";
 import { useAuth } from "@/lib/use-auth";
-import { useMeals, useWaterLog, useAddWater, useDailyCalories } from "@/lib/queries";
+import {
+  useMeals,
+  useWaterLog,
+  useAdjustWater,
+  useDailyCalories,
+  useProfile,
+} from "@/lib/queries";
 import { uploadMealImage, fileToBase64 } from "@/lib/storage";
 import { createClient } from "@/lib/supabase-browser";
 
@@ -29,18 +37,49 @@ interface AnalyzeResult {
 export default function HomePage() {
   const { selectedDate } = useMealStore();
   const { userName, targetCal } = useProfileStore();
+  const setProfileStore = useProfileStore((s) => s.setProfile);
   const { userId } = useAuth();
   const queryClient = useQueryClient();
 
+  const {
+    data: profile,
+    refetch: refetchProfile,
+    isLoading: profileLoading,
+    isError: profileQueryError,
+  } = useProfile(userId);
+
   const { data: meals = [] } = useMeals(userId, selectedDate);
   const { data: waterLog } = useWaterLog(userId, selectedDate);
-  const addWater = useAddWater(userId, selectedDate);
+  const adjustWater = useAdjustWater(userId, selectedDate);
   const totalCalories = useDailyCalories(meals);
 
-  const target = targetCal || 2000;
+  const displayName = profile?.user_name?.trim() || userName;
+  const target = profile?.target_cal ?? targetCal ?? 2000;
 
-  // Camera / Analyze state
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  useEffect(() => {
+    if (!profile) return;
+    setProfileStore({
+      userName: profile.user_name ?? "",
+      bmr: profile.bmr ?? 0,
+      targetCal: profile.target_cal ?? 0,
+    });
+  }, [
+    profile?.updated_at,
+    profile?.user_name,
+    profile?.bmr,
+    profile?.target_cal,
+    setProfileStore,
+  ]);
+
+  useEffect(() => {
+    if (settingsOpen && userId) void refetchProfile();
+  }, [settingsOpen, userId, refetchProfile]);
+
+  // Camera / gallery → same analyze + storage flow (handleFileChange)
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const [analyzeOpen, setAnalyzeOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -54,8 +93,12 @@ export default function HomePage() {
   const [manualOpen, setManualOpen] = useState(false);
   const [isManualSaving, setIsManualSaving] = useState(false);
 
-  const handleCamera = () => {
-    fileInputRef.current?.click();
+  const openCameraPicker = () => {
+    cameraInputRef.current?.click();
+  };
+
+  const openGalleryPicker = () => {
+    galleryInputRef.current?.click();
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -163,24 +206,44 @@ export default function HomePage() {
 
   return (
     <main className="flex-1 pb-28 max-w-md mx-auto w-full">
-      {/* Hidden file input for camera */}
+      {/* 카메라: 촬영 우선 (모바일에서 후면 카메라) */}
       <input
-        ref={fileInputRef}
+        ref={cameraInputRef}
         type="file"
         accept="image/*"
         capture="environment"
         className="hidden"
         onChange={handleFileChange}
       />
+      {/* 사진첩: 갤러리/라이브러리에서 선택 (capture 없음) */}
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileChange}
+      />
 
       {/* Header */}
-      <header className="px-4 pt-6 pb-2 flex items-center justify-between">
-        <div>
+      <header className="px-4 pt-6 pb-2 flex items-center justify-between gap-3">
+        <div className="min-w-0">
           <h1 className="text-xl font-bold">BAPS</h1>
-          <p className="text-sm text-muted-foreground">
-            {userName ? `${userName}님, 오늘도 건강하게!` : "오늘도 건강하게!"}
+          <p className="text-sm text-muted-foreground truncate">
+            {displayName
+              ? `${displayName}님, 오늘도 건강하게!`
+              : "오늘도 건강하게!"}
           </p>
         </div>
+        {userId ? (
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="shrink-0 rounded-xl border p-2.5 hover:bg-muted transition-colors"
+            aria-label="개인 설정"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        ) : null}
       </header>
 
       {/* Weekly Calendar */}
@@ -197,8 +260,19 @@ export default function HomePage() {
       <section className="px-4 py-2">
         <WaterCounter
           cups={waterLog?.cups ?? 0}
-          onAdd={() => addWater.mutate(waterLog?.cups ?? 0)}
-          isAdding={addWater.isPending}
+          onIncrement={() =>
+            adjustWater.mutate({
+              currentCups: waterLog?.cups ?? 0,
+              delta: 1,
+            })
+          }
+          onDecrement={() =>
+            adjustWater.mutate({
+              currentCups: waterLog?.cups ?? 0,
+              delta: -1,
+            })
+          }
+          isUpdating={adjustWater.isPending}
         />
       </section>
 
@@ -212,9 +286,9 @@ export default function HomePage() {
 
       {/* Floating Actions */}
       <QuickActionButton
-        onCamera={handleCamera}
+        onCamera={openCameraPicker}
+        onGallery={openGalleryPicker}
         onManualInput={() => setManualOpen(true)}
-        onWater={() => addWater.mutate(waterLog?.cups ?? 0)}
       />
       <ChatFab
         meals={meals}
@@ -242,6 +316,16 @@ export default function HomePage() {
         onClose={() => setManualOpen(false)}
         onSubmit={handleManualSubmit}
         isSaving={isManualSaving}
+      />
+
+      <ProfileSettingsSheet
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        userId={userId}
+        profile={profile ?? null}
+        isLoadingProfile={profileLoading}
+        profileQueryError={profileQueryError}
+        onRetryProfile={() => void refetchProfile()}
       />
     </main>
   );

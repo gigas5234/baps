@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Camera, Pencil, Droplets, Plus, X } from "lucide-react";
+import { Camera, Images, Pencil, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface QuickActionButtonProps {
   onCamera?: () => void;
+  onGallery?: () => void;
   onManualInput?: () => void;
-  onWater?: () => void;
 }
 
 const actions = [
@@ -19,30 +19,30 @@ const actions = [
     color: "bg-blue-500 shadow-blue-500/30",
   },
   {
+    id: "gallery",
+    icon: Images,
+    label: "사진첩",
+    color: "bg-violet-500 shadow-violet-500/30",
+  },
+  {
     id: "manual",
     icon: Pencil,
     label: "직접 입력",
     color: "bg-green-500 shadow-green-500/30",
   },
-  {
-    id: "water",
-    icon: Droplets,
-    label: "물 마시기",
-    color: "bg-cyan-500 shadow-cyan-500/30",
-  },
 ] as const;
 
 export function QuickActionButton({
   onCamera,
+  onGallery,
   onManualInput,
-  onWater,
 }: QuickActionButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   const handlers: Record<string, (() => void) | undefined> = {
     camera: onCamera,
+    gallery: onGallery,
     manual: onManualInput,
-    water: onWater,
   };
 
   const handleAction = (id: string) => {
@@ -87,6 +87,7 @@ export function QuickActionButton({
                   className="flex flex-col items-center gap-1.5"
                 >
                   <button
+                    type="button"
                     onClick={() => handleAction(id)}
                     className={cn(
                       "text-white rounded-full p-3.5 shadow-lg active:scale-90 transition-transform",
@@ -106,6 +107,7 @@ export function QuickActionButton({
 
         {/* Main FAB */}
         <motion.button
+          type="button"
           onClick={() => setIsOpen(!isOpen)}
           className="bg-primary text-primary-foreground rounded-full p-4 shadow-xl active:scale-90 transition-colors"
           animate={{ rotate: isOpen ? 45 : 0 }}
