@@ -114,3 +114,16 @@ export function coachMeta(id: CoachPersonaId): CoachPersonaMeta {
     COACH_PERSONAS_UI.find((c) => c.id === id) ?? COACH_PERSONAS_UI[0]
   );
 }
+
+/** 카톡형 원형 아바타 배경 (Clinical: 인디고/바이올렛 링) */
+export const COACH_AVATAR_SURFACE: Record<CoachPersonaId, string> = {
+  diet:
+    "bg-gradient-to-br from-rose-600 to-rose-800 ring-2 ring-indigo-500/45 shadow-md shadow-black/20",
+  nutrition:
+    "bg-gradient-to-br from-emerald-600 to-emerald-900 ring-2 ring-violet-500/40 shadow-md shadow-black/20",
+  exercise:
+    "bg-gradient-to-br from-amber-600 to-orange-800 ring-2 ring-indigo-400/40 shadow-md shadow-black/20",
+  mental:
+    "bg-gradient-to-br from-violet-600 to-indigo-900 ring-2 ring-purple-400/40 shadow-md shadow-black/20",
+  roi: "bg-gradient-to-br from-indigo-600 to-blue-900 ring-2 ring-indigo-300/45 shadow-md shadow-black/20",
+};

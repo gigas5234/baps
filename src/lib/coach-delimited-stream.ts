@@ -6,6 +6,10 @@ import {
   type DataCardPayload,
   type QuickChip,
 } from "@/lib/chat-coach";
+import {
+  COACH_STREAM_FALLBACK_MESSAGE,
+  coachStreamIsCorruptLeak,
+} from "@/lib/coach-stream-guard";
 import type { CoachPersonaId } from "@/lib/coach-personas";
 
 const DELIM_RE =
@@ -37,11 +41,34 @@ const TAG_TO_PERSONA: Partial<Record<CoachDelimTag, CoachPersonaId>> = {
   ROI: "roi",
 };
 
+export function buildStreamCorruptFallbackReply(): CoachChatReply {
+  return {
+    analysis: COACH_STREAM_FALLBACK_MESSAGE,
+    roast: "",
+    mission: "같은 메시지를 한 번 더 보내보세요.",
+    coach_quips: [],
+    data_card: emptyDataCard(),
+    quick_chips: [],
+  };
+}
+
 /** 누적 스트링 → 태그 구간 (마지막 블록은 complete=false 가능) */
 export function parseCoachDelimitedStream(
   raw: string,
   streamFinished: boolean
 ): { segments: CoachStreamSegment[] } {
+  if (coachStreamIsCorruptLeak(raw, streamFinished)) {
+    return {
+      segments: [
+        {
+          tag: "ANALYSIS",
+          text: COACH_STREAM_FALLBACK_MESSAGE,
+          complete: streamFinished,
+        },
+      ],
+    };
+  }
+
   const matches = [...raw.matchAll(DELIM_RE)];
   if (matches.length === 0) {
     if (!raw.trim()) return { segments: [] };
@@ -101,6 +128,10 @@ function parseDataCardJson(s: string): DataCardPayload | null {
 
 /** 스트림 완료 후 단일 객체로 병합 → 기존 UI·normalizeCoachReply와 호환 */
 export function delimitedStreamToCoachChatReply(raw: string): CoachChatReply {
+  if (coachStreamIsCorruptLeak(raw, true)) {
+    return buildStreamCorruptFallbackReply();
+  }
+
   const { segments } = parseCoachDelimitedStream(raw, true);
   let analysis = "";
   let mission = "";

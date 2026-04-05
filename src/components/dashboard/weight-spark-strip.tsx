@@ -10,7 +10,7 @@ import {
   WEIGHT_STORAGE_KEY,
 } from "@/lib/weight-local-storage";
 import { layoutWeightChart } from "@/lib/weight-chart-geometry";
-import { createClient } from "@/lib/supabase-browser";
+import { useUpsertWeightLog, useWeightLogs } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { getLocalYmd } from "@/lib/local-date";
 
@@ -83,6 +83,10 @@ export function WeightSparkStrip({
 }: WeightSparkStripProps) {
   const clipUid = useId().replace(/:/g, "");
   const dateOptions = useMemo(() => buildDateOptions(DATE_WHEEL_DAYS), []);
+  const oldestDate = dateOptions[0] ?? getLocalYmd();
+  const { data: remoteEntries = [] } = useWeightLogs(userId, oldestDate);
+  const upsertWeightLog = useUpsertWeightLog(userId);
+
   const [entriesVersion, setEntriesVersion] = useState(0);
 
   const [pickDate, setPickDate] = useState(selectedDate);
@@ -95,6 +99,7 @@ export function WeightSparkStrip({
   }, []);
 
   useEffect(() => {
+    if (userId) return;
     const load = () => bumpEntries();
     const onStorage = (e: StorageEvent) => {
       if (e.key === WEIGHT_STORAGE_KEY || e.key === null) load();
@@ -105,7 +110,7 @@ export function WeightSparkStrip({
       window.removeEventListener("storage", onStorage);
       window.removeEventListener("baps-weight-storage", load);
     };
-  }, [bumpEntries]);
+  }, [userId, bumpEntries]);
 
   useEffect(() => {
     if (dateOptions.includes(selectedDate)) {
@@ -117,9 +122,17 @@ export function WeightSparkStrip({
 
   /** 최근 기록 N개만 (7일 창이 아닌 “마지막 7포인트”) */
   const chartEntries = useMemo(() => {
+    if (userId) {
+      const sorted = [...remoteEntries].sort((a, b) =>
+        a.date.localeCompare(b.date)
+      );
+      return sorted.length <= CHART_POINTS
+        ? sorted
+        : sorted.slice(-CHART_POINTS);
+    }
     void entriesVersion;
     return getChartWeightEntries(CHART_POINTS);
-  }, [entriesVersion]);
+  }, [userId, remoteEntries, entriesVersion]);
 
   const { pts, pathD, yTarget, minKg, maxKg } = layoutWeightChart(
     chartEntries,
@@ -129,11 +142,16 @@ export function WeightSparkStrip({
   const hasDots = pts.length > 0;
 
   const entryForPick = useMemo(() => {
+    if (userId) {
+      return remoteEntries.find((e) => e.date === pickDate);
+    }
     return loadWeightEntries().find((e) => e.date === pickDate);
-  }, [pickDate, entriesVersion]);
+  }, [userId, remoteEntries, pickDate, entriesVersion]);
 
   useEffect(() => {
-    const e = loadWeightEntries().find((x) => x.date === pickDate);
+    const e = userId
+      ? remoteEntries.find((x) => x.date === pickDate)
+      : loadWeightEntries().find((x) => x.date === pickDate);
     let seed = e?.kg;
     if (seed == null && pickDate === getLocalYmd() && profileKg != null) {
       seed = profileKg;
@@ -147,7 +165,7 @@ export function WeightSparkStrip({
     const dec = Math.round((clamped - flo) * 10);
     setKgInt(String(flo));
     setKgDec(String(Math.min(9, Math.max(0, dec))));
-  }, [pickDate, profileKg, entriesVersion]);
+  }, [userId, remoteEntries, pickDate, profileKg, entriesVersion]);
 
   const parsedKg =
     Number.parseInt(kgInt, 10) + Number.parseInt(kgDec, 10) / 10;
@@ -175,12 +193,12 @@ export function WeightSparkStrip({
     setSaving(true);
     try {
       const kg = Math.round(parsedKg * 10) / 10;
-      upsertWeightEntry(pickDate, kg);
-      bumpEntries();
       if (userId) {
-        const supabase = createClient();
-        await supabase.from("profiles").update({ weight: kg }).eq("id", userId);
+        await upsertWeightLog.mutateAsync({ date: pickDate, kg });
         onSavedProfile?.();
+      } else {
+        upsertWeightEntry(pickDate, kg);
+        bumpEntries();
       }
     } finally {
       setSaving(false);
@@ -401,7 +419,7 @@ export function WeightSparkStrip({
 
       <button
         type="button"
-        disabled={saving || !kgValid}
+        disabled={saving || upsertWeightLog.isPending || !kgValid}
         onClick={handleSave}
         className={cn(
           "mt-2 w-full shrink-0 rounded-xl py-2 text-[11px] font-semibold transition-colors active:scale-[0.99]",

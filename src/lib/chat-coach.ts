@@ -5,6 +5,10 @@ import {
   parseCoachPersonaId,
   type CoachPersonaId,
 } from "@/lib/coach-personas";
+import {
+  COACH_STREAM_FALLBACK_MESSAGE,
+  coachTextLooksLikeJsonLeak,
+} from "@/lib/coach-stream-guard";
 export type EmergencyNutritionTrigger =
   | "low_intake_today"
   | "low_intake_3d_avg";
@@ -494,6 +498,13 @@ export function normalizeCoachReply(raw: RawCoachReply): CoachChatReply {
     analysis = raw.reply.trim();
     roast = roast || "데이터만 보면 아직 네가 선택한 건 기록에 없다.";
     mission = mission || "구체적으로 다시 질문해.";
+  }
+  if (coachTextLooksLikeJsonLeak(analysis)) {
+    analysis = COACH_STREAM_FALLBACK_MESSAGE;
+    mission = mission?.trim() || "같은 메시지를 한 번 더 보내보세요.";
+  }
+  if (coachTextLooksLikeJsonLeak(mission)) {
+    mission = "같은 메시지를 한 번 더 보내보세요.";
   }
   if (!analysis) analysis = "컨텍스트만으로는 판단이 불완전하다.";
   if (!mission) mission = "다음 식사를 기록한 뒤 같은 질문을 반복해.";

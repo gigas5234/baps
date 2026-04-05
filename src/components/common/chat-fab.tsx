@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   MessageCircle,
@@ -28,12 +28,20 @@ import {
   coachMeta,
   type CoachPersonaId,
 } from "@/lib/coach-personas";
-import { interventionCodename } from "@/lib/coach-intervention-triggers";
+import {
+  formatInlineBold,
+  KakaoDelimitedCoachStream,
+  KakaoOpeningCoachMessage,
+  KakaoStrategicTurnView,
+} from "@/components/common/kakao-coach-bubbles";
+import { formatKoreanChatTime } from "@/lib/coach-chat-time";
 
 interface ChatMessage {
   id: string;
   message: string;
   is_ai: boolean;
+  /** 수신·전송 시각 (카톡형 타임스탬프) */
+  createdAt?: number;
   /** opening만 문자열 / 턴 응답은 구조화 */
   coachTurn?: CoachStrategicTurn;
   data_card?: DataCardPayload | null;
@@ -43,227 +51,12 @@ interface ChatMessage {
   streamSegments?: CoachStreamSegment[];
 }
 
-const COACH_TAG_TO_PERSONA: Partial<Record<string, CoachPersonaId>> = {
-  DIET: "diet",
-  NUTRITION: "nutrition",
-  EXERCISE: "exercise",
-  MENTAL: "mental",
-  ROI: "roi",
-};
-
-function DelimitedStreamBubbles({ segments }: { segments: CoachStreamSegment[] }) {
-  return (
-    <div className="space-y-2.5">
-      {segments.map((seg, idx) => {
-        if (seg.tag === "INVITE") {
-          const code = seg.text.trim().toUpperCase();
-          const pid = COACH_TAG_TO_PERSONA[code];
-          const title = pid ? interventionCodename(pid) : code;
-          const emoji = pid ? coachMeta(pid).emoji : "📣";
-          return (
-            <div
-              key={`invite-${idx}-${code}`}
-              className="rounded-lg border border-dashed border-primary/35 bg-primary/[0.06] px-2 py-2 text-center dark:border-primary/28 dark:bg-primary/[0.08]"
-            >
-              <p className="text-[10px] font-semibold tracking-wide text-primary">
-                <span aria-hidden>{emoji}</span> 시스템
-              </p>
-              <p className="mt-1 font-mono text-[10px] leading-snug text-foreground/90">
-                ── {title}님이 대화에 참여했습니다 ──
-              </p>
-            </div>
-          );
-        }
-        const pid = COACH_TAG_TO_PERSONA[seg.tag];
-        const isCoach = Boolean(pid);
-        const coachLabel = pid ? coachMeta(pid).label : "";
-        const coachEmoji = pid ? coachMeta(pid).emoji : "";
-        return (
-          <div
-            key={`${seg.tag}-${idx}`}
-            className={cn(
-              "rounded-lg border px-2.5 py-2 text-[13px] leading-snug",
-              seg.complete
-                ? "border-border/80 bg-background/40"
-                : "border-primary/35 bg-primary/[0.04]",
-              isCoach &&
-                "border-rose-500/18 bg-rose-500/[0.05] dark:border-rose-400/20"
-            )}
-          >
-            <p className="text-[10px] font-bold tracking-wide text-muted-foreground">
-              <span className="font-mono text-[9px] text-primary/90">
-                [{seg.tag}]
-              </span>
-              {isCoach ? (
-                <span className="ml-1.5 font-semibold text-foreground">
-                  <span className="select-none" aria-hidden>
-                    {coachEmoji}{" "}
-                  </span>
-                  {coachLabel} 코치
-                  {!seg.complete ? (
-                    <span className="ml-1 text-[9px] font-normal text-primary animate-pulse">
-                      입력 중…
-                    </span>
-                  ) : null}
-                </span>
-              ) : seg.tag === "ANALYSIS" ? (
-                <span className="ml-1.5">분석</span>
-              ) : seg.tag === "MISSION" ? (
-                <span className="ml-1.5">미션</span>
-              ) : (
-                <span className="ml-1.5">{seg.tag}</span>
-              )}
-            </p>
-            <p className="mt-1 text-foreground/90 whitespace-pre-wrap break-words">
-              {seg.text || (!seg.complete ? "…" : "")}
-            </p>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 interface ChatFabProps {
   /** 서버에서 식사·프로필 컨텍스트를 조회할 캘린더 날짜 (YYYY-MM-DD) */
   selectedDate: string;
   totalCal: number;
   targetCal: number;
   macros: MacroTotals;
-}
-
-function formatInlineBold(
-  text: string,
-  variant: "default" | "coach" | "coach-roast" = "default"
-): ReactNode {
-  const strongCls =
-    variant === "default"
-      ? "font-semibold text-foreground tabular-nums"
-      : variant === "coach-roast"
-        ? "not-italic font-bold text-primary tabular-nums"
-        : "font-bold text-primary tabular-nums";
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
-  return parts.map((part, i) => {
-    if (part.startsWith("**") && part.endsWith("**")) {
-      return (
-        <strong key={i} className={strongCls}>
-          {part.slice(2, -2)}
-        </strong>
-      );
-    }
-    return <span key={i}>{part}</span>;
-  });
-}
-
-function CoachStrategicTurnView({ turn }: { turn: CoachStrategicTurn }) {
-  const quips =
-    turn.coach_quips?.filter((q) => q.zinger?.trim()) ?? [];
-  const showGroup = quips.length > 0;
-
-  return (
-    <div className="space-y-3 text-sm leading-relaxed">
-      <div>
-        <p
-          className="flex items-center gap-1 text-[11px] font-bold tracking-wide text-primary"
-          role="heading"
-          aria-level={3}
-        >
-          <span className="select-none" aria-hidden>
-            🔍
-          </span>
-          분석
-        </p>
-        <p className="mt-1 text-foreground/90">
-          {formatInlineBold(turn.analysis, "coach")}
-        </p>
-      </div>
-      {showGroup ? (
-        <div>
-          <p
-            className="flex items-center gap-1 text-[11px] font-bold tracking-wide text-[#FF3355] dark:text-[#FF4D6A]"
-            role="heading"
-            aria-level={3}
-          >
-            <span className="select-none" aria-hidden>
-              💬
-            </span>
-            감시 단톡
-          </p>
-          <div className="mt-1.5 space-y-2">
-            {quips.map((q, idx) => {
-              const meta = coachMeta(q.persona_id);
-              return (
-                <div
-                  key={`${q.persona_id}-${idx}`}
-                  className={cn(
-                    "rounded-lg border border-rose-500/20 bg-rose-500/[0.06] px-2.5 py-2",
-                    "dark:border-rose-400/25 dark:bg-rose-500/10"
-                  )}
-                >
-                  <p className="text-[10px] font-bold text-foreground/90">
-                    <span className="select-none" aria-hidden>
-                      {meta.emoji}
-                    </span>{" "}
-                    {meta.label} 코치
-                  </p>
-                  <p
-                    className={cn(
-                      "mt-1 text-[13px] italic leading-snug text-foreground/95",
-                      "border-l-2 border-rose-400/50 pl-2"
-                    )}
-                  >
-                    {formatInlineBold(q.zinger, "coach-roast")}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : (
-        <div>
-          <p
-            className="flex items-center gap-1 text-[11px] font-bold tracking-wide text-[#FF3355] dark:text-[#FF4D6A]"
-            role="heading"
-            aria-level={3}
-          >
-            <span className="select-none" aria-hidden>
-              🚨
-            </span>
-            경고
-          </p>
-          <p
-            className={cn(
-              "mt-1 rounded-lg border border-amber-200/55 bg-amber-100/50 px-2.5 py-2 italic leading-relaxed",
-              "text-foreground/95 ring-1 ring-amber-300/25",
-              "dark:border-amber-500/35 dark:bg-amber-400/12 dark:ring-amber-400/15"
-            )}
-          >
-            {formatInlineBold(turn.roast, "coach-roast")}
-          </p>
-        </div>
-      )}
-      <div
-        className={cn(
-          "rounded-xl border border-teal-500/35 bg-teal-500/[0.08] px-2.5 py-2",
-          "dark:border-teal-400/30 dark:bg-teal-400/[0.1]"
-        )}
-      >
-        <p
-          className="flex items-center gap-1 text-[11px] font-bold tracking-wide text-teal-600 dark:text-teal-400"
-          role="heading"
-          aria-level={3}
-        >
-          <span className="select-none" aria-hidden>
-            🎯
-          </span>
-          미션
-        </p>
-        <p className="mt-1 text-foreground/90">
-          {formatInlineBold(turn.mission, "coach")}
-        </p>
-      </div>
-    </div>
-  );
 }
 
 function CoachDataCardView({
@@ -454,8 +247,6 @@ export function ChatFab({
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [bootLoading, setBootLoading] = useState(false);
-  /** 스트리밍 JSON 꼬리 (단톡 UI 맛) */
-  const [bootStreamHint, setBootStreamHint] = useState("");
   const wasChatOpenRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   /** send 직후에도 최신 대화로 history를 만들기 위함 (칩/카드는 입력 없이 즉시 API) */
@@ -473,7 +264,7 @@ export function ChatFab({
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, bootLoading, isLoading, bootStreamHint]);
+  }, [messages, bootLoading, isLoading]);
 
   useEffect(() => {
     if (wasChatOpenRef.current && !isOpen) {
@@ -509,26 +300,15 @@ export function ChatFab({
 
     let cancelled = false;
     setBootLoading(true);
-    setBootStreamHint("");
 
     (async () => {
       try {
-        const outcome = await postCoachChat(
-          {
-            bootstrap: true,
-            coach_id: coachPersona,
-            date: selectedDate,
-            local_hour: new Date().getHours(),
-          },
-          {
-            onStreamRaw: (raw) => {
-              if (!cancelled)
-                setBootStreamHint(
-                  raw.length > 320 ? `…${raw.slice(-320)}` : raw
-                );
-            },
-          }
-        );
+        const outcome = await postCoachChat({
+          bootstrap: true,
+          coach_id: coachPersona,
+          date: selectedDate,
+          local_hour: new Date().getHours(),
+        });
         if (cancelled) return;
 
         const { ok, status, data } = outcome;
@@ -544,6 +324,7 @@ export function ChatFab({
                   ? d.error
                   : "로그인 후 이용할 수 있어요.",
               data_card: null,
+              createdAt: Date.now(),
             },
           ];
           messagesRef.current = first;
@@ -565,6 +346,7 @@ export function ChatFab({
               is_ai: true,
               message: opening,
               data_card: null,
+              createdAt: Date.now(),
             },
           ];
           messagesRef.current = first;
@@ -582,6 +364,7 @@ export function ChatFab({
               is_ai: true,
               message: msg,
               data_card: null,
+              createdAt: Date.now(),
             },
           ];
           messagesRef.current = first;
@@ -598,6 +381,7 @@ export function ChatFab({
               message:
                 "연결이 꽤 느리네. 한번 더 열어보거나, 입력으로 바로 물어봐.",
               data_card: null,
+              createdAt: Date.now(),
             },
           ];
           messagesRef.current = fail;
@@ -620,7 +404,6 @@ export function ChatFab({
       } finally {
         if (!cancelled) {
           setBootLoading(false);
-          setBootStreamHint("");
         }
       }
     })();
@@ -641,26 +424,15 @@ export function ChatFab({
 
     let cancelled = false;
     setBootLoading(true);
-    setBootStreamHint("");
 
     (async () => {
       try {
-        const outcome = await postCoachChat(
-          {
-            bootstrap: true,
-            coach_id: coachPersona,
-            date: selectedDate,
-            local_hour: new Date().getHours(),
-          },
-          {
-            onStreamRaw: (raw) => {
-              if (!cancelled)
-                setBootStreamHint(
-                  raw.length > 320 ? `…${raw.slice(-320)}` : raw
-                );
-            },
-          }
-        );
+        const outcome = await postCoachChat({
+          bootstrap: true,
+          coach_id: coachPersona,
+          date: selectedDate,
+          local_hour: new Date().getHours(),
+        });
         if (cancelled) return;
 
         const { ok, status, data } = outcome;
@@ -676,6 +448,7 @@ export function ChatFab({
                   ? d.error
                   : "로그인 후 이용할 수 있어요.",
               data_card: null,
+              createdAt: Date.now(),
             },
           ];
           messagesRef.current = next;
@@ -694,6 +467,7 @@ export function ChatFab({
                   ? d.error
                   : "코치를 불러오지 못했어요.",
               data_card: null,
+              createdAt: Date.now(),
             },
           ];
           messagesRef.current = next;
@@ -717,6 +491,7 @@ export function ChatFab({
             is_ai: true,
             message: opening,
             data_card: null,
+            createdAt: Date.now(),
           },
         ];
         messagesRef.current = next;
@@ -728,7 +503,6 @@ export function ChatFab({
       } finally {
         if (!cancelled) {
           setBootLoading(false);
-          setBootStreamHint("");
         }
       }
     })();
@@ -753,14 +527,17 @@ export function ChatFab({
       id: `u-${Date.now()}-${source}`,
       message: text,
       is_ai: false,
+      createdAt: Date.now(),
     };
     const streamId = `ai-stream-${Date.now()}`;
+    const streamStartedAt = Date.now();
     const streamBubble: ChatMessage = {
       id: streamId,
       is_ai: true,
       message: "단톡 수신 중…",
       data_card: null,
       streamDelimited: { segments: [] },
+      createdAt: streamStartedAt,
     };
     const nextThread = [...prior, userMsg, streamBubble];
     messagesRef.current = nextThread;
@@ -826,6 +603,7 @@ export function ChatFab({
               ? data.error
               : "응답을 받지 못했어요.",
           data_card: null,
+          createdAt: Date.now(),
         };
         const t = [...messagesRef.current, errBubble];
         messagesRef.current = t;
@@ -842,6 +620,7 @@ export function ChatFab({
               ? data.error
               : "응답을 받지 못했어요.",
           data_card: null,
+          createdAt: Date.now(),
         };
         const t = [...messagesRef.current, errBubble];
         messagesRef.current = t;
@@ -871,6 +650,7 @@ export function ChatFab({
         coachTurn,
         data_card: normalized.data_card ?? null,
         streamSegments,
+        createdAt: Date.now(),
       };
       const t = [...messagesRef.current, aiBubble];
       messagesRef.current = t;
@@ -885,6 +665,7 @@ export function ChatFab({
         is_ai: true,
         message: "네트워크 오류가 발생했어요. 다시 시도해주세요.",
         data_card: null,
+        createdAt: Date.now(),
       };
       const t = [...messagesRef.current, errBubble];
       messagesRef.current = t;
@@ -903,95 +684,120 @@ export function ChatFab({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            className="fixed inset-0 z-50 flex flex-col bg-background"
+            className="fixed inset-0 z-50 flex flex-col bg-[#1b1d20] text-zinc-100"
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <div className="flex items-center justify-between border-b border-zinc-800/90 bg-[#1b1d20] px-4 py-3">
               <div>
-                <h2 className="text-base font-bold">전략 코칭</h2>
-                <p className="text-[9px] font-medium text-muted-foreground">
-                  위: 코치 응답 · 아래: 질문 템플릿(코치 말풍선과 별도)
+                <h2 className="text-base font-bold text-zinc-100">감시 단톡</h2>
+                <p className="text-[9px] font-medium text-zinc-500">
+                  카톡형 코칭 · 아래 추천 질문은 말풍선 밖 템플릿
                 </p>
-                <p className="mt-0.5 text-[10px] font-medium text-primary">
+                <p className="mt-0.5 text-[10px] font-medium text-indigo-300">
                   {coachMeta(coachPersona).emoji}{" "}
                   {coachMeta(coachPersona).label} 코치 ·{" "}
                   {coachMeta(coachPersona).description}
                 </p>
-                <p className="text-[10px] text-muted-foreground dark:text-foreground/65">
+                <p className="text-[10px] text-zinc-500">
                   오늘 {totalCal}kcal · 목표 {targetCal}kcal · 단백{" "}
-                  {Math.round(macros.proteinG)}g
+                  {Math.round(macros.proteinG)}g ·{" "}
+                  {formatKoreanChatTime(new Date())}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="rounded-full p-2 hover:bg-muted"
+                className="rounded-full p-2 text-zinc-300 hover:bg-zinc-800"
                 aria-label="닫기"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="flex-1 overflow-y-auto space-y-3 bg-[#1b1d20] p-4">
               {bootLoading && messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center gap-2 pt-16 text-sm text-muted-foreground px-3">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <div className="flex flex-col items-center justify-center gap-2 px-3 pt-16 text-sm text-zinc-500">
+                  <Loader2 className="h-6 w-6 animate-spin text-indigo-400" />
                   <span>코치가 데이터 보고 입 열 준비 중…</span>
-                  {bootStreamHint ? (
-                    <p
-                      className="w-full max-w-md font-mono text-[9px] leading-snug text-muted-foreground/80 break-all max-h-24 overflow-y-auto rounded-lg border border-border/50 bg-muted/20 px-2 py-1.5"
-                      aria-live="polite"
-                    >
-                      {bootStreamHint}
-                    </p>
-                  ) : null}
                 </div>
               ) : null}
 
-              {messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={cn("flex", msg.is_ai ? "justify-start" : "justify-end")}
-                >
-                  <div
-                    className={cn(
-                      "max-w-[88%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
-                      msg.is_ai
-                        ? "bg-muted text-foreground dark:bg-muted/80"
-                        : "bg-primary text-primary-foreground"
-                    )}
-                  >
-                    {msg.streamDelimited &&
-                    msg.streamDelimited.segments.length > 0 ? (
-                      <DelimitedStreamBubbles
-                        segments={msg.streamDelimited.segments}
-                      />
-                    ) : msg.streamSegments && msg.streamSegments.length > 0 ? (
-                      <DelimitedStreamBubbles segments={msg.streamSegments} />
-                    ) : msg.is_ai && msg.coachTurn ? (
-                      <CoachStrategicTurnView turn={msg.coachTurn} />
-                    ) : (
-                      <div>{formatInlineBold(msg.message)}</div>
-                    )}
-                    {msg.is_ai && msg.data_card ? (
-                      <CoachDataCardView
-                        card={msg.data_card}
-                        onAction={(prompt) => void sendWithText(prompt, "card")}
-                      />
-                    ) : null}
+              {messages.map((msg) => {
+                const ts = msg.createdAt ?? Date.now();
+                const receivedAt = new Date(ts);
+                const hasStream =
+                  (msg.streamDelimited?.segments?.length ?? 0) > 0 ||
+                  (msg.streamSegments?.length ?? 0) > 0;
+
+                if (!msg.is_ai) {
+                  return (
+                    <div
+                      key={msg.id}
+                      className="flex justify-end"
+                    >
+                      <div className="flex max-w-[min(100%,20rem)] flex-row-reverse items-end gap-1.5">
+                        <div
+                          className={cn(
+                            "rounded-[14px] bg-[#FEE500] px-3 py-2 text-[13px] leading-snug text-[#191919]",
+                            "shadow-sm"
+                          )}
+                        >
+                          <span className="whitespace-pre-wrap break-words">
+                            {formatInlineBold(msg.message, "bubble")}
+                          </span>
+                        </div>
+                        <span className="mb-1 shrink-0 text-[10px] tabular-nums text-zinc-500">
+                          {formatKoreanChatTime(receivedAt)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={msg.id} className="flex max-w-[min(100%,24rem)] justify-start">
+                    <div className="min-w-0 flex-1 space-y-2">
+                      {hasStream ? (
+                        <KakaoDelimitedCoachStream
+                          segments={
+                            (msg.streamDelimited?.segments?.length
+                              ? msg.streamDelimited.segments
+                              : msg.streamSegments) ?? []
+                          }
+                          receivedAt={receivedAt}
+                        />
+                      ) : msg.coachTurn ? (
+                        <KakaoStrategicTurnView
+                          turn={msg.coachTurn}
+                          receivedAt={receivedAt}
+                        />
+                      ) : (
+                        <KakaoOpeningCoachMessage
+                          text={msg.message}
+                          coachId={coachPersona}
+                          receivedAt={receivedAt}
+                        />
+                      )}
+                      {msg.data_card ? (
+                        <CoachDataCardView
+                          card={msg.data_card}
+                          onAction={(prompt) => void sendWithText(prompt, "card")}
+                        />
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
               {isLoading ? (
-                <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <div className="flex items-center gap-2 text-sm text-zinc-500">
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-indigo-400" />
                   <span>팩트 장전 중…</span>
                 </div>
               ) : null}
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="border-t border-border bg-background/95 p-3 space-y-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <div className="border-t border-zinc-800 bg-[#121316] p-3 space-y-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               <CoachPersonaPicker
                 value={coachPersona}
                 onChange={setCoachPersona}

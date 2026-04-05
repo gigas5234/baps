@@ -68,6 +68,16 @@ export interface WaterLog {
   date: string;
 }
 
+/** 일자별 체중 기록 (동기화) */
+export interface WeightLog {
+  id: string;
+  user_id: string;
+  date: string;
+  kg: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DailyLog {
   id: string;
   user_id: string;
@@ -114,6 +124,12 @@ export type Database = {
         Update: Partial<Omit<WaterLog, "id">>;
         Relationships: [];
       };
+      weight_logs: {
+        Row: WeightLog;
+        Insert: Omit<WeightLog, "id" | "created_at" | "updated_at">;
+        Update: Partial<Omit<WeightLog, "id">>;
+        Relationships: [];
+      };
       daily_logs: {
         Row: DailyLog;
         Insert: Omit<DailyLog, "id" | "created_at">;
@@ -152,6 +168,10 @@ export type Database = {
           p_frequent_fat: number;
           p_frequent_image_url: string | null;
         };
+        Returns: string;
+      };
+      upsert_weight_log_and_profile: {
+        Args: { p_date: string; p_kg: number };
         Returns: string;
       };
     };

@@ -1,6 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase-browser";
-import type { FrequentMeal, Meal, Profile, WaterLog } from "@/types/database";
+import type {
+  FrequentMeal,
+  Meal,
+  Profile,
+  WaterLog,
+} from "@/types/database";
+import type { WeightEntry } from "@/lib/weight-local-storage";
 
 function getSupabase() {
   return createClient();
@@ -93,6 +99,54 @@ export function useWaterLog(userId: string | undefined, date: string) {
       return (data as WaterLog) ?? null;
     },
     enabled: !!userId,
+  });
+}
+
+// --- Weight logs (체중 추이 동기화) ---
+
+export function useWeightLogs(userId: string | undefined, oldestDate: string) {
+  return useQuery({
+    queryKey: ["weightLogs", userId, oldestDate],
+    queryFn: async () => {
+      if (!userId) return [];
+
+      const { data, error } = await getSupabase()
+        .from("weight_logs")
+        .select("date, kg")
+        .eq("user_id", userId)
+        .gte("date", oldestDate)
+        .order("date", { ascending: true });
+
+      if (error) throw error;
+      return (data ?? []).map(
+        (r) =>
+          ({
+            date: r.date,
+            kg: typeof r.kg === "string" ? Number.parseFloat(r.kg) : Number(r.kg),
+          }) satisfies WeightEntry
+      );
+    },
+    enabled: !!userId && !!oldestDate,
+  });
+}
+
+export function useUpsertWeightLog(userId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ date, kg }: { date: string; kg: number }) => {
+      if (!userId) throw new Error("Not authenticated");
+      const { data, error } = await getSupabase().rpc(
+        "upsert_weight_log_and_profile",
+        { p_date: date, p_kg: kg }
+      );
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["weightLogs", userId] });
+      queryClient.invalidateQueries({ queryKey: ["profile", userId] });
+    },
   });
 }
 
