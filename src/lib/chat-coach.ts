@@ -88,17 +88,24 @@ export type CoachBootstrapReply = {
 /**
  * 전략적 감시 코칭 — Flash-Lite 구조화 출력용.
  */
-const COACH_PERSONA = `너는 냉정하지만 유능한 데이터 코치 **BAPS**다. 단순 잡답이 아니라 **전략적 감시 코칭**만 한다. (Flash-Lite: 짧고 구조화.)
+const COACH_PERSONA = `너는 냉정하고 무미건조한 데이터 관제 시스템 **BAPS**다.
+유저를 '케어'하는 것이 아니라, 유저라는 '신체 시스템'의 **결함과 수치를 보고**한다.
+
+[대원칙]
+1) **말투**: "~입니다", "~해요" 같은 서술형보다 **"~포착", "~진단", "~확정"** 같은 명사형 종결이나 보고서체를 선호한다.
+2) **금지어**: "좋아요", "노력해보세요", "힘내세요", "추천합니다", "건강을 위해".
+3) **팩트**: "배고프시죠?"(추측) 대신 **"공복 16시간 경과, 혈당 저하 감지"**(데이터)라고 말한다.
+4) **강조**: 핵심 수치와 진단명은 반드시 ** 로 감싼다.
 
 [내부 판단 — 유저 발화에 적용]
 1) 컨텍스트에서 **남은 칼로리**(target_cal−current_cal), **탄·단·지(g)**, **물**, **local_hour**, **최근 메뉴**를 읽는다.
 2) 유형 가늠: 메뉴 추천("뭐 먹을까") / 허용·판정("치킨 되나") / 공복·욕구("배고파") / 잡담.
 3) 데이터에 없는 수치·메뉴를 **지어내지 않는다.**
 
-[출력 블록 — 각 1~2문장, 장문 금지]
-- **analysis**: 현상 한 줄. 예: 탄수 과잉·단백 부족, 남은 여유 **380kcal** 등 **팩트만**.
-- **roast**: 나태·위험 선택을 짧고 굵게. 욕설·혐오·집단 비하·의학 치료 보장 금지.
-- **mission**: **명령조**로 지금 할 **최선 행동·대체 메뉴 1개**. 컨텍스트와 모순 없게.
+[출력 블록 규칙]
+- **analysis**: [현상 진단] 한 줄. 숫자로 기선을 제압할 것.
+- **roast**: [데이터 압박] 유저의 선택이 시스템에 준 타격을 기술. (예: **근손실 유발**, **지방 축적 확정**) 욕설·혐오·집단 비하·의학 치료 보장 금지.
+- **mission**: [시스템 명령] 가장 효율적인 단일 행동 명령.
 
 [마크다운 강조]
 - 핵심 숫자·단위·추천 음식명·권장 행동은 반드시 앞뒤 ** 로 감싼다. 예: **1200kcal**, **닭가슴살**, **물 300ml**
@@ -106,8 +113,12 @@ const COACH_PERSONA = `너는 냉정하지만 유능한 데이터 코치 **BAPS*
 [data_card]
 - 특정 음식·행동 **허용/가능/먹어도 되나** 질문일 때만 채운다. 그 외는 빈 값·[].
 
-[quick_chips]
-- 정확히 3개. 오늘 **남은 kcal·단백·물·시간대** 중 실제 데이터와 연결. prompt에 오늘 수치 최소 1회.`;
+[quick_chips 생성 규칙]
+- 정확히 3개. **상담형·해요체 라벨 금지.** 진단·감사(Audit)·명령 톤.
+- **label**: 심리 압박·호기심을 자극하는 **진단명** 위주 (예: 설계 결함 분석, 예산 탈선 감사, 도파민 회로 오류 판독).
+- **prompt**: 반드시 현재 컨텍스트 **수치(kcal, g, ml 등)**를 1회 이상 포함. 추측 멘트 대신 데이터 명령.
+- **톤**: 수사·감사·관제. "추천해요" 대신 "명령해" "증명해" "판독해" "찔러".
+- **예시 라벨 톤**: "지방 과부하 해결책", "단백질 결핍 복구 작전", "익일 체중 상승 방어", "대사 저하 긴급 복구" — 약한 표현(대사 회복) 대신 **긴급·결함·탈선** 프레임 우선.`;
 
 /** 부트스트랩·후속 프롬프트에서 쓰는 시간대 힌트 (Flash-Lite가 맥락 고정에 유리) */
 const COACH_TIME_BAND_HINT = `
@@ -116,7 +127,7 @@ const COACH_TIME_BAND_HINT = `
 - 11–15: 점심
 - 16–22: 저녁
 - 그 외: 심야/간식 시간대
-opening·quick_chips는 이 밴드와 **오늘 수치**가 맞고, **전략 코칭** 톤(짧은 팩트+압박)이 나게 한다.`;
+opening·quick_chips는 이 밴드와 **오늘 수치**가 맞고, **관제 보고** 톤(짧은 팩트+압박, 반말·시니컬 허용)이 나게 한다.`;
 
 export function formatContextBlock(ctx: CoachApiContext): string {
   const lines = [
@@ -250,7 +261,7 @@ export const chatResponseSchema: Schema = {
       type: SchemaType.ARRAY,
       items: chipItemSchema,
       description:
-        "후속 칩 3개. 단백 보충·야식·물 등 **현재 컨텍스트**에 맞춤.",
+        "정확히 3개. 진단명·감사 톤 label. prompt에 kcal·g·ml 등 오늘 수치 필수. 수사·관제 톤, 상담체 금지.",
     },
   },
   required: ["analysis", "mission", "coach_quips", "data_card", "quick_chips"],
@@ -263,34 +274,35 @@ export function fallbackBootstrap(ctx: CoachApiContext): CoachBootstrapReply {
     const parts: string[] = [];
     if (ctx.emergency_triggers.includes("low_intake_3d_avg") && avg != null) {
       parts.push(
-        `최근 3일 평균 **${Math.round(avg)}kcal/일**로 에너지 여유가 데이터상 빡빡해—의도적 감량인지 기록 누락인지 함께 봐야 해. **근손실·대사 저하** 신호일 수 있어서, 무리한 결식보다 **균형·수면·전문가 상담**을 권해.`
+        `**저섭취 구간** 관제: 최근 3일 평균 **${Math.round(avg)}kcal/일**. 의도적 감량 vs **기록 누락** 감사 필요. **근손실·대사 저하** 신호일 수 있어—무리한 결식 대신 **균형·수면·전문가** 채널을 같이 본다.`
       );
     }
     if (ctx.emergency_triggers.includes("low_intake_today")) {
       parts.push(
-        `오늘 기록만 보면 **${ctx.user_profile.current_cal}kcal**야. **소량이라도 균형 있는 식사**를 먼저 고려해 줘.`
+        `오늘 기록 **${ctx.user_profile.current_cal}kcal**. 데이터만 보면 에너지 대시보드 **적자**—**소량·균형** 식사를 먼저 넣는 게 관제 프로토콜상 1순위야.`
       );
     }
     const opening =
       parts.join(" ") ||
-      `데이터가 **저섭취 구간**처럼 보여. **의료·영양 전문가** 상담도 함께 알아보는 게 안전해.`;
+      `**저섭취 구간** 플래그. 관제 모드에서도 **안전 한도**는 넘지 마라—**의료·영양 전문가** 병행이 기본 룰.`;
+    const avgRounded = avg != null ? Math.round(avg) : null;
     return {
       opening,
       quick_chips: [
         {
-          label: "가벼운 한 끼 예시",
+          label: "기록 누락 vs 실제 적자 감사",
           prompt:
-            "지금 기록 기준으로 부담이 적은 소량 한 끼 예시를 두 가지 말해줘.",
+            avgRounded != null
+              ? `최근 3일 평균 **${avgRounded}kcal/일**·오늘 **${ctx.user_profile.current_cal}kcal**만 보고 **기록 누락**과 **진짜 저섭취**를 어떻게 감별할지 데이터 관점에서 짧게 명령해.`
+              : `오늘 **${ctx.user_profile.current_cal}kcal** 기록만으로 누락 가능성 vs 실제 적자를 어떻게 감사할지 짧게 명령해.`,
         },
         {
-          label: "수분·소금은 어떻게",
-          prompt:
-            "저섭취 구간에서 수분이랑 나트륨은 어떻게 챙기면 좋은지 짧게 말해줘.",
+          label: "수분·전해질 인상 계획",
+          prompt: `지금 체중·오늘 **${Math.round(ctx.water_intake_ml)}ml** 수분 기준으로, 저섭취 구간에서 **ml 단위** 보충·나트륨 각도를 팩트로 짧게 명령해.`,
         },
         {
-          label: "기록 점검",
-          prompt:
-            "기록을 빠뜨려서 칼로리가 낮게 보였을 수 있어. 기록 점검 팁을 짧게 알려줘.",
+          label: "균형 한 끼 강제안",
+          prompt: `오늘 **${ctx.user_profile.current_cal}kcal**·목표 **${ctx.user_profile.target_cal}kcal** 범위에서 부담 낮은 **균형 한 끼** 후보 2개만 수치 붙여 명령해.`,
         },
       ],
     };
@@ -305,100 +317,95 @@ export function fallbackBootstrap(ctx: CoachApiContext): CoachBootstrapReply {
     user_profile.target_cal > 0
       ? user_profile.current_cal / user_profile.target_cal
       : 0;
+  const waterTargetMl = ctx.water_target_cups * ctx.water_cup_ml;
+  const waterMlRounded = Math.round(water_intake_ml);
 
   const proteinLow =
     user_profile.current_cal >= 350 && macros_g.protein < 40 && pct < 0.85;
   const calorieTight = pct >= 0.78 && pct < 1 && rem <= 400;
   const waterLow =
-    ctx.water_target_cups > 0 &&
-    water_intake_ml < ctx.water_target_cups * ctx.water_cup_ml * 0.35;
+    ctx.water_target_cups > 0 && water_intake_ml < waterTargetMl * 0.35;
 
   let opening: string;
   const chips: QuickChip[] = [];
 
   if (proteinLow && local_hour < 12) {
-    opening = `현재 단백질 섭취 **${macros_g.protein.toFixed(0)}g**. 아침부터 근손실 예약 중인 거 맞지? 데이터가 그렇게 말해.`;
+    opening = `단백질 **${macros_g.protein.toFixed(0)}g** 확정. 아침부터 **근육 이화** 각이 열렸다—데이터가 먼저 팩폭한다.`;
     chips.push(
       {
-        label: "지금 먹기 좋은 고단백 식단 추천해봐",
-        prompt:
-          "지금 먹기 좋은 고단백 식단 추천해줘. 오늘 남은 칼로리와 단백질 부족을 반영해서.",
+        label: "단백질 결핍 복구 작전",
+        prompt: `오늘 **${user_profile.current_cal}kcal**·단백 **${macros_g.protein.toFixed(0)}g**·남은 **${rem}kcal** 기준으로 **g 단위** 보충 커맨드 하나만 명령해.`,
       },
       {
-        label: "편의점에서 때울 건데 뭐 먹어?",
-        prompt:
-          "편의점에서 단백질 채우려면 뭐 사야 해? 칼로리랑 단백질 수치 기준으로 추천해줘.",
+        label: "편의점 고단백 강제 집행",
+        prompt: `남은 **${rem}kcal** 안에서 편의점 SKU로 단백 **+20g** 이상 찍는 조합을 **kcal·단백 g**로 감사해줘.`,
       },
       {
-        label: "단백질 목표만 짧게 정리해줘",
-        prompt:
-          "내 체중·오늘 칼로리 기준으로 단백질 목표를 숫자로 짧게 정리해줘.",
+        label: "단백 목표치 수치 감사",
+        prompt: `체중·오늘 섭취 **${user_profile.current_cal}kcal** 기준 **단백질 g 목표**를 한 줄 숫자로 결정해. 변명 없이.`,
       }
     );
   } else if (calorieTight) {
-    opening = `목표까지 **${rem}kcal** 남았다. 저녁 굶을 셈이야, 아니면 딜 카드 짤래?`;
+    opening = `목표까지 **${rem}kcal**. 예산 **바닥**—오늘 저녁은 **설계 결함** 안 나게 짜라.`;
     chips.push(
       {
-        label: "남은 칼로리로 먹을 수 있는 최고의 만찬은?",
-        prompt: `오늘 남은 칼로리가 ${rem}kcal야. 이 안에서 저녁 만찬 메뉴 추천하고 숫자로 근거 붙여줘.`,
+        label: "잔여 예산 최적 배분",
+        prompt: `남은 **${rem}kcal**를 가장 효율적으로 태울 수 있는 고효율 식단 **하나만** 명령해. 탄단지 **g**도 붙여.`,
       },
       {
-        label: "치킨 먹고 싶은데 방법 없어?",
+        label: "치킨 섭취 시 타격 예측",
         prompt:
-          "치킨이 땡기는데 오늘 남은 칼로리 안에서 현실적으로 어떻게 타협할 수 있는지 팩트로 말해줘.",
+          "지금 치킨을 먹었을 때 내일 아침 체중과 남은 예산 이탈률을 계산해줘.",
       },
       {
-        label: "가볍게 마무리할 한 끼 추천",
-        prompt:
-          "남은 칼로리에 맞춰 가볍게 마무리할 한 끼 추천해줘. 대략 kcal도 적어줘.",
+        label: "만찬 설계 결함 선제 차단",
+        prompt: `오늘 **${rem}kcal** 안에서 만찬 **타이밍·탄단지** 실패 패턴 2개를 찔러줘.`,
       }
     );
   } else if (waterLow) {
-    opening = `물이 **${ctx.water_intake_label}** 수준이다. 대사는 통계적으로 네 편이 아니야.`;
+    const gapMl = Math.max(0, Math.round(waterTargetMl - water_intake_ml));
+    opening = `수분 **${ctx.water_intake_label}**. 지금 **${waterMlRounded}ml** — 대사 보드는 너 편이 아니다.`;
     chips.push(
       {
-        label: "물 더 마시면 뭐가 좋아지나",
-        prompt:
-          "지금 물 부족 상태에서 오늘 목표까지 마시면 어떤 효과가 있는지 짧고 팩트로 말해줘.",
+        label: "대사 저하 긴급 복구",
+        prompt: `물 **${waterMlRounded}ml** 즉시 **+250ml** 추가 시 대사·포만 지표 측면 이득을 **수치로 증명**해. 과장 금지.`,
       },
       {
-        label: "한 번에 몇 ml씩 마실까",
-        prompt:
-          "지금 시각 기준으로 물 목표 맞추려면 남은 시간에 몇 ml씩 마시면 되는지 계산해줘.",
+        label: "잔여 수분 예산 분배",
+        prompt: `목표 **${Math.round(waterTargetMl)}ml** 대비 남은 **${gapMl}ml**를 지금 시각 기준으로 **시간당 ml**로 쪼개 명령해.`,
       },
       {
-        label: "저녁에 붓기 줄이려면",
-        prompt:
-          "수분·나트륨 관점에서 저녁 붓기 줄이는 팁을 오늘 기록 기준으로 말해줘.",
+        label: "나트륨·붓기 리스크 감사",
+        prompt: `오늘 **${waterMlRounded}ml**·식단 컨텍스트로 저녁 **붓기** 리스크를 수분·나트륨 각도에서 팩트로 감사해.`,
       }
     );
   } else {
     opening =
       user_profile.current_cal <= 0
-        ? `오늘 섭취 **0kcal**. 기록이 없으면 코치도 통계를 못 쓴다. 뭐부터 물어볼 거야?`
-        : `오늘 **${user_profile.current_cal}kcal** / 목표 **${user_profile.target_cal}kcal**. 데이터는 솔직하니까, 너도 솔직하게 물어봐.`;
+        ? `오늘 섭취 **0kcal** 확정. 기록 공백 = **데이터 파기**. 다음 질의를 입력해라.`
+        : `오늘 **${user_profile.current_cal}kcal** 섭취. 시스템은 **당신의 다음 실수**를 대기 중이다.`;
     chips.push(
       {
-        label: "오늘 식단 팩트로 평가해줘",
-        prompt: "오늘 먹은 것들 기준으로 식단을 팩트로 평가해줘. 탄단지도 언급해줘.",
+        label: "오늘의 설계 결함 분석",
+        prompt:
+          "오늘 기록된 데이터에서 가장 치명적인 결함 3가지만 짚어줘.",
       },
       {
-        label: "저녁 뭐 먹을지 추천",
-        prompt:
-          "오늘 남은 칼로리와 기록을 반영해서 저녁 메뉴 추천해줘.",
+        label: "남은 예산 최적 집행",
+        prompt: `목표까지 남은 **${rem}kcal**를 어떻게 써야 '적자'를 면할지 대안을 명령해.`,
       },
       {
-        label: "지금 치킨 먹어도 돼?",
+        label: "야식 욕구 회로 차단",
         prompt:
-          "지금 치킨 먹으면 오늘 목표 대비 어떻게 되는지 숫자로 말해줘.",
+          "지금 뭔가 먹고 싶은 게 생리적 허기인지 심리적 오류인지 분석하고 팩폭 날려줘.",
       }
     );
   }
 
   while (chips.length < 3) {
     chips.push({
-      label: "목표 대비 내 상황 요약",
-      prompt: "지금 데이터 기준으로 내 현황을 3문장으로 요약해줘.",
+      label: "관제 대시 요약",
+      prompt: `오늘 **${user_profile.current_cal}kcal** / 목표 **${user_profile.target_cal}kcal** 기준 **3문장** 압축. 변명 없이.`,
     });
   }
 

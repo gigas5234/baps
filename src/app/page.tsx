@@ -31,7 +31,10 @@ import { QuickLogSlider } from "@/components/dashboard/quick-log-slider";
 import { HomeDashboardSkeleton } from "@/components/dashboard/home-dashboard-skeleton";
 import { WaterCounter } from "@/components/dashboard/water-counter";
 import { HomeLanding } from "@/components/home/home-landing";
-import { AnalyzeModal } from "@/components/meal/analyze-modal";
+import {
+  AnalyzeModal,
+  type AnalyzeModalShape,
+} from "@/components/meal/analyze-modal";
 import { CameraCaptureModal } from "@/components/meal/camera-capture-modal";
 import {
   ManualInputModal,
@@ -51,18 +54,27 @@ import {
   useAdjustWater,
   useDailyCalories,
   useProfile,
-  useDeleteMeal,
+  useDeleteMealGroup,
+  useMoveMealGroupSlot,
 } from "@/lib/queries";
 import { fetchMainDashboardInsight } from "@/lib/main-summary-client";
 import { rankFrequentMealsForNow } from "@/lib/frequent-meals-rank";
 import { bumpFrequentMealLog } from "@/lib/frequent-meals";
 import { trackBapsEvent } from "@/lib/analytics";
-import type { FrequentMeal, Meal } from "@/types/database";
+import type { FrequentMeal } from "@/types/database";
 import { compressImageForAnalysis } from "@/lib/image-compress";
 import { uploadMealImage } from "@/lib/storage";
 import { getCalorieZone, type CalorieZone } from "@/lib/calorie-zone";
 import { sumMealMacros } from "@/lib/meal-macros";
 import { syncSelectedDateToLocalTodayOnce } from "@/lib/local-date";
+import { readCaptureDateFromImageFile } from "@/lib/exif-capture-date";
+import {
+  defaultEatenAtIsoForSlot,
+  mealSlotFromLocalDate,
+  mergeExifTimeOntoSelectedYmd,
+  MEAL_SLOT_SECTION,
+  type MealSlot,
+} from "@/lib/meal-slots";
 import {
   getRecommendedWaterMl,
   getWaterTargetCups,
@@ -73,15 +85,6 @@ import { ThemeToggleIcons } from "@/components/theme-toggle-icons";
 import { cn } from "@/lib/utils";
 import { useWaterTopBarNudge } from "@/hooks/use-water-topbar-nudge";
 import { touchWaterLastAdjust } from "@/lib/water-reminder-storage";
-
-interface AnalyzeResult {
-  food_name: string;
-  cal: number;
-  carbs: number;
-  protein: number;
-  fat: number;
-  description: string;
-}
 
 export default function HomePage() {
   const { selectedDate, setSelectedDate } = useMealStore();
@@ -112,7 +115,8 @@ export default function HomePage() {
   );
   const { data: waterLog } = useWaterLog(userId, selectedDate);
   const adjustWater = useAdjustWater(userId, selectedDate);
-  const deleteMealMutation = useDeleteMeal(userId, selectedDate);
+  const deleteMealGroupMutation = useDeleteMealGroup(userId, selectedDate);
+  const moveMealGroupMutation = useMoveMealGroupSlot(userId, selectedDate);
   const displayName = profile?.user_name?.trim() || userName;
   const target = profile?.target_cal ?? targetCal ?? 2000;
   const totalCalories = useDailyCalories(meals);
@@ -300,9 +304,18 @@ export default function HomePage() {
   const [analyzeOpen, setAnalyzeOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [analyzeResult, setAnalyzeResult] = useState<AnalyzeResult | null>(null);
+  const [analyzeResult, setAnalyzeResult] = useState<AnalyzeModalShape | null>(
+    null
+  );
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+  const [analyzeMealSlot, setAnalyzeMealSlot] = useState<MealSlot>(() =>
+    mealSlotFromLocalDate(new Date())
+  );
+  const [analyzeExifCapture, setAnalyzeExifCapture] = useState<Date | null>(
+    null
+  );
+  const [analyzeExifHint, setAnalyzeExifHint] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   /** 브라우저 내 카메라 — input capture 대신 사용해 탭 리로드 방지 */
@@ -328,7 +341,9 @@ export default function HomePage() {
 
   const [toast, setToast] = useState<string | null>(null);
   const [quickLogBusyId, setQuickLogBusyId] = useState<string | null>(null);
-  const [mealDeletingId, setMealDeletingId] = useState<string | null>(null);
+  const [mealDeletingGroupId, setMealDeletingGroupId] = useState<string | null>(
+    null
+  );
 
   useEffect(() => {
     if (!toast) return;
@@ -406,8 +421,27 @@ export default function HomePage() {
     setAnalyzeResult(null);
     setAnalyzeError(null);
     setImageUrl(null);
+    setAnalyzeExifCapture(null);
+    setAnalyzeExifHint(null);
     setAnalyzeOpen(true);
     setIsAnalyzing(true);
+
+    const capRaw = await readCaptureDateFromImageFile(file);
+    if (capRaw) {
+      const merged = mergeExifTimeOntoSelectedYmd(capRaw, selectedDate);
+      setAnalyzeExifCapture(merged);
+      const sl = mealSlotFromLocalDate(merged);
+      setAnalyzeMealSlot(sl);
+      const tt = merged.toLocaleTimeString("ko-KR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      setAnalyzeExifHint(
+        `사진이 ${tt}쯤 찍힌 것으로 보여요. ${MEAL_SLOT_SECTION[sl].title} 슬롯에 넣을까요?`
+      );
+    } else {
+      setAnalyzeMealSlot(mealSlotFromLocalDate(new Date()));
+    }
 
     try {
       // 1. 리사이즈·JPEG 압축 후 Base64 전송 (Vercel 413 본문 제한 대응)
@@ -464,54 +498,80 @@ export default function HomePage() {
     saveAsFrequent,
     portionPct,
     priceWon,
+    mealSlot,
   }: {
     saveAsFrequent: boolean;
     portionPct: number;
     priceWon: number | null;
+    mealSlot: MealSlot;
   }) => {
     if (!analyzeResult || !userId) return;
     const p = Math.min(100, Math.max(0, portionPct)) / 100;
     if (p <= 0) return;
 
-    setIsSaving(true);
+    const items = analyzeResult.items;
+    if (!items.length) return;
 
-    const cal = Math.round(analyzeResult.cal * p);
-    const carbs = Math.round(analyzeResult.carbs * p * 10) / 10;
-    const protein = Math.round(analyzeResult.protein * p * 10) / 10;
-    const fat = Math.round(analyzeResult.fat * p * 10) / 10;
+    const eatenIso =
+      analyzeExifCapture != null
+        ? mergeExifTimeOntoSelectedYmd(
+            analyzeExifCapture,
+            selectedDate
+          ).toISOString()
+        : defaultEatenAtIsoForSlot(mealSlot, selectedDate);
+    const groupId = crypto.randomUUID();
+
+    setIsSaving(true);
 
     try {
       const supabase = createClient();
-      const { error: mealErr } = await supabase.rpc(
-        "confirm_meal_and_optional_frequent",
-        {
-          p_food_name: analyzeResult.food_name,
-          p_cal: cal,
-          p_carbs: carbs,
-          p_protein: protein,
-          p_fat: fat,
-          p_image_url: imageUrl,
-          p_price_won: priceWon,
-          p_save_frequent: saveAsFrequent,
-          p_frequent_cal: analyzeResult.cal,
-          p_frequent_carbs: analyzeResult.carbs,
-          p_frequent_protein: analyzeResult.protein,
-          p_frequent_fat: analyzeResult.fat,
-          p_frequent_image_url: imageUrl,
-        }
-      );
-      if (mealErr) throw mealErr;
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        const cal = Math.round(it.cal * p);
+        const carbs = Math.round(it.carbs * p * 10) / 10;
+        const protein = Math.round(it.protein * p * 10) / 10;
+        const fat = Math.round(it.fat * p * 10) / 10;
+
+        const { error: mealErr } = await supabase.rpc(
+          "confirm_meal_and_optional_frequent",
+          {
+            p_food_name: it.food_name,
+            p_cal: cal,
+            p_carbs: carbs,
+            p_protein: protein,
+            p_fat: fat,
+            p_image_url: i === 0 ? imageUrl : null,
+            p_price_won: i === 0 ? priceWon : null,
+            p_save_frequent:
+              saveAsFrequent && items.length === 1 && i === 0,
+            p_frequent_cal: it.cal,
+            p_frequent_carbs: it.carbs,
+            p_frequent_protein: it.protein,
+            p_frequent_fat: it.fat,
+            p_frequent_image_url: i === 0 ? imageUrl : null,
+            p_meal_slot: mealSlot,
+            p_meal_group_id: groupId,
+            p_eaten_at: eatenIso,
+          }
+        );
+        if (mealErr) throw mealErr;
+      }
 
       queryClient.invalidateQueries({ queryKey: ["meals", userId, selectedDate] });
       queryClient.invalidateQueries({ queryKey: ["frequentMeals", userId] });
       setAnalyzeOpen(false);
+      setAnalyzeExifCapture(null);
+      setAnalyzeExifHint(null);
       trackBapsEvent("meal_saved", {
         source: "analyze_image",
-        save_as_frequent: saveAsFrequent,
+        save_as_frequent: saveAsFrequent && items.length === 1,
         has_price: priceWon != null,
       });
-      if (saveAsFrequent) setToast("자주 먹는 메뉴에도 저장했어요");
-      else setToast("식단에 추가되었습니다");
+      if (saveAsFrequent && items.length === 1) {
+        setToast("자주 먹는 메뉴에도 저장했어요");
+      } else {
+        setToast("식단에 추가되었습니다");
+      }
       void requestMainInsight("meal");
     } catch {
       setAnalyzeError("저장에 실패했어요.");
@@ -533,6 +593,7 @@ export default function HomePage() {
     try {
       const supabase = createClient();
       const b = data.baseForFrequent;
+      const eatenIso = defaultEatenAtIsoForSlot(data.meal_slot, selectedDate);
       const { error: mealErr } = await supabase.rpc(
         "confirm_meal_and_optional_frequent",
         {
@@ -549,6 +610,8 @@ export default function HomePage() {
           p_frequent_protein: b.protein,
           p_frequent_fat: b.fat,
           p_frequent_image_url: null,
+          p_meal_slot: data.meal_slot,
+          p_eaten_at: eatenIso,
         }
       );
       if (mealErr) throw mealErr;
@@ -690,16 +753,39 @@ export default function HomePage() {
     }
   };
 
-  const handleDeleteMeal = async (meal: Meal) => {
-    if (!userId || mealDeletingId) return;
-    setMealDeletingId(meal.id);
+  const handleDeleteMealGroup = async (mealGroupId: string) => {
+    if (!userId || mealDeletingGroupId) return;
+    setMealDeletingGroupId(mealGroupId);
     try {
-      await deleteMealMutation.mutateAsync(meal.id);
+      await deleteMealGroupMutation.mutateAsync(mealGroupId);
       setToast("기록을 삭제했어요");
     } catch {
       setToast("삭제에 실패했어요");
     } finally {
-      setMealDeletingId(null);
+      setMealDeletingGroupId(null);
+    }
+  };
+
+  const handleMoveTrayToSlot = async (
+    mealGroupId: string,
+    toSlot: MealSlot,
+    fromSlot: MealSlot
+  ) => {
+    if (!userId || moveMealGroupMutation.isPending) return;
+    try {
+      const eatenIso = defaultEatenAtIsoForSlot(toSlot, selectedDate);
+      await moveMealGroupMutation.mutateAsync({
+        mealGroupId,
+        slot: toSlot,
+        eatenAtIso: eatenIso,
+      });
+      if (fromSlot === "lunch" && toSlot === "latenight") {
+        setToast(
+          "점심을 야식 슬롯으로 옮겼어. 이 시간에 먹은 거 맞아? 기록 누락이면 신체 리듬 데이터가 오염돼."
+        );
+      }
+    } catch {
+      setToast("슬롯 이동에 실패했어요");
     }
   };
 
@@ -973,8 +1059,15 @@ export default function HomePage() {
             </div>
             <MealTimeline
               meals={meals}
-              onDeleteMeal={userId ? handleDeleteMeal : undefined}
-              isDeletingId={mealDeletingId}
+              selectedDateYmd={selectedDate}
+              onDeleteMealGroup={
+                userId ? handleDeleteMealGroup : undefined
+              }
+              onMoveTrayToSlot={
+                userId ? handleMoveTrayToSlot : undefined
+              }
+              isDeletingGroupId={mealDeletingGroupId}
+              isMovingTray={moveMealGroupMutation.isPending}
             />
           </section>
 
@@ -1079,12 +1172,17 @@ export default function HomePage() {
             });
           }
           setAnalyzeOpen(false);
+          setAnalyzeExifCapture(null);
+          setAnalyzeExifHint(null);
         }}
         imageUrl={imageUrl}
         previewUrl={previewUrl}
         result={analyzeResult}
         isAnalyzing={isAnalyzing}
         error={analyzeError}
+        exifHint={analyzeExifHint}
+        mealSlot={analyzeMealSlot}
+        onMealSlotChange={setAnalyzeMealSlot}
         onConfirm={handleConfirmAnalysis}
         isSaving={isSaving}
       />

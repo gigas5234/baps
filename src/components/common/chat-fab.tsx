@@ -25,6 +25,7 @@ import {
 } from "@/lib/chat-coach";
 import {
   COACH_PERSONAS_UI,
+  COACH_QUICK_CHIP_ACCENT,
   DEFAULT_COACH_PERSONA_ID,
   coachMeta,
   type CoachPersonaId,
@@ -178,19 +179,22 @@ function CoachPersonaPicker({
 
 function QuickChipRow({
   chips,
+  coachId,
   disabled,
   onPick,
 }: {
   chips: QuickChip[];
+  coachId: CoachPersonaId;
   disabled: boolean;
   onPick: (prompt: string) => void;
 }) {
   if (!chips.length) return null;
+  const accent = COACH_QUICK_CHIP_ACCENT[coachId];
   return (
     <div
       className={cn(
         "rounded-xl border border-dashed border-muted-foreground/35 bg-muted/30 p-2.5",
-        "dark:border-white/12 dark:bg-muted/20"
+        "dark:border-white/14 dark:bg-muted/12"
       )}
     >
       <p className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
@@ -205,15 +209,23 @@ function QuickChipRow({
             disabled={disabled}
             onClick={() => onPick(c.prompt)}
             className={cn(
-              "flex w-full max-w-full shrink-0 items-start gap-2 rounded-lg border border-border bg-background px-3 py-2 text-left",
+              "flex w-full max-w-full shrink-0 items-start gap-2 rounded-lg bg-background pl-2.5 pr-3 py-2 text-left",
               "text-[11px] font-medium leading-snug text-foreground",
-              "transition-colors hover:bg-muted/70 active:scale-[0.99]",
+              accent.border,
+              "transition-colors hover:bg-muted/60 active:scale-[0.99]",
               "disabled:pointer-events-none disabled:opacity-45",
-              "dark:border-white/12 dark:bg-card/80 dark:hover:bg-muted/40"
+              "dark:bg-zinc-900/75 dark:hover:bg-zinc-800/85"
             )}
           >
             <span
-              className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-muted font-mono text-[9px] font-bold text-muted-foreground"
+              className={cn(
+                "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
+                accent.dot
+              )}
+              aria-hidden
+            />
+            <span
+              className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-muted/90 font-mono text-[9px] font-bold text-muted-foreground dark:bg-zinc-800/90"
               aria-hidden
             >
               {i + 1}
@@ -249,13 +261,18 @@ export function ChatFab({
   const messagesRef = useRef<ChatMessage[]>([]);
   /** opening 메시지가 현재 coachPersona와 이미 맞는지 (중복 부트스트랩 방지) */
   const openingCoachSynced = useRef<CoachPersonaId | null>(null);
+  /** 마지막으로 빠른 요청을 맞춘 `날짜|코치` — 코치·날짜 바뀌면 부트스트랩으로 칩 재수신 */
+  const quickChipsBootstrapKeyRef = useRef<string>("");
 
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
 
   useEffect(() => {
-    if (!isOpen) openingCoachSynced.current = null;
+    if (!isOpen) {
+      openingCoachSynced.current = null;
+      quickChipsBootstrapKeyRef.current = "";
+    }
   }, [isOpen]);
 
   useEffect(() => {
@@ -421,6 +438,7 @@ export function ChatFab({
       } finally {
         if (!cancelled) {
           setBootLoading(false);
+          quickChipsBootstrapKeyRef.current = `${selectedDate}|${coachPersona}`;
         }
       }
     })();
@@ -430,19 +448,41 @@ export function ChatFab({
     };
   }, [isOpen, messages.length, coachPersona, selectedDate]);
 
-  /** 유저 턴 없이 코칭만 바꿀 때 opening·빠른 요청 재생성.
-   * bootLoading 을 의존성/가드에 넣으면 setBootLoading(true) 직후 effect가 재실행되며
-   * 이전 fetch cleanup 으로 요청이 취소되는 버그가 난다. */
+  /** 코치·날짜가 바뀌면 부트스트랩으로 빠른 요청 동기화. 대화가 여러 턴이어도 칩만 갱신한다.
+   * bootLoading 은 오프닝 1통만 있을 때만 전체 패널형 로딩(입력 비활성)을 쓴다. */
   useEffect(() => {
     if (!isOpen || isLoading) return;
     const m = messagesRef.current;
+    if (m.length === 0) return;
+
+    const chipCtxKey = `${selectedDate}|${coachPersona}`;
+    if (quickChipsBootstrapKeyRef.current === chipCtxKey) return;
+
     const onlyOpening =
       m.length === 1 && m[0].is_ai && !m[0].coachTurn;
-    if (!onlyOpening) return;
-    if (openingCoachSynced.current === coachPersona) return;
 
     let cancelled = false;
-    setBootLoading(true);
+    if (onlyOpening) {
+      setQuickChips([]);
+      setBootLoading(true);
+    }
+
+    const fallbackChips = (): QuickChip[] => [
+      {
+        label: "오늘의 설계 결함 분석",
+        prompt:
+          "오늘 기록된 데이터에서 가장 치명적인 결함 3가지만 짚어줘.",
+      },
+      {
+        label: "남은 예산 최적 집행",
+        prompt: `오늘 ${totalCal}kcal / 목표 ${targetCal}kcal 기준 남은 kcal를 아껴 쓰는 집행안을 명령해.`,
+      },
+      {
+        label: "야식 욕구 회로 차단",
+        prompt:
+          "지금 먹고 싶은 게 생리적 허기인지 심리적 오류인지 팩트로 판독해줘.",
+      },
+    ];
 
     (async () => {
       try {
@@ -458,41 +498,48 @@ export function ChatFab({
         const d = data as Record<string, unknown>;
 
         if (status === 401) {
-          const next: ChatMessage[] = [
-            {
-              id: `ai-open-${Date.now()}`,
-              is_ai: true,
-              message:
-                typeof d.error === "string"
-                  ? d.error
-                  : "로그인 후 이용할 수 있어요.",
-              data_card: null,
-              createdAt: Date.now(),
-            },
-          ];
-          messagesRef.current = next;
-          setMessages(next);
-          openingCoachSynced.current = coachPersona;
+          if (onlyOpening) {
+            const next: ChatMessage[] = [
+              {
+                id: `ai-open-${Date.now()}`,
+                is_ai: true,
+                message:
+                  typeof d.error === "string"
+                    ? d.error
+                    : "로그인 후 이용할 수 있어요.",
+                data_card: null,
+                createdAt: Date.now(),
+              },
+            ];
+            messagesRef.current = next;
+            setMessages(next);
+            openingCoachSynced.current = coachPersona;
+          }
+          setQuickChips([]);
+          quickChipsBootstrapKeyRef.current = chipCtxKey;
           return;
         }
 
         if (!ok) {
-          const next: ChatMessage[] = [
-            {
-              id: `ai-open-${Date.now()}`,
-              is_ai: true,
-              message:
-                typeof d.error === "string"
-                  ? d.error
-                  : "코치를 불러오지 못했어요.",
-              data_card: null,
-              createdAt: Date.now(),
-            },
-          ];
-          messagesRef.current = next;
-          setMessages(next);
+          if (onlyOpening) {
+            const next: ChatMessage[] = [
+              {
+                id: `ai-open-${Date.now()}`,
+                is_ai: true,
+                message:
+                  typeof d.error === "string"
+                    ? d.error
+                    : "코치를 불러오지 못했어요.",
+                data_card: null,
+                createdAt: Date.now(),
+              },
+            ];
+            messagesRef.current = next;
+            setMessages(next);
+            openingCoachSynced.current = coachPersona;
+          }
           setQuickChips([]);
-          openingCoachSynced.current = coachPersona;
+          quickChipsBootstrapKeyRef.current = chipCtxKey;
           return;
         }
 
@@ -504,23 +551,32 @@ export function ChatFab({
           ? (d.quick_chips as QuickChip[]).slice(0, 3)
           : [];
 
-        const next: ChatMessage[] = [
-          {
-            id: `ai-open-${Date.now()}`,
-            is_ai: true,
-            message: opening,
-            data_card: null,
-            createdAt: Date.now(),
-          },
-        ];
-        messagesRef.current = next;
-        setMessages(next);
+        if (onlyOpening) {
+          const next: ChatMessage[] = [
+            {
+              id: `ai-open-${Date.now()}`,
+              is_ai: true,
+              message: opening,
+              data_card: null,
+              createdAt: Date.now(),
+            },
+          ];
+          messagesRef.current = next;
+          setMessages(next);
+          openingCoachSynced.current = coachPersona;
+        }
         setQuickChips(chips);
-        openingCoachSynced.current = coachPersona;
+        quickChipsBootstrapKeyRef.current = chipCtxKey;
       } catch {
-        /* 유지 */
-      } finally {
         if (!cancelled) {
+          quickChipsBootstrapKeyRef.current = chipCtxKey;
+          setQuickChips(fallbackChips());
+          if (onlyOpening) {
+            openingCoachSynced.current = coachPersona;
+          }
+        }
+      } finally {
+        if (!cancelled && onlyOpening) {
           setBootLoading(false);
         }
       }
@@ -529,7 +585,14 @@ export function ChatFab({
     return () => {
       cancelled = true;
     };
-  }, [coachPersona, isOpen, isLoading, selectedDate]);
+  }, [
+    coachPersona,
+    isOpen,
+    isLoading,
+    selectedDate,
+    totalCal,
+    targetCal,
+  ]);
 
   /**
    * @param source chip | card — 입력창을 거치지 않고 곧바로 API만 호출. 보내기 버튼은 직접 입력용.
@@ -676,6 +739,7 @@ export function ChatFab({
       setMessages(t);
       const chips = normalized.quick_chips ?? [];
       setQuickChips(chips);
+      quickChipsBootstrapKeyRef.current = `${selectedDate}|${coachPersona}`;
       if (chips.length > 0) setAccessoryExpanded(true);
     } catch {
       const cleaned = messagesRef.current.filter((m) => m.id !== streamId);
@@ -737,6 +801,17 @@ export function ChatFab({
                 <div className="flex flex-col items-center justify-center gap-2 px-3 pt-16 text-sm text-muted-foreground">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                   <span>코치가 데이터 보고 입 열 준비 중…</span>
+                </div>
+              ) : null}
+
+              {bootLoading && messages.length > 0 ? (
+                <div
+                  className="flex items-center gap-2 rounded-lg border border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-[12px] text-muted-foreground dark:bg-primary/10"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
+                  <span>코치 교대 중 · 빠른 요청 갱신 중…</span>
                 </div>
               ) : null}
 
@@ -853,6 +928,7 @@ export function ChatFab({
               />
               <QuickChipRow
                 chips={quickChips}
+                coachId={coachPersona}
                 disabled={isLoading || bootLoading}
                 onPick={(prompt) => void sendWithText(prompt, "chip")}
               />

@@ -30,6 +30,12 @@ export interface Meal {
   /** 선택: 해당 끼니 식비(원) */
   price_won?: number | null;
   created_at: string;
+  /** 실제 섭취 시각(일별 집계·슬롯 표시) */
+  eaten_at: string;
+  /** 아침·점심·간식·저녁·야식 */
+  meal_slot: string;
+  /** 한 끼(한 사진) 트레이 — 동일 ID 행 묶음 */
+  meal_group_id: string;
 }
 
 /** 공용 영양 캐시 (텍스트 분석) */
@@ -169,6 +175,9 @@ export type Database = {
           p_frequent_protein: number;
           p_frequent_fat: number;
           p_frequent_image_url: string | null;
+          p_meal_slot?: string | null;
+          p_meal_group_id?: string | null;
+          p_eaten_at?: string | null;
         };
         Returns: string;
       };

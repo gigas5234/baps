@@ -34,9 +34,10 @@ function formatInlineBold(
   text: string,
   variant: "bubble" | "roast" = "bubble"
 ): ReactNode {
+  /** bubble: 말풍선·카드가 이미 대비 색을 정함 — 강조만 굵게 두고 색은 상속 (미션 톤 다크배경에서 zinc-900 덮어쓰기 버그 방지) */
   const strongCls =
     variant === "bubble"
-      ? "font-semibold text-foreground tabular-nums dark:text-zinc-900"
+      ? "font-semibold tabular-nums text-inherit"
       : "font-bold text-rose-700 tabular-nums dark:text-rose-300";
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, i) => {
@@ -203,17 +204,6 @@ function IncomingBubble({
   );
 }
 
-function SystemMetaRow({ seg }: { seg: CoachStreamSegment }) {
-  const label = seg.tag === "QUICK_CHIPS" ? "빠른 요청" : "분석 카드";
-  return (
-    <div className="flex justify-center py-1">
-      <p className="rounded-full border border-border bg-muted px-3 py-1 text-[10px] text-muted-foreground">
-        {label} · 불러오는 중…
-      </p>
-    </div>
-  );
-}
-
 /** 스트리밍 단톡 세그먼트 — 카카오톡 수신 말풍선 레이아웃 */
 export function KakaoDelimitedCoachStream({
   segments,
@@ -262,7 +252,7 @@ export function KakaoDelimitedCoachStream({
         const head = group[0];
         if (!head) return null;
         if (head.tag === "QUICK_CHIPS" || head.tag === "DATA_CARD") {
-          return <SystemMetaRow key={`meta-${gi}`} seg={head} />;
+          return null;
         }
         if (head.tag === "INVITE") {
           const code = head.text.trim().toUpperCase();
