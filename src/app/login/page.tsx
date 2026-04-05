@@ -3,9 +3,8 @@
 import { createClient } from "@/lib/supabase-browser";
 
 export default function LoginPage() {
-  const supabase = createClient();
-
   const handleSocialLogin = async (provider: "kakao" | "google") => {
+    const supabase = createClient();
     await supabase.auth.signInWithOAuth({
       provider,
       options: {
