@@ -1,101 +1,177 @@
 "use client";
 
 import Image from "next/image";
+import { useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Radar, UtensilsCrossed, X } from "lucide-react";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
+import { UtensilsCrossed, X } from "lucide-react";
 import type { Meal } from "@/types/database";
 import { cn } from "@/lib/utils";
 import { foodEmojiForName } from "@/lib/food-emoji";
-import { SwipeDeleteRow } from "@/components/dashboard/swipe-delete-row";
+import {
+  MEAL_SLOT_IDS,
+  MEAL_SLOT_SECTION,
+  isLateNightSlot,
+  type MealSlot,
+} from "@/lib/meal-slots";
+import { traysIntoBuckets, sumTrayCal, slotForTray } from "@/lib/meal-tray";
 
 interface MealTimelineProps {
   meals: Meal[];
-  onDeleteMeal?: (meal: Meal) => void;
-  isDeletingId?: string | null;
+  /** 드롭 시 eaten_at 기본 시각 (YYYY-MM-DD) */
+  selectedDateYmd: string;
+  onDeleteMealGroup?: (mealGroupId: string) => void;
+  onMoveTrayToSlot?: (
+    mealGroupId: string,
+    toSlot: MealSlot,
+    fromSlot: MealSlot
+  ) => void;
+  isDeletingGroupId?: string | null;
+  isMovingTray?: boolean;
 }
 
-/** 로컬 시각 기준 끼니 구간 (뱃지·그룹 헤더용) */
-type MealKind = "breakfast" | "lunch" | "snack" | "dinner" | "latenight";
+function DraggableTray({
+  id,
+  disabled,
+  children,
+}: {
+  id: string;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({ id, disabled: Boolean(disabled) });
+  const style = transform
+    ? { transform: CSS.Translate.toString(transform) }
+    : undefined;
 
-const KIND_ORDER: MealKind[] = [
-  "breakfast",
-  "lunch",
-  "snack",
-  "dinner",
-  "latenight",
-];
-
-const KIND_LABEL: Record<
-  MealKind,
-  { sectionTitle: string; sectionHint: string; badge: string }
-> = {
-  breakfast: {
-    sectionTitle: "아침",
-    sectionHint: "05:00–10:59",
-    badge: "아침",
-  },
-  lunch: {
-    sectionTitle: "점심",
-    sectionHint: "11:00–14:59",
-    badge: "점심",
-  },
-  snack: {
-    sectionTitle: "디저트 · 음료",
-    sectionHint: "15:00–16:59",
-    badge: "디저트·음료",
-  },
-  dinner: {
-    sectionTitle: "저녁",
-    sectionHint: "17:00–21:59",
-    badge: "저녁",
-  },
-  latenight: {
-    sectionTitle: "야식",
-    sectionHint: "22:00–04:59",
-    badge: "야식",
-  },
-};
-
-function mealKindFromCreatedAt(createdAt: string): MealKind {
-  const h = new Date(createdAt).getHours();
-  if (h >= 22 || h < 5) return "latenight";
-  if (h < 11) return "breakfast";
-  if (h < 15) return "lunch";
-  if (h < 17) return "snack";
-  if (h < 22) return "dinner";
-  return "latenight";
+  return (
+    <div ref={setNodeRef} style={style} className={cn(isDragging && "z-10")}>
+      <div
+        {...listeners}
+        {...attributes}
+        className={cn(
+          "touch-none",
+          !disabled && "cursor-grab active:cursor-grabbing"
+        )}
+      >
+        {children}
+      </div>
+    </div>
+  );
 }
 
-function isLateNightGlow(createdAt: string): boolean {
-  const h = new Date(createdAt).getHours();
-  return h >= 22 || h < 5;
+function DroppableBucket({
+  slot,
+  children,
+}: {
+  slot: MealSlot;
+  children: React.ReactNode;
+}) {
+  const { isOver, setNodeRef } = useDroppable({ id: `slot:${slot}` });
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "min-h-[4.5rem] rounded-2xl transition-[box-shadow,background-color]",
+        isOver && "bg-primary/8 ring-2 ring-primary/40 ring-offset-2 ring-offset-background"
+      )}
+    >
+      {children}
+    </div>
+  );
 }
 
-function groupMealsByKind(meals: Meal[]): Record<MealKind, Meal[]> {
-  const buckets: Record<MealKind, Meal[]> = {
-    breakfast: [],
-    lunch: [],
-    snack: [],
-    dinner: [],
-    latenight: [],
-  };
-  for (const m of meals) {
-    buckets[mealKindFromCreatedAt(m.created_at)].push(m);
-  }
-  for (const k of KIND_ORDER) {
-    buckets[k].sort(
-      (a, b) =>
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    );
-  }
-  return buckets;
+function timeLabel(iso: string) {
+  return new Date(iso).toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export function MealTimeline({
   meals,
-  onDeleteMeal,
-  isDeletingId,
+  selectedDateYmd,
+  onDeleteMealGroup,
+  onMoveTrayToSlot,
+  isDeletingGroupId,
+  isMovingTray,
 }: MealTimelineProps) {
+  const dndEnabled = Boolean(onMoveTrayToSlot);
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { delay: 240, tolerance: 10 },
+    })
+  );
+
+  const buckets = useMemo(() => traysIntoBuckets(meals), [meals]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeFromSlot, setActiveFromSlot] = useState<MealSlot | null>(
+    null
+  );
+  const fromSlotRef = useRef<MealSlot | null>(null);
+
+  const activeTray = useMemo(() => {
+    if (!activeId) return null;
+    const gid = activeId.replace(/^tray:/, "");
+    for (const slot of MEAL_SLOT_IDS) {
+      for (const tray of buckets[slot]) {
+        if (tray[0]?.meal_group_id === gid) return tray;
+      }
+    }
+    return null;
+  }, [activeId, buckets]);
+
+  const handleDragStart = (e: DragStartEvent) => {
+    const id = String(e.active.id);
+    setActiveId(id);
+    const gid = id.replace(/^tray:/, "");
+    for (const slot of MEAL_SLOT_IDS) {
+      for (const tray of buckets[slot]) {
+        if (tray[0]?.meal_group_id === gid) {
+          fromSlotRef.current = slot;
+          setActiveFromSlot(slot);
+          return;
+        }
+      }
+    }
+    fromSlotRef.current = null;
+    setActiveFromSlot(null);
+  };
+
+  const handleDragEnd = (e: DragEndEvent) => {
+    setActiveId(null);
+    setActiveFromSlot(null);
+    const { active, over } = e;
+    if (!over || !onMoveTrayToSlot) return;
+    const trayKey = String(active.id);
+    const overKey = String(over.id);
+    if (!trayKey.startsWith("tray:") || !overKey.startsWith("slot:")) return;
+    const mealGroupId = trayKey.slice("tray:".length);
+    const toSlot = overKey.slice("slot:".length) as MealSlot;
+    const from = fromSlotRef.current;
+    fromSlotRef.current = null;
+    if (!from || from === toSlot) return;
+    onMoveTrayToSlot(mealGroupId, toSlot, from);
+  };
+
+  const handleDragCancel = () => {
+    setActiveId(null);
+    setActiveFromSlot(null);
+    fromSlotRef.current = null;
+  };
+
   if (meals.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-muted-foreground/20 py-12 text-muted-foreground">
@@ -110,152 +186,213 @@ export function MealTimeline({
     );
   }
 
-  const grouped = groupMealsByKind(meals);
+  const renderTrayCard = (
+    tray: Meal[],
+    slot: MealSlot,
+    { drag }: { drag: boolean }
+  ) => {
+    const head = tray[0];
+    if (!head) return null;
+    const groupId = head.meal_group_id;
+    const total = sumTrayCal(tray);
+    const multi = tray.length > 1;
+    const night = isLateNightSlot(slot);
+    const busy = isDeletingGroupId === groupId;
+    const img = tray.find((m) => m.image_url?.trim())?.image_url ?? null;
+    const meta = MEAL_SLOT_SECTION[slot];
+
+    const inner = (
+      <div
+        className={cn(
+          "relative rounded-2xl border p-3 pr-10 shadow-sm transition-[box-shadow,border-color]",
+          night
+            ? "border-red-500/35 bg-card shadow-[0_0_20px_-4px_rgba(239,68,68,0.42)] dark:border-red-400/28 dark:shadow-[0_0_22px_-4px_rgba(248,113,113,0.35)]"
+            : "border-border bg-card",
+          busy && "pointer-events-none opacity-50"
+        )}
+      >
+        {onDeleteMealGroup ? (
+          <button
+            type="button"
+            disabled={busy}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => onDeleteMealGroup(groupId)}
+            className={cn(
+              "absolute right-2 top-2 rounded-lg p-1.5 text-muted-foreground/40 transition-colors hover:bg-destructive/12 hover:text-destructive",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            )}
+            aria-label="이 끼니 기록 전체 삭제"
+          >
+            <X className="h-4 w-4" strokeWidth={2} />
+          </button>
+        ) : null}
+
+        <div className="flex items-start gap-3">
+          <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-muted">
+            {img ? (
+              <Image
+                src={img}
+                alt=""
+                fill
+                className="object-cover"
+                sizes="56px"
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-2xl leading-none">
+                {tray.length === 1
+                  ? foodEmojiForName(tray[0].food_name)
+                  : "🍱"}
+              </div>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-[9px] font-bold tracking-wide",
+                  night
+                    ? "bg-red-500/15 text-red-700 dark:text-red-300"
+                    : "bg-primary/12 text-primary"
+                )}
+              >
+                {meta.badge}
+              </span>
+              <p className="font-data text-lg font-bold tabular-nums leading-none text-foreground">
+                {total}
+                <span className="ml-0.5 text-xs font-semibold text-muted-foreground">
+                  kcal
+                </span>
+              </p>
+              <span className="text-[10px] font-medium text-muted-foreground">
+                {timeLabel(head.eaten_at)}
+              </span>
+            </div>
+            <p className="mt-1 text-xs font-semibold text-foreground">
+              {multi
+                ? `${meta.title} 식사 (${tray.length}품)`
+                : tray[0].food_name}
+            </p>
+            {multi ? (
+              <ul className="mt-1.5 space-y-0.5 text-[11px] text-muted-foreground">
+                {tray.map((m) => (
+                  <li key={m.id} className="tabular-nums">
+                    • {m.food_name} ({m.cal}kcal)
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="mt-1 flex flex-wrap gap-x-2 font-data text-[11px] font-semibold tabular-nums text-foreground/85">
+                <span>탄 {Number(tray[0].carbs)}g</span>
+                <span>단 {Number(tray[0].protein)}g</span>
+                <span>지 {Number(tray[0].fat)}g</span>
+              </div>
+            )}
+          </div>
+        </div>
+        {dndEnabled ? (
+          <p className="mt-2 text-[9px] text-muted-foreground">
+            길게 눌러 다른 끼니 슬롯으로 이동
+          </p>
+        ) : null}
+      </div>
+    );
+
+    if (drag && dndEnabled) {
+      return (
+        <DraggableTray
+          id={`tray:${groupId}`}
+          disabled={isMovingTray || busy}
+        >
+          {inner}
+        </DraggableTray>
+      );
+    }
+    return inner;
+  };
+
+  const sections = MEAL_SLOT_IDS.map((slot) => {
+    const meta = MEAL_SLOT_SECTION[slot];
+    const list = buckets[slot];
+    return (
+      <motion.div
+        key={slot}
+        layout
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="space-y-2"
+      >
+        <div className="flex items-baseline gap-2 px-0.5">
+          <span className="text-lg" aria-hidden>
+            {meta.emoji}
+          </span>
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-foreground">
+              {meta.title}
+            </p>
+            <p className="text-[10px] text-muted-foreground">{meta.hint}</p>
+          </div>
+        </div>
+
+        <DroppableBucket slot={slot}>
+          {list.length === 0 ? (
+            <div
+              className={cn(
+                "flex min-h-[4.5rem] items-center justify-center rounded-2xl border border-dashed px-3 py-4 text-center text-[11px] text-muted-foreground",
+                dndEnabled
+                  ? "border-muted-foreground/25 bg-muted/15"
+                  : "border-muted-foreground/15"
+              )}
+            >
+              {dndEnabled
+                ? "비어 있음 · 다른 슬롯에서 끼니를 끌어다 놓기"
+                : "기록 없음"}
+            </div>
+          ) : (
+            <ul className="list-none space-y-2.5 p-0" role="list">
+              {list.map((tray) => (
+                <motion.li
+                  key={tray[0]?.meal_group_id ?? tray[0]?.id}
+                  layout
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
+                  {renderTrayCard(tray, slot, { drag: true })}
+                </motion.li>
+              ))}
+            </ul>
+          )}
+        </DroppableBucket>
+      </motion.div>
+    );
+  });
+
+  const timelineBody = (
+    <div className="space-y-8">
+      <AnimatePresence mode="popLayout">{sections}</AnimatePresence>
+    </div>
+  );
+
+  if (!dndEnabled) {
+    return timelineBody;
+  }
 
   return (
-    <div className="space-y-6">
-      <AnimatePresence mode="popLayout">
-        {KIND_ORDER.map((kind) => {
-          const partMeals = grouped[kind];
-          if (partMeals.length === 0) return null;
-          const meta = KIND_LABEL[kind];
-
-          return (
-            <motion.div
-              key={kind}
-              layout
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-2"
-            >
-              <div className="flex items-baseline gap-2 px-0.5">
-                <Radar className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-foreground">
-                    {meta.sectionTitle}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {meta.sectionHint}
-                  </p>
-                </div>
-              </div>
-
-              <ul className="list-none space-y-2.5 p-0" role="list">
-                {partMeals.map((meal, i) => {
-                  const time = new Date(meal.created_at).toLocaleTimeString(
-                    "ko-KR",
-                    { hour: "2-digit", minute: "2-digit" }
-                  );
-                  const night = isLateNightGlow(meal.created_at);
-                  const canSwipe = Boolean(onDeleteMeal);
-                  const busy = isDeletingId === meal.id;
-
-                  const row = (
-                    <div
-                      className={cn(
-                        "relative flex items-center gap-3 rounded-2xl border p-3 pr-10 shadow-sm transition-[box-shadow,border-color]",
-                        night
-                          ? "border-red-500/35 bg-card shadow-[0_0_20px_-4px_rgba(239,68,68,0.42)] dark:border-red-400/28 dark:shadow-[0_0_22px_-4px_rgba(248,113,113,0.35)]"
-                          : "border-border bg-card"
-                      )}
-                    >
-                      <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-muted">
-                        {meal.image_url ? (
-                          <Image
-                            src={meal.image_url}
-                            alt={meal.food_name}
-                            fill
-                            className="object-cover"
-                            sizes="56px"
-                          />
-                        ) : (
-                          <div
-                            className="flex h-full w-full items-center justify-center text-2xl leading-none"
-                            aria-hidden
-                          >
-                            {foodEmojiForName(meal.food_name)}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                          <span
-                            className={cn(
-                              "rounded-full px-2 py-0.5 text-[9px] font-bold tracking-wide",
-                              night
-                                ? "bg-red-500/15 text-red-700 dark:text-red-300"
-                                : "bg-primary/12 text-primary"
-                            )}
-                          >
-                            {meta.badge}
-                          </span>
-                          <p className="font-data text-xl font-bold tabular-nums leading-none text-foreground">
-                            {meal.cal}
-                            <span className="ml-0.5 text-xs font-semibold text-muted-foreground">
-                              kcal
-                            </span>
-                          </p>
-                          <span className="text-[10px] font-medium text-muted-foreground">
-                            {time}
-                          </span>
-                        </div>
-                        <p className="mt-1 truncate text-xs font-medium text-muted-foreground">
-                          {meal.food_name}
-                        </p>
-                        <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0 font-data text-[11px] font-semibold tabular-nums text-foreground/85">
-                          <span>탄 {Number(meal.carbs)}g</span>
-                          <span>단 {Number(meal.protein)}g</span>
-                          <span>지 {Number(meal.fat)}g</span>
-                        </div>
-                      </div>
-
-                      {onDeleteMeal ? (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onPointerDown={(e) => e.stopPropagation()}
-                          onClick={() => onDeleteMeal(meal)}
-                          className={cn(
-                            "absolute right-2 top-2 rounded-lg p-1.5 text-muted-foreground/40 transition-colors hover:bg-destructive/12 hover:text-destructive",
-                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                            busy && "pointer-events-none opacity-40"
-                          )}
-                          aria-label={`${meal.food_name} 기록 삭제`}
-                        >
-                          <X className="h-4 w-4" strokeWidth={2} />
-                        </button>
-                      ) : null}
-                    </div>
-                  );
-
-                  return (
-                    <motion.li
-                      key={meal.id}
-                      layout
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.98 }}
-                      transition={{ duration: 0.22, delay: i * 0.03 }}
-                    >
-                      {canSwipe ? (
-                        <SwipeDeleteRow
-                          onDelete={() => onDeleteMeal?.(meal)}
-                          disabled={busy}
-                        >
-                          {row}
-                        </SwipeDeleteRow>
-                      ) : (
-                        row
-                      )}
-                    </motion.li>
-                  );
-                })}
-              </ul>
-            </motion.div>
-          );
-        })}
-      </AnimatePresence>
-    </div>
+    <DndContext
+      sensors={sensors}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
+    >
+      {timelineBody}
+      <DragOverlay dropAnimation={null}>
+        {activeTray && activeTray[0] ? (
+          <div className="w-[min(100%,20rem)] scale-[1.02] shadow-xl">
+            {renderTrayCard(activeTray, activeFromSlot ?? slotForTray(activeTray), {
+              drag: false,
+            })}
+          </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   );
 }

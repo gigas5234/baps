@@ -5,53 +5,110 @@ import { createGenAI, getGeminiModelName } from "@/lib/gemini";
 
 export const maxDuration = 60;
 
-/** 대략 6MB 원본에 해당하는 base64 길이 상한 (과대 페이로드 방지) */
 const MAX_IMAGE_BASE64_CHARS = 8_500_000;
 
-/**
- * Gemini 3.1 Flash-Lite: 저지연·이미지→구조화 추출에 맞춘 스키마 전용 호출.
- * @see https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite-preview
- */
-const mealAnalysisSchema: Schema = {
+const analyzableItemSchema: Schema = {
   type: SchemaType.OBJECT,
   properties: {
     food_name: {
       type: SchemaType.STRING,
-      description: "대표 음식명, 한국어, 짧게. 반상이면 한 줄로 합쳐 표기.",
+      description: "개별 음식·반찬명, 한국어. 예: 밥, 된장찌개, 김치.",
     },
-    calories: {
-      type: SchemaType.NUMBER,
-      description: "추정 총 칼로리 kcal, 1인분·한 끼 기준.",
-    },
+    calories: { type: SchemaType.NUMBER, description: "이 항목 분량 kcal" },
     carbs: { type: SchemaType.NUMBER, description: "탄수화물 g" },
     protein: { type: SchemaType.NUMBER, description: "단백질 g" },
     fat: { type: SchemaType.NUMBER, description: "지방 g" },
+  },
+  required: ["food_name", "calories", "carbs", "protein", "fat"],
+};
+
+const mealAnalysisSchema: Schema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    items: {
+      type: SchemaType.ARRAY,
+      items: analyzableItemSchema,
+      description:
+        "사진에 구분되는 **각 음식마다 1행**. 밥·국·반찬은 분리. 한 종류만 보이면 원소 1개.",
+    },
     description: {
       type: SchemaType.STRING,
-      description: "한 줄 요약, 약 40자 이내, 팩트만.",
+      description: "이 한 끼 전체 한 줄 요약, 약 40자.",
     },
   },
-  required: [
-    "food_name",
-    "calories",
-    "carbs",
-    "protein",
-    "fat",
-    "description",
-  ],
+  required: ["items", "description"],
 };
 
 const VISION_PROMPT = `[작업]
-사진 1장을 보고 **한 끼 식사**로 추정한 영양 값만 구조화한다. 모델 특성(Flash-Lite): 빠른 시각→필드 추출, 짧은 근거.
+사진 1장에서 **보이는 음식별로** 영양을 나눠 구조화한다. 한 끼에 여러 품목이 있으면 items에 각각 나열한다.
 
 [규칙]
-- **보이는 것만** 근거로 삼는다. 애매하면 한국 일반 분량 기준으로 **보수적** 추정(칼로리 과대 금지).
-- 반찬·밥·국이 같이 있으면 **한 끼 합산**으로 food_name에 대표명을 적는다.
-- 반드시 스키마 숫자 필드만 채운다. 부가 설명·마크다운 없음.
+- 보이는 것만 근거. 애매하면 한국 일반 분량으로 **보수적** 추정(칼로리 과대 금지).
+- 밥·메인·반찬·국·음료가 함께 보이면 **항목을 분리**한다. 합쳐서 한 줄 food_name 금지(항목마다 고유 food_name).
+- 각 items[].calories는 **그 항목만**의 kcal이며, 모든 항목 합이 한 끼 총칼로리다.
 
 [단위]
-- calories: 총 kcal
-- carbs, protein, fat: 그램`;
+- calories: kcal, carbs/protein/fat: g`;
+
+type RawItem = {
+  food_name?: string;
+  calories?: number;
+  carbs?: number;
+  protein?: number;
+  fat?: number;
+};
+
+function normalizeItems(parsed: { items?: RawItem[]; description?: string }): {
+  items: {
+    food_name: string;
+    cal: number;
+    carbs: number;
+    protein: number;
+    fat: number;
+  }[];
+  description: string;
+  food_name: string;
+} {
+  const raw = Array.isArray(parsed.items) ? parsed.items : [];
+  const mapped = raw.map((row) => {
+    const food_name = String(row?.food_name ?? "").trim() || "음식";
+    const cal = Math.max(0, Math.round(Number(row?.calories) || 0));
+    const carbs = Math.max(0, Math.round(Number(row?.carbs) * 10) / 10);
+    const protein = Math.max(0, Math.round(Number(row?.protein) * 10) / 10);
+    const fat = Math.max(0, Math.round(Number(row?.fat) * 10) / 10);
+    return { food_name, cal, carbs, protein, fat };
+  });
+
+  let chosen = mapped.filter(
+    (x) => x.cal > 0 || x.carbs > 0 || x.protein > 0 || x.fat > 0
+  );
+  if (chosen.length === 0 && mapped.length > 0) {
+    chosen = [mapped[0]];
+  }
+  if (chosen.length === 0) {
+    chosen = [
+      {
+        food_name: "식사",
+        cal: 0,
+        carbs: 0,
+        protein: 0,
+        fat: 0,
+      },
+    ];
+  }
+
+  const totalCal = chosen.reduce((s, x) => s + x.cal, 0);
+  const label =
+    chosen.length === 1
+      ? chosen[0].food_name
+      : `${chosen[0]?.food_name ?? "식사"} 외 ${chosen.length - 1}품 (${totalCal}kcal)`;
+
+  return {
+    items: chosen,
+    description: String(parsed.description ?? ""),
+    food_name: label,
+  };
+}
 
 export async function POST(request: Request) {
   try {
@@ -111,14 +168,7 @@ export async function POST(request: Request) {
     ]);
 
     const text = result.response.text();
-    let parsed: {
-      food_name?: string;
-      calories?: number;
-      carbs?: number;
-      protein?: number;
-      fat?: number;
-      description?: string;
-    };
+    let parsed: { items?: RawItem[]; description?: string };
     try {
       parsed = JSON.parse(text);
     } catch {
@@ -129,14 +179,8 @@ export async function POST(request: Request) {
       parsed = JSON.parse(jsonStr);
     }
 
-    return NextResponse.json({
-      food_name: String(parsed.food_name ?? "식사"),
-      cal: Math.round(Number(parsed.calories) || 0),
-      carbs: Math.round(Number(parsed.carbs) * 10) / 10,
-      protein: Math.round(Number(parsed.protein) * 10) / 10,
-      fat: Math.round(Number(parsed.fat) * 10) / 10,
-      description: String(parsed.description ?? ""),
-    });
+    const out = normalizeItems(parsed);
+    return NextResponse.json(out);
   } catch (error) {
     console.error("Gemini analyze error:", error);
     return NextResponse.json(

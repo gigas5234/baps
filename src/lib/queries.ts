@@ -47,9 +47,9 @@ export function useMeals(userId: string | undefined, date: string) {
         .from("meals")
         .select("*")
         .eq("user_id", userId)
-        .gte("created_at", start)
-        .lte("created_at", end)
-        .order("created_at", { ascending: true });
+        .gte("eaten_at", start)
+        .lte("eaten_at", end)
+        .order("eaten_at", { ascending: true });
 
       if (error) throw error;
       return (data ?? []) as Meal[];
@@ -194,6 +194,57 @@ export function useDeleteMeal(userId: string | undefined, date: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["meals", userId, date] });
+    },
+  });
+}
+
+export function useDeleteMealGroup(userId: string | undefined, date: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (mealGroupId: string) => {
+      if (!userId) throw new Error("Not authenticated");
+      const { error } = await getSupabase()
+        .from("meals")
+        .delete()
+        .eq("meal_group_id", mealGroupId)
+        .eq("user_id", userId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["meals", userId, date] });
+    },
+  });
+}
+
+export function useMoveMealGroupSlot(
+  userId: string | undefined,
+  dateYmd: string
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      mealGroupId,
+      slot,
+      eatenAtIso,
+    }: {
+      mealGroupId: string;
+      slot: string;
+      eatenAtIso: string;
+    }) => {
+      if (!userId) throw new Error("Not authenticated");
+      const { error } = await getSupabase()
+        .from("meals")
+        .update({ meal_slot: slot, eaten_at: eatenAtIso })
+        .eq("meal_group_id", mealGroupId)
+        .eq("user_id", userId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["meals", userId, dateYmd] });
     },
   });
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Loader2, Check, AlertCircle } from "lucide-react";
 import Image from "next/image";
@@ -9,6 +9,11 @@ import {
   PortionPctSlider,
   type PortionPct,
 } from "@/components/meal/portion-pct-slider";
+import {
+  MEAL_SLOT_IDS,
+  MEAL_SLOT_SECTION,
+  type MealSlot,
+} from "@/lib/meal-slots";
 
 function scaleCal(base: number, pct: PortionPct) {
   return Math.round((base * pct) / 100);
@@ -17,12 +22,17 @@ function scaleMacro(base: number, pct: PortionPct) {
   return Math.round((base * pct) / 100 * 10) / 10;
 }
 
-interface AnalyzeResult {
+export interface AnalyzeMealItemRow {
   food_name: string;
   cal: number;
   carbs: number;
   protein: number;
   fat: number;
+}
+
+export interface AnalyzeModalShape {
+  items: AnalyzeMealItemRow[];
+  food_name: string;
   description: string;
 }
 
@@ -31,14 +41,18 @@ interface AnalyzeModalProps {
   onClose: () => void;
   imageUrl: string | null;
   previewUrl: string | null;
-  result: AnalyzeResult | null;
+  result: AnalyzeModalShape | null;
   isAnalyzing: boolean;
   error: string | null;
+  /** EXIF 등 — 슬롯 제안 문구 */
+  exifHint?: string | null;
+  mealSlot: MealSlot;
+  onMealSlotChange: (slot: MealSlot) => void;
   onConfirm: (options: {
     saveAsFrequent: boolean;
     portionPct: PortionPct;
-    /** 이번에 기록하는 끼니 식비(원), 미입력 시 null */
     priceWon: number | null;
+    mealSlot: MealSlot;
   }) => void | Promise<void>;
   isSaving: boolean;
 }
@@ -50,6 +64,9 @@ export function AnalyzeModal({
   result,
   isAnalyzing,
   error,
+  exifHint,
+  mealSlot,
+  onMealSlotChange,
   onConfirm,
   isSaving,
 }: AnalyzeModalProps) {
@@ -78,12 +95,29 @@ export function AnalyzeModal({
     }
   }, [isOpen, result?.food_name]);
 
+  const multiItem = (result?.items.length ?? 0) > 1;
+
+  const baseTotals = useMemo(() => {
+    if (!result?.items.length) {
+      return { cal: 0, carbs: 0, protein: 0, fat: 0 };
+    }
+    return result.items.reduce(
+      (acc, i) => ({
+        cal: acc.cal + i.cal,
+        carbs: acc.carbs + i.carbs,
+        protein: acc.protein + i.protein,
+        fat: acc.fat + i.fat,
+      }),
+      { cal: 0, carbs: 0, protein: 0, fat: 0 }
+    );
+  }, [result]);
+
   const scaled = result
     ? {
-        cal: scaleCal(result.cal, portionPct),
-        carbs: scaleMacro(result.carbs, portionPct),
-        protein: scaleMacro(result.protein, portionPct),
-        fat: scaleMacro(result.fat, portionPct),
+        cal: scaleCal(baseTotals.cal, portionPct),
+        carbs: scaleMacro(baseTotals.carbs, portionPct),
+        protein: scaleMacro(baseTotals.protein, portionPct),
+        fat: scaleMacro(baseTotals.fat, portionPct),
       }
     : null;
 
@@ -101,53 +135,98 @@ export function AnalyzeModal({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            className="max-h-[min(92dvh,100%)] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-3xl bg-background p-6 pb-8 space-y-5 touch-pan-y"
+            className="max-h-[min(92dvh,100%)] w-full max-w-md space-y-5 overflow-y-auto overscroll-contain rounded-t-3xl bg-background p-6 pb-8 touch-pan-y"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold">
                 {isAnalyzing ? "분석 중..." : result ? "분석 완료!" : "오류"}
               </h2>
-              <button onClick={onClose} disabled={isSaving}>
-                <X className="w-5 h-5" />
+              <button type="button" onClick={onClose} disabled={isSaving}>
+                <X className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Preview image */}
-            {previewUrl && (
-              <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-muted">
+            {previewUrl ? (
+              <div className="relative aspect-square w-full overflow-hidden rounded-2xl bg-muted">
                 <Image
                   src={previewUrl}
                   alt="촬영한 음식"
                   fill
                   className="object-cover"
                 />
-                {isAnalyzing && (
-                  <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                    <Loader2 className="w-8 h-8 text-white animate-spin" />
+                {isAnalyzing ? (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                    <Loader2 className="h-8 w-8 animate-spin text-white" />
                   </div>
-                )}
+                ) : null}
               </div>
-            )}
+            ) : null}
 
-            {/* Error */}
-            {error && (
-              <div className="flex items-center gap-2 text-red-500 text-sm">
-                <AlertCircle className="w-4 h-4" />
+            {error ? (
+              <div className="flex items-center gap-2 text-sm text-red-500">
+                <AlertCircle className="h-4 w-4" />
                 <p>{error}</p>
               </div>
-            )}
+            ) : null}
 
-            {/* Result */}
-            {result && scaled && (
+            {result && scaled ? (
               <div className="space-y-3">
                 <div className="text-center">
                   <p className="text-xl font-bold">{result.food_name}</p>
-                  <p className="text-sm text-muted-foreground mt-1">
+                  <p className="mt-1 text-sm text-muted-foreground">
                     {result.description}
                   </p>
                 </div>
+
+                {exifHint ? (
+                  <p className="rounded-xl border border-primary/25 bg-primary/8 px-3 py-2 text-center text-[11px] leading-snug text-foreground">
+                    {exifHint}
+                  </p>
+                ) : null}
+
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold text-muted-foreground">
+                    언제 먹은 끼니인가요?
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {MEAL_SLOT_IDS.map((id) => {
+                      const meta = MEAL_SLOT_SECTION[id];
+                      const on = mealSlot === id;
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => onMealSlotChange(id)}
+                          className={cn(
+                            "rounded-full border px-2.5 py-1 text-[10px] font-bold transition-colors",
+                            on
+                              ? "border-primary bg-primary/15 text-primary"
+                              : "border-border bg-muted/40 text-muted-foreground"
+                          )}
+                        >
+                          {meta.emoji} {meta.title}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {result.items.length > 1 ? (
+                  <ul className="space-y-1 rounded-xl border border-border bg-card/40 px-3 py-2 text-left text-[11px]">
+                    {result.items.map((it, idx) => (
+                      <li key={`${it.food_name}-${idx}`} className="tabular-nums">
+                        <span className="font-medium text-foreground">
+                          • {it.food_name}
+                        </span>{" "}
+                        <span className="text-muted-foreground">
+                          ({scaleCal(it.cal, portionPct)}kcal · 탄{" "}
+                          {scaleMacro(it.carbs, portionPct)}g)
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
@@ -157,10 +236,9 @@ export function AnalyzeModal({
                     </span>
                   </div>
                   <p className="text-[10px] leading-snug text-muted-foreground dark:text-foreground/65">
-                    0~100% · 1% 단위. 사진 추정 1인분을 100%로 두고 남김이면
-                    줄이세요.{" "}
+                    0~100% · 사진 추정 분량을 100%로 둔 뒤 조절.{" "}
                     <strong className="text-foreground">자주 먹는 저장</strong>은
-                    항상 100%(1인분)으로 등록돼요.
+                    항목이 1개일 때만 가능해요.
                   </p>
                   <PortionPctSlider
                     value={portionPct}
@@ -169,14 +247,13 @@ export function AnalyzeModal({
                 </div>
 
                 <p className="text-[10px] text-muted-foreground dark:text-foreground/65">
-                  사진 추정(100%):{" "}
+                  추정 합계(100%):{" "}
                   <span className="font-data">
-                    {result.cal}kcal · 탄 {result.carbs}g · 단 {result.protein}g ·
-                    지 {result.fat}g
+                    {baseTotals.cal}kcal · 탄 {baseTotals.carbs}g · 단{" "}
+                    {baseTotals.protein}g · 지 {baseTotals.fat}g
                   </span>
                 </p>
 
-                {/* Nutrition grid — 이번 기록(비율 적용) */}
                 <div className="grid grid-cols-4 gap-2 rounded-2xl border border-grid-line bg-card/50 p-2">
                   {[
                     {
@@ -208,20 +285,32 @@ export function AnalyzeModal({
                       key={label}
                       className="rounded-xl border border-grid-line bg-background/60 p-3 text-center"
                     >
-                      <p className={`font-data text-lg font-bold ${color}`}>
+                      <p
+                        className={cn("font-data text-lg font-bold", color)}
+                      >
                         {value}
                       </p>
-                      <p className="text-[10px] text-muted-foreground">{unit}</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">{label}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {unit}
+                      </p>
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">
+                        {label}
+                      </p>
                     </div>
                   ))}
                 </div>
 
-                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border bg-muted/25 px-4 py-3.5 text-left transition-colors hover:bg-muted/40 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring">
+                <label
+                  className={cn(
+                    "flex cursor-pointer items-start gap-3 rounded-2xl border border-border bg-muted/25 px-4 py-3.5 text-left transition-colors hover:bg-muted/40 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring",
+                    multiItem && "pointer-events-none opacity-50"
+                  )}
+                >
                   <input
                     type="checkbox"
-                    checked={saveAsFrequent}
+                    checked={saveAsFrequent && !multiItem}
                     onChange={(e) => setSaveAsFrequent(e.target.checked)}
+                    disabled={multiItem}
                     className="mt-0.5 h-4 w-4 shrink-0 rounded border-input text-primary focus:ring-primary"
                   />
                   <span className="text-sm leading-snug">
@@ -229,15 +318,15 @@ export function AnalyzeModal({
                       자주 먹는 메뉴로 저장
                     </span>
                     <span className="mt-1 block text-xs text-muted-foreground">
-                      Quick Log에는 사진 분석 100% 기준 영양이 저장돼요.
+                      {multiItem
+                        ? "여러 품목 사진은 자주 먹는 메뉴에 한 번에 넣지 않아요."
+                        : "Quick Log에는 사진 분석 100% 기준이 저장돼요."}
                     </span>
                   </span>
                 </label>
 
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium">
-                    식비(원, 선택)
-                  </label>
+                  <label className="text-sm font-medium">식비(원, 선택)</label>
                   <input
                     type="number"
                     inputMode="numeric"
@@ -247,33 +336,35 @@ export function AnalyzeModal({
                     onChange={(e) => setPriceWonInput(e.target.value)}
                     className="font-data w-full rounded-xl border px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   />
-                  <p className="text-[10px] text-muted-foreground">
-                    입력하면 오늘 합산·kcal당 원 맥락에 반영돼요.
-                  </p>
                 </div>
 
-                {/* Confirm button */}
                 <button
+                  type="button"
                   onClick={() => {
                     const raw = priceWonInput.trim();
                     const n =
                       raw === "" ? NaN : Math.round(parseFloat(raw) || 0);
                     const priceWon =
                       Number.isFinite(n) && n > 0 ? n : null;
-                    void onConfirm({ saveAsFrequent, portionPct, priceWon });
+                    void onConfirm({
+                      saveAsFrequent: multiItem ? false : saveAsFrequent,
+                      portionPct,
+                      priceWon,
+                      mealSlot,
+                    });
                   }}
                   disabled={isSaving || portionPct <= 0 || scaled.cal <= 0}
-                  className="w-full py-3.5 rounded-xl bg-primary text-primary-foreground font-medium text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
                 >
                   {isSaving ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    <Check className="w-4 h-4" />
+                    <Check className="h-4 w-4" />
                   )}
                   {isSaving ? "저장 중..." : "식단에 추가하기"}
                 </button>
               </div>
-            )}
+            ) : null}
           </motion.div>
         </motion.div>
       )}

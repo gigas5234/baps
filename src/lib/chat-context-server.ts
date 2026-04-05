@@ -83,9 +83,9 @@ export async function buildCoachApiContext(
       .from("meals")
       .select("*")
       .eq("user_id", userId)
-      .gte("created_at", rangeStart)
-      .lte("created_at", endOfDay)
-      .order("created_at", { ascending: true }),
+      .gte("eaten_at", rangeStart)
+      .lte("eaten_at", endOfDay)
+      .order("eaten_at", { ascending: true }),
     supabase
       .from("water_logs")
       .select("*")
@@ -98,8 +98,9 @@ export async function buildCoachApiContext(
 
   const profile = profileRes.data as Profile;
   const mealsRange = (mealsRangeRes.data ?? []) as Meal[];
+  const mealClock = (m: Meal) => m.eaten_at ?? m.created_at;
   const meals = mealsRange.filter((m) => {
-    const t = new Date(m.created_at).getTime();
+    const t = new Date(mealClock(m)).getTime();
     return (
       t >= new Date(startOfDay).getTime() &&
       t <= new Date(endOfDay).getTime()
@@ -112,7 +113,7 @@ export async function buildCoachApiContext(
     [dayM2]: 0,
   };
   for (const m of mealsRange) {
-    const day = isoToCalendarYmdInTimeZone(m.created_at, tz);
+    const day = isoToCalendarYmdInTimeZone(mealClock(m), tz);
     if (day in sums) sums[day] += Number(m.cal) || 0;
   }
   const recent_three_day_cal_average =

@@ -7,6 +7,12 @@ import {
   MEAL_QUICK_PRESETS,
   type MealQuickPreset,
 } from "@/lib/meal-presets";
+import {
+  MEAL_SLOT_IDS,
+  MEAL_SLOT_SECTION,
+  mealSlotFromLocalDate,
+  type MealSlot,
+} from "@/lib/meal-slots";
 import { cn } from "@/lib/utils";
 import {
   PortionPctSlider,
@@ -28,6 +34,8 @@ export interface ManualMealSubmitPayload {
   protein: number;
   fat: number;
   saveAsFrequent: boolean;
+  /** 끼니 슬롯 — eaten_at 기본 시각과 동기화 */
+  meal_slot: MealSlot;
   /** 이번 기록 끼니 식비(원), 선택 */
   price_won?: number | null;
   /** 자주 먹는 식단 등록 시 항상 1인분(100%) 기준 */
@@ -73,6 +81,9 @@ export function ManualInputModal({
   const [priceWonInput, setPriceWonInput] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+  const [mealSlot, setMealSlot] = useState<MealSlot>(() =>
+    mealSlotFromLocalDate(new Date())
+  );
 
   useEffect(() => {
     if (!isOpen) return;
@@ -85,6 +96,7 @@ export function ManualInputModal({
     setPriceWonInput("");
     setAnalyzeError(null);
     setIsAnalyzing(false);
+    setMealSlot(mealSlotFromLocalDate(new Date()));
   }, [isOpen]);
 
   useEffect(() => {
@@ -211,6 +223,7 @@ export function ManualInputModal({
       protein: scaled.protein,
       fat: scaled.fat,
       saveAsFrequent,
+      meal_slot: mealSlot,
       price_won,
       baseForFrequent: {
         cal: Math.max(0, Math.round(base.cal)),
@@ -249,6 +262,33 @@ export function ManualInputModal({
               <button type="button" onClick={onClose} aria-label="닫기">
                 <X className="w-5 h-5" />
               </button>
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold text-muted-foreground">
+                언제 먹은 끼니인가요?
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {MEAL_SLOT_IDS.map((id) => {
+                  const meta = MEAL_SLOT_SECTION[id];
+                  const on = mealSlot === id;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setMealSlot(id)}
+                      className={cn(
+                        "rounded-full border px-2.5 py-1 text-[10px] font-bold transition-colors",
+                        on
+                          ? "border-primary bg-primary/15 text-primary"
+                          : "border-border bg-muted/40 text-muted-foreground"
+                      )}
+                    >
+                      {meta.emoji} {meta.title}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {MEAL_QUICK_PRESETS.length > 0 ? (
