@@ -50,8 +50,8 @@ export function QuickLogSlider({
 
   if (isLoading) {
     return (
-      <section className="px-4 pb-3 pt-3">
-        <div className="mb-3 flex items-center justify-between gap-2 pr-1">
+      <section className="px-4 pb-[1.05rem] pt-[1.05rem]">
+        <div className="mb-[1.05rem] flex items-center justify-between gap-2 pr-1">
           <div className="h-4 w-36 rounded bg-muted animate-pulse" />
           <div className="h-8 w-8 shrink-0 rounded-xl bg-muted animate-pulse" />
         </div>
@@ -69,11 +69,12 @@ export function QuickLogSlider({
 
   if (visible.length === 0) {
     return (
-      <section className="px-4 pb-4 pt-3">
-        <div className="mb-3 flex items-center justify-between gap-2 pr-1">
-          <h2 className="flex min-w-0 items-center gap-1.5 text-base font-semibold text-foreground">
+      <section className="px-4 pb-[1.4rem] pt-[1.05rem]">
+        <div className="mb-[1.05rem] flex items-center justify-between gap-2 pr-1">
+          <h2 className="flex min-w-0 items-center gap-2 text-lg font-bold tracking-tight text-foreground">
             <Sparkles
-              className="h-5 w-5 shrink-0 text-primary"
+              className="h-6 w-6 shrink-0 text-primary"
+              strokeWidth={2}
               aria-hidden
             />
             퀵 로그 · 자주 찾는 식단
@@ -133,10 +134,14 @@ export function QuickLogSlider({
   }
 
   return (
-    <section className="px-4 pb-3 pt-3">
-      <div className="mb-3 flex items-center justify-between gap-2 pr-1">
-        <h2 className="flex min-w-0 items-center gap-1.5 text-base font-semibold text-foreground">
-          <Sparkles className="h-5 w-5 shrink-0 text-primary" aria-hidden />
+    <section className="px-4 pb-[1.05rem] pt-[1.05rem]">
+      <div className="mb-[1.05rem] flex items-center justify-between gap-2 pr-1">
+        <h2 className="flex min-w-0 items-center gap-2 text-lg font-bold tracking-tight text-foreground">
+          <Sparkles
+            className="h-6 w-6 shrink-0 text-primary"
+            strokeWidth={2}
+            aria-hidden
+          />
           퀵 로그 · 자주 찾는 식단
         </h2>
         {headerAddon}

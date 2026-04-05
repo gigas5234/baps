@@ -4,12 +4,12 @@
 export function HomeDashboardSkeleton() {
   return (
     <>
-      <section className="space-y-3 px-4 pb-4 pt-3" aria-hidden>
-        <div className="h-7 w-48 rounded-md bg-muted/90 animate-pulse" />
+      <section className="space-y-[1.05rem] px-4 pb-[1.4rem] pt-[1.05rem]" aria-hidden>
         <div className="space-y-2">
-          <div className="h-6 w-40 rounded-md bg-muted/80 animate-pulse" />
+          <div className="h-7 w-44 rounded-md bg-muted/90 animate-pulse" />
           <div className="h-14 rounded-xl border border-border/70 bg-muted/40 animate-pulse" />
         </div>
+        <div className="h-7 w-48 rounded-md bg-muted/90 animate-pulse" />
         <div className="rounded-3xl border border-border/80 bg-card p-6 shadow-sm">
           <div className="mx-auto mb-2 h-6 w-28 rounded-full bg-muted/90 animate-pulse" />
           <div className="flex flex-col items-center">
@@ -31,8 +31,8 @@ export function HomeDashboardSkeleton() {
         </div>
       </section>
 
-      <section className="px-4 pb-3 pt-3" aria-hidden>
-        <div className="mb-3 h-6 w-44 rounded-md bg-muted animate-pulse" />
+      <section className="px-4 pb-[1.05rem] pt-[1.05rem]" aria-hidden>
+        <div className="mb-[1.05rem] h-7 w-48 rounded-md bg-muted animate-pulse" />
         <div className="flex gap-2.5">
           {[1, 2, 3].map((k) => (
             <div
@@ -43,9 +43,9 @@ export function HomeDashboardSkeleton() {
         </div>
       </section>
 
-      <section className="px-4 py-2" aria-hidden>
-        <div className="mb-2 space-y-1">
-          <div className="h-4 w-24 rounded bg-muted animate-pulse" />
+      <section className="px-4 pb-[1.4rem] pt-[1.05rem]" aria-hidden>
+        <div className="mb-[1.05rem] space-y-1">
+          <div className="h-7 w-40 rounded-md bg-muted animate-pulse" />
           <div className="h-3 w-32 rounded bg-muted/70 animate-pulse" />
         </div>
         <div className="space-y-3">
@@ -64,8 +64,8 @@ export function HomeDashboardSkeleton() {
         </div>
       </section>
 
-      <section className="px-4 pb-3 pt-1" aria-hidden>
-        <div className="grid grid-cols-2 gap-2.5">
+      <section className="px-4 pb-[1.75rem] pt-[1.05rem]" aria-hidden>
+        <div className="grid grid-cols-2 gap-[1.05rem]">
           <div className="min-h-[200px] rounded-2xl border border-border/80 bg-card p-2.5 shadow-sm">
             <div className="mx-auto mt-2 h-20 w-16 rounded bg-muted/80 animate-pulse" />
             <div className="mt-3 flex justify-between px-1">

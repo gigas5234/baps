@@ -838,11 +838,11 @@ export default function HomePage() {
       />
 
       {/* 캘린더 */}
-      <section className="mx-4 rounded-2xl bg-slate-200/35 px-4 pb-3 pt-3 dark:bg-slate-900/50">
-        <div className="mb-3 flex items-center gap-1.5">
-          <h2 className="flex min-w-0 items-center gap-1.5 text-base font-semibold text-foreground">
+      <section className="mx-4 rounded-2xl bg-slate-200/35 px-4 pb-[1.05rem] pt-[1.05rem] dark:bg-slate-900/50">
+        <div className="mb-[1.05rem] flex items-center gap-1.5">
+          <h2 className="flex min-w-0 items-center gap-2 text-lg font-bold tracking-tight text-foreground">
             <CalendarDays
-              className="h-5 w-5 shrink-0 text-primary"
+              className="h-6 w-6 shrink-0 text-primary"
               strokeWidth={2}
               aria-hidden
             />
@@ -856,27 +856,18 @@ export default function HomePage() {
         <HomeDashboardSkeleton />
       ) : (
         <>
-          {/* 오늘의 영양 지표: 인사이트 카드 + 칼로리 게이지 */}
-          <section className="space-y-3 px-4 pb-4 pt-3">
-            {userId ? (
-              <h2 className="flex min-w-0 items-center gap-2 text-lg font-bold tracking-tight text-foreground">
-                <Gauge
-                  className="h-6 w-6 shrink-0 text-primary"
-                  strokeWidth={2}
-                  aria-hidden
-                />
-                오늘의 영양 지표
-              </h2>
-            ) : null}
+          {/* 데일리 인사이트(AI) → 오늘의 영양 지표 제목 → 칼로리 히어로 */}
+          <section className="space-y-[1.05rem] px-4 pb-[1.4rem] pt-[1.05rem]">
             {!authLoading && userId ? (
               <div className="space-y-2">
-                <h3 className="flex min-w-0 items-center gap-1.5 text-base font-semibold text-foreground">
+                <h2 className="flex min-w-0 items-center gap-2 text-lg font-bold tracking-tight text-foreground">
                   <Sparkles
-                    className="h-5 w-5 shrink-0 text-primary"
+                    className="h-6 w-6 shrink-0 text-primary"
+                    strokeWidth={2}
                     aria-hidden
                   />
                   데일리 인사이트
-                </h3>
+                </h2>
                 <DailyQuipBanner
                   displayName={displayName}
                   totalCal={totalCalories}
@@ -897,6 +888,16 @@ export default function HomePage() {
                   aiPending={geminiInsightPending}
                 />
               </div>
+            ) : null}
+            {userId ? (
+              <h2 className="flex min-w-0 items-center gap-2 text-lg font-bold tracking-tight text-foreground">
+                <Gauge
+                  className="h-6 w-6 shrink-0 text-primary"
+                  strokeWidth={2}
+                  aria-hidden
+                />
+                오늘의 영양 지표
+              </h2>
             ) : null}
             <CalorieGauge
               current={totalCalories}
@@ -924,11 +925,11 @@ export default function HomePage() {
             />
           ) : null}
 
-          <section className="px-4 pb-4 pt-3">
-            <div className="mb-3">
-              <h2 className="flex min-w-0 items-center gap-1.5 text-base font-semibold text-foreground">
+          <section className="px-4 pb-[1.4rem] pt-[1.05rem]">
+            <div className="mb-[1.05rem]">
+              <h2 className="flex min-w-0 items-center gap-2 text-lg font-bold tracking-tight text-foreground">
                 <UtensilsCrossed
-                  className="h-5 w-5 shrink-0 text-primary"
+                  className="h-6 w-6 shrink-0 text-primary"
                   strokeWidth={2}
                   aria-hidden
                 />
@@ -947,11 +948,11 @@ export default function HomePage() {
 
           {/* 물 + 체중: BAPS 감시본부 2컬럼 */}
           {userId ? (
-            <section className="px-4 pb-5 pt-3">
-              <div className="mb-3">
-                <h2 className="flex min-w-0 items-center gap-1.5 text-base font-semibold text-foreground">
+            <section className="px-4 pb-[1.75rem] pt-[1.05rem]">
+              <div className="mb-[1.05rem]">
+                <h2 className="flex min-w-0 items-center gap-2 text-lg font-bold tracking-tight text-foreground">
                   <Activity
-                    className="h-5 w-5 shrink-0 text-primary"
+                    className="h-6 w-6 shrink-0 text-primary"
                     strokeWidth={2}
                     aria-hidden
                   />
@@ -961,7 +962,7 @@ export default function HomePage() {
                   BAPS 감시본부 — 물 잔수와 체중 기록
                 </p>
               </div>
-              <div className="grid grid-cols-2 items-stretch gap-3">
+              <div className="grid grid-cols-2 items-stretch gap-[1.05rem]">
                 <WaterCounter
                   variant="paired"
                   cups={waterLog?.cups ?? 0}
@@ -989,7 +990,7 @@ export default function HomePage() {
               </div>
             </section>
           ) : (
-            <section className="px-4 pb-5 pt-3">
+            <section className="px-4 pb-[1.75rem] pt-[1.05rem]">
               <WaterCounter
                 cups={waterLog?.cups ?? 0}
                 cupMl={cupMl}
