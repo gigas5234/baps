@@ -15,6 +15,7 @@ import {
   coachLanguageModel,
 } from "@/lib/coach-google-ai";
 import { parseCoachPersonaId, type CoachPersonaId } from "@/lib/coach-personas";
+import { pickInterventionGuestsForChat } from "@/lib/coach-intervention-triggers";
 
 const MAX_USER_MESSAGE_CHARS = 8_000;
 const MAX_HISTORY_LINE_CHARS = 6_000;
@@ -144,10 +145,22 @@ export async function POST(request: Request) {
 
     const history = parseHistory(body.history);
 
+    const interventionGuests = pickInterventionGuestsForChat(
+      ctx,
+      message,
+      coachId
+    );
+
     try {
       const result = streamText({
         model,
-        prompt: buildAiCoachChatPrompt(ctx, message, history, coachId),
+        prompt: buildAiCoachChatPrompt(
+          ctx,
+          message,
+          history,
+          coachId,
+          interventionGuests
+        ),
         temperature: 0.42,
         providerOptions: coachGoogleProviderOptions,
       });

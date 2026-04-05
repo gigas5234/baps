@@ -15,6 +15,8 @@ interface DigitalWheelColumnProps {
   ariaLabel?: string;
   /** 화면에만 다른 포맷 (값 비교는 `values` 원본) */
   formatDisplay?: (value: string) => string;
+  /** 날짜·체중 휠 시각 구분 */
+  tone?: "date" | "weight";
 }
 
 /**
@@ -28,6 +30,7 @@ export function DigitalWheelColumn({
   className,
   ariaLabel,
   formatDisplay,
+  tone = "weight",
 }: DigitalWheelColumnProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   /** 브라우저 setTimeout 반환형(number) — Node Timeout과 이원화 방지 */
@@ -79,24 +82,56 @@ export function DigitalWheelColumn({
     settleRef.current = window.setTimeout(flushSelect, 100);
   }, [flushSelect]);
 
+  const shell =
+    tone === "date"
+      ? "rounded-lg border border-dashed border-zinc-400/45 bg-zinc-100/80 dark:border-zinc-500/40 dark:bg-zinc-900/65"
+      : "rounded-xl border border-zinc-300/80 bg-zinc-100/90 dark:border-zinc-600/50 dark:bg-zinc-900/80";
+
+  const slotRing =
+    tone === "date"
+      ? "border-zinc-400/45 bg-zinc-200/25 dark:border-zinc-500/40 dark:bg-zinc-800/35"
+      : "border-teal-700/25 bg-teal-800/12 dark:border-teal-500/25 dark:bg-teal-950/35";
+
+  const selText =
+    tone === "date"
+      ? "font-semibold text-zinc-900 dark:text-zinc-100"
+      : "font-bold text-teal-800 dark:text-teal-200";
+
+  const fadeTop =
+    tone === "date"
+      ? "from-zinc-100 dark:from-zinc-900"
+      : "from-zinc-100 dark:from-zinc-900";
+  const fadeMid = "via-zinc-100/60 dark:via-zinc-900/60";
+
   return (
     <div
       className={cn(
-        "relative flex min-w-0 flex-1 flex-col rounded-xl border border-zinc-200/90 bg-zinc-900/90 shadow-[inset_0_2px_8px_rgba(0,0,0,0.45)]",
-        "dark:border-zinc-600/55 dark:bg-[#0c0f14]",
+        "relative flex min-w-0 flex-1 flex-col shadow-inner",
+        shell,
         className
       )}
     >
       <div
-        className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[calc(50%-18px)] rounded-t-xl bg-gradient-to-b from-zinc-900 via-zinc-900/50 to-transparent dark:from-[#0c0f14]"
+        className={cn(
+          "pointer-events-none absolute inset-x-0 top-0 z-10 h-[calc(50%-18px)] rounded-t-[inherit] bg-gradient-to-b to-transparent",
+          fadeTop,
+          fadeMid
+        )}
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[calc(50%-18px)] rounded-b-xl bg-gradient-to-t from-zinc-900 via-zinc-900/50 to-transparent dark:from-[#0c0f14]"
+        className={cn(
+          "pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[calc(50%-18px)] rounded-b-[inherit] bg-gradient-to-t to-transparent",
+          fadeTop,
+          fadeMid
+        )}
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute inset-x-2 top-1/2 z-20 h-9 -translate-y-1/2 rounded-md border border-teal-500/35 bg-teal-500/8"
+        className={cn(
+          "pointer-events-none absolute inset-x-2 top-1/2 z-20 h-9 -translate-y-1/2 rounded-md border",
+          slotRing
+        )}
         aria-hidden
       />
       <div
@@ -123,9 +158,7 @@ export function DigitalWheelColumn({
                 aria-selected={isSel}
                 className={cn(
                   "flex h-9 w-full shrink-0 snap-center items-center justify-center font-mono text-[13px] tabular-nums transition-colors",
-                  isSel
-                    ? "font-bold text-[#4cf3d0]"
-                    : "text-zinc-500 hover:text-zinc-400"
+                  isSel ? selText : "text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-400"
                 )}
                 onClick={() => onSelect(v)}
               >

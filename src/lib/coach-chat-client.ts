@@ -96,10 +96,14 @@ export async function postCoachChat(
         data: parseCoachJson<unknown>(full),
       };
     }
+    const reply = delimitedStreamToCoachChatReply(full);
     return {
       ok: true,
       status: res.status,
-      data: delimitedStreamToCoachChatReply(full),
+      data: {
+        ...reply,
+        stream_segments: parseCoachDelimitedStream(full, true).segments,
+      },
     };
   } catch {
     return {

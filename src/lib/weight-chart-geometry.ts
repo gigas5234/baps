@@ -15,9 +15,28 @@ export interface WeightChartLayout {
   maxKg: number;
 }
 
+/** 베지어가 뷰박스 밖으로 삐져나가지 않도록 안쪽으로 좁힘 */
+const CHART_INSET = 8;
+
+function insetMap(value01: number): number {
+  return (
+    CHART_INSET +
+    (Math.min(100, Math.max(0, value01)) / 100) * (100 - 2 * CHART_INSET)
+  );
+}
+
+function insetPoint(p: ChartPoint): ChartPoint {
+  return {
+    ...p,
+    x: insetMap(p.x),
+    y: insetMap(p.y),
+  };
+}
+
 /**
  * 날짜 간격에 따라 x(0~100), 체중·목표 포함 범위로 y(0~100).
  * 기록 1개는 가운데 x=50.
+ * 최종 좌표는 CHART_INSET 만큼 안쪽으로 매핑된다.
  */
 export function layoutWeightChart(
   entries: WeightEntry[],
@@ -78,9 +97,18 @@ export function layoutWeightChart(
       ? Math.min(100, Math.max(0, yTargetRaw))
       : null;
 
-  const pathD = smoothWeightPath(pts);
+  const ptsInset = pts.map(insetPoint);
+  const pathD = smoothWeightPath(ptsInset);
+  const yTargetInset =
+    yTarget != null ? insetMap(yTarget) : null;
 
-  return { pts, pathD, yTarget, minKg, maxKg };
+  return {
+    pts: ptsInset,
+    pathD,
+    yTarget: yTargetInset,
+    minKg,
+    maxKg,
+  };
 }
 
 /** Catmull–Rom 스타일 곡선 (2점은 직선, 1점은 빈 path). */

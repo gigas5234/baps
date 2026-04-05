@@ -2,7 +2,14 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageCircle, X, Send, Loader2 } from "lucide-react";
+import {
+  MessageCircle,
+  X,
+  Send,
+  Loader2,
+  Headset,
+  ListTodo,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MacroTotals } from "@/lib/meal-macros";
 import type { CoachStreamSegment } from "@/lib/coach-delimited-stream";
@@ -21,6 +28,7 @@ import {
   coachMeta,
   type CoachPersonaId,
 } from "@/lib/coach-personas";
+import { interventionCodename } from "@/lib/coach-intervention-triggers";
 
 interface ChatMessage {
   id: string;
@@ -31,6 +39,8 @@ interface ChatMessage {
   data_card?: DataCardPayload | null;
   /** 스트리밍 중 단톡 태그 파싱 미리보기 */
   streamDelimited?: { segments: CoachStreamSegment[] };
+  /** 완료 후에도 단톡·기습 등판([INVITE]) 연출 유지 */
+  streamSegments?: CoachStreamSegment[];
 }
 
 const COACH_TAG_TO_PERSONA: Partial<Record<string, CoachPersonaId>> = {
@@ -45,6 +55,25 @@ function DelimitedStreamBubbles({ segments }: { segments: CoachStreamSegment[] }
   return (
     <div className="space-y-2.5">
       {segments.map((seg, idx) => {
+        if (seg.tag === "INVITE") {
+          const code = seg.text.trim().toUpperCase();
+          const pid = COACH_TAG_TO_PERSONA[code];
+          const title = pid ? interventionCodename(pid) : code;
+          const emoji = pid ? coachMeta(pid).emoji : "📣";
+          return (
+            <div
+              key={`invite-${idx}-${code}`}
+              className="rounded-lg border border-dashed border-primary/35 bg-primary/[0.06] px-2 py-2 text-center dark:border-primary/28 dark:bg-primary/[0.08]"
+            >
+              <p className="text-[10px] font-semibold tracking-wide text-primary">
+                <span aria-hidden>{emoji}</span> 시스템
+              </p>
+              <p className="mt-1 font-mono text-[10px] leading-snug text-foreground/90">
+                ── {title}님이 대화에 참여했습니다 ──
+              </p>
+            </div>
+          );
+        }
         const pid = COACH_TAG_TO_PERSONA[seg.tag];
         const isCoach = Boolean(pid);
         const coachLabel = pid ? coachMeta(pid).label : "";
@@ -306,9 +335,15 @@ function CoachPersonaPicker({
   disabled: boolean;
 }) {
   return (
-    <div className="space-y-1">
-      <p className="px-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-        1:1 코치
+    <div
+      className={cn(
+        "space-y-1.5 rounded-xl border border-rose-500/20 bg-rose-500/[0.04] p-2.5",
+        "dark:border-rose-400/18 dark:bg-rose-500/[0.07]"
+      )}
+    >
+      <p className="flex items-center gap-1.5 px-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-600 dark:text-rose-300">
+        <Headset className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        담당 코치 (말투·초점)
       </p>
       <div
         className={cn(
@@ -362,23 +397,44 @@ function QuickChipRow({
 }) {
   if (!chips.length) return null;
   return (
-    <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-thin">
-      {chips.map((c, i) => (
-        <button
-          key={`${c.label}-${i}`}
-          type="button"
-          disabled={disabled}
-          onClick={() => onPick(c.prompt)}
-          className={cn(
-            "shrink-0 max-w-[85vw] rounded-2xl border border-primary/25 bg-primary/[0.06] px-3 py-2 text-left",
-            "text-[11px] font-medium leading-snug text-foreground shadow-sm",
-            "transition-colors hover:bg-primary/12 disabled:pointer-events-none disabled:opacity-45",
-            "dark:border-primary/30 dark:bg-primary/10"
-          )}
-        >
-          {c.label}
-        </button>
-      ))}
+    <div
+      className={cn(
+        "rounded-xl border border-dashed border-muted-foreground/35 bg-muted/30 p-2.5",
+        "dark:border-white/12 dark:bg-muted/20"
+      )}
+    >
+      <p className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+        <ListTodo className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        추천 질문
+        <span className="font-normal normal-case text-[9px] text-muted-foreground/85">
+          · 탭하면 입력 없이 전송
+        </span>
+      </p>
+      <div className="flex flex-col gap-1.5">
+        {chips.map((c, i) => (
+          <button
+            key={`${c.label}-${i}`}
+            type="button"
+            disabled={disabled}
+            onClick={() => onPick(c.prompt)}
+            className={cn(
+              "flex w-full max-w-full shrink-0 items-start gap-2 rounded-lg border border-border bg-background px-3 py-2 text-left",
+              "text-[11px] font-medium leading-snug text-foreground",
+              "transition-colors hover:bg-muted/70 active:scale-[0.99]",
+              "disabled:pointer-events-none disabled:opacity-45",
+              "dark:border-white/12 dark:bg-card/80 dark:hover:bg-muted/40"
+            )}
+          >
+            <span
+              className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-muted font-mono text-[9px] font-bold text-muted-foreground"
+              aria-hidden
+            >
+              {i + 1}
+            </span>
+            <span className="min-w-0 flex-1">{c.label}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -794,6 +850,13 @@ export function ChatFab({
       }
 
       const normalized = normalizeCoachReply(data);
+      const streamSegmentsRaw = (
+        data as { stream_segments?: CoachStreamSegment[] }
+      ).stream_segments;
+      const streamSegments =
+        Array.isArray(streamSegmentsRaw) && streamSegmentsRaw.length > 0
+          ? streamSegmentsRaw
+          : undefined;
       const coachTurn: CoachStrategicTurn = {
         analysis: normalized.analysis,
         roast: normalized.roast,
@@ -807,6 +870,7 @@ export function ChatFab({
         message: encodeCoachTurnForHistory(coachTurn),
         coachTurn,
         data_card: normalized.data_card ?? null,
+        streamSegments,
       };
       const t = [...messagesRef.current, aiBubble];
       messagesRef.current = t;
@@ -845,7 +909,7 @@ export function ChatFab({
               <div>
                 <h2 className="text-base font-bold">전략 코칭</h2>
                 <p className="text-[9px] font-medium text-muted-foreground">
-                  답장은 최대 3명 코치 단톡 · 미션까지 확인
+                  위: 코치 응답 · 아래: 질문 템플릿(코치 말풍선과 별도)
                 </p>
                 <p className="mt-0.5 text-[10px] font-medium text-primary">
                   {coachMeta(coachPersona).emoji}{" "}
@@ -901,6 +965,8 @@ export function ChatFab({
                       <DelimitedStreamBubbles
                         segments={msg.streamDelimited.segments}
                       />
+                    ) : msg.streamSegments && msg.streamSegments.length > 0 ? (
+                      <DelimitedStreamBubbles segments={msg.streamSegments} />
                     ) : msg.is_ai && msg.coachTurn ? (
                       <CoachStrategicTurnView turn={msg.coachTurn} />
                     ) : (

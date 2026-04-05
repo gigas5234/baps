@@ -9,11 +9,12 @@ import {
 import type { CoachPersonaId } from "@/lib/coach-personas";
 
 const DELIM_RE =
-  /\[(ANALYSIS|MISSION|DIET|NUTRITION|EXERCISE|MENTAL|ROI|QUICK_CHIPS|DATA_CARD)\]/gi;
+  /\[(ANALYSIS|MISSION|INVITE|DIET|NUTRITION|EXERCISE|MENTAL|ROI|QUICK_CHIPS|DATA_CARD)\]/gi;
 
 export type CoachDelimTag =
   | "ANALYSIS"
   | "MISSION"
+  | "INVITE"
   | "DIET"
   | "NUTRITION"
   | "EXERCISE"

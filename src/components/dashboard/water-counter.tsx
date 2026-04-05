@@ -67,15 +67,14 @@ export function WaterCounter({
     return (
       <div
         className={cn(
-          "flex min-h-[22rem] flex-col rounded-2xl border p-2.5 shadow-md backdrop-blur-md",
-          "border-zinc-300/80 bg-gradient-to-b from-zinc-50 via-white to-zinc-100/90",
-          "dark:border-zinc-600/50 dark:from-zinc-800/90 dark:via-zinc-900/80 dark:to-zinc-950/90"
+          "flex min-h-[22rem] flex-col rounded-2xl border border-border/80 bg-card/80 p-2.5 shadow-sm",
+          "dark:border-white/10 dark:bg-card/40"
         )}
       >
         <p className="text-center text-xs font-semibold leading-tight text-foreground">
           물 섭취
         </p>
-        <p className="text-[10px] text-center text-muted-foreground tabular-nums dark:text-foreground/65">
+        <p className="text-[10px] text-center text-muted-foreground tabular-nums">
           {safeTarget}잔 · {goalMl.toLocaleString()}ml
         </p>
         <div className="mt-1 flex flex-1 flex-col items-center justify-between gap-2">
@@ -83,7 +82,7 @@ export function WaterCounter({
             progress={fillProgress}
             size="compact"
             centerPercentLabel={centerLabel}
-            className="shrink-0"
+            className="shrink-0 opacity-95"
           />
           <div className="flex w-full max-w-[11.5rem] items-center justify-between gap-1">
             <button
@@ -92,22 +91,22 @@ export function WaterCounter({
               disabled={!canDecrement}
               aria-label="1잔 빼기"
               className={cn(
-                "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border-2 border-zinc-300/90 bg-white text-foreground shadow-sm transition-transform active:scale-95",
+                "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border bg-background text-foreground transition-transform active:scale-95",
                 "disabled:pointer-events-none disabled:opacity-35",
-                "hover:bg-zinc-100 dark:border-zinc-600 dark:bg-zinc-800 dark:hover:bg-zinc-700"
+                "hover:bg-muted/80 dark:bg-card dark:hover:bg-muted/50"
               )}
             >
               <Minus className="h-4 w-4 stroke-[2.5]" aria-hidden />
             </button>
             <motion.span
               key={cups}
-              className="font-data text-lg font-bold tabular-nums text-scanner"
-              initial={{ scale: 1.05, opacity: 0.85 }}
+              className="font-data text-lg font-semibold tabular-nums text-foreground"
+              initial={{ scale: 1.03, opacity: 0.9 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: "spring", stiffness: 400, damping: 28 }}
             >
               {cups}
-              <span className="text-xs font-semibold text-muted-foreground dark:text-foreground/55">
+              <span className="text-xs font-medium text-muted-foreground">
                 /{safeTarget}
               </span>
             </motion.span>
@@ -117,24 +116,34 @@ export function WaterCounter({
               disabled={!canIncrement}
               aria-label="1잔 더하기"
               className={cn(
-                "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-scanner text-scanner-foreground shadow-md shadow-scanner/25 transition-transform active:scale-95",
+                "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-teal-700/30 bg-teal-700/88 text-white transition-transform active:scale-95",
                 "disabled:pointer-events-none disabled:opacity-50",
-                "hover:brightness-95 dark:hover:brightness-110"
+                "hover:bg-teal-700 dark:border-teal-500/25 dark:bg-teal-800/90"
               )}
             >
               <Plus className="h-4 w-4 stroke-[2.5]" aria-hidden />
             </button>
           </div>
-          <p className="text-[9px] leading-tight text-muted-foreground dark:text-foreground/60">
+          <p className="text-[9px] leading-tight text-muted-foreground">
             {totalMl}ml · 권장 {recommendedMl.toLocaleString()}ml
           </p>
           {readOnly ? (
             <p className="text-[9px] text-muted-foreground">로그인 후 기록</p>
           ) : null}
         </div>
-        <p className="mt-2 border-t border-zinc-200/80 pt-2 text-center text-[10px] font-semibold leading-snug text-foreground dark:border-zinc-600/50">
-          {waterCoachCopy({ pctTowardRecommended, cups })}
-        </p>
+        <div
+          className={cn(
+            "mt-2 rounded-lg border border-border/70 bg-muted/25 px-2.5 py-2",
+            "dark:border-white/10 dark:bg-muted/15"
+          )}
+        >
+          <p className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+            관제 코멘트
+          </p>
+          <p className="mt-1 text-[10px] font-medium leading-relaxed text-foreground/90">
+            {waterCoachCopy({ pctTowardRecommended, cups })}
+          </p>
+        </div>
       </div>
     );
   }

@@ -15,6 +15,10 @@ import {
   coachMeta,
   type CoachPersonaId,
 } from "@/lib/coach-personas";
+import {
+  formatInterventionTriggerSummary,
+  interventionCodename,
+} from "@/lib/coach-intervention-triggers";
 
 function buildTranscript(
   history: { message: string; is_ai: boolean }[]
@@ -92,7 +96,8 @@ export function buildAiCoachChatPrompt(
   ctx: CoachApiContext,
   message: string,
   history: { message: string; is_ai: boolean }[],
-  coachId: CoachPersonaId
+  coachId: CoachPersonaId,
+  interventionGuests: CoachPersonaId[] = []
 ): string {
   const locked = pickRuleBasedCoachSlots(ctx);
   const lockLines = ruleLockedCoachPromptLines(locked, "chat");
@@ -102,6 +107,27 @@ export function buildAiCoachChatPrompt(
   const { emoji, label } = coachMeta(coachId);
   const transcript = buildTranscript(history);
   const nightCue = nightCueIfNeeded(ctx);
+  const leadCodename = interventionCodename(coachId);
+  const guests = interventionGuests.filter((g) => g !== coachId);
+  const interventionBlock =
+    guests.length === 0
+      ? ""
+      : `
+[기습 등판 — BAPS 단톡방 초대(서버 트리거 확정)]
+지금은 **리드 1명만이 아니라** 아래 코치들이 **동시에 방에 난입한 상태**다. 유저에게 알림톡에 사람 초대된 듯한 재미를 준다.
+**난입 게스트(이 순서·인원 고정):**
+${formatInterventionTriggerSummary(guests)}
+
+난입 연출 규칙 — 스트리밍 태그만 사용:
+1) [ANALYSIS] [MISSION] 은 **리드 · ${leadCodename}** 관점으로 먼저 처리 (짧은 팩트·데이터 코칭).
+2) 각 **난입 게스트**마다 반드시 **연속 2블록**:
+   - 첫 줄: [INVITE] 태그명만 (대문자 한 단어). 예: [INVITE] MENTAL
+     → 본문에 추가 문장·이모지·따옴표 금지. 허용 태그명: MENTAL | ROI | NUTRITION | EXERCISE (난입 목록에 있는 것만)
+   - 둘째 블록: [MENTAL] 또는 [ROI] 등 **같은 코치의 팩폭 한 문장**.
+3) 리드 1:1 태그 **${requiredCoachTag(coachId)}** 도 **반드시 1회** 포함한다.
+   - 리드 태그가 난입 게스트와 **동일 인물**이면: 해당 코치에 대해 [INVITE] 없이 리드 태그 한 블록만 써도 된다.
+4) 난입이 **없으면** [INVITE] 블록을 **절대** 출력하지 않는다.
+`;
 
   return `${COACH_PERSONA}
 ${guard}
@@ -109,19 +135,20 @@ ${coachVoicePromptAppend(coachId)}
 ${COACH_TIME_BAND_HINT}
 ${nightCue}
 ${lockLines}
+${interventionBlock}
 
 [오케스트레이터 — BAPS 단톡 — 스트리밍 출력 규약]
 모델 응답은 **오직 아래 태그 블록만** 순서대로 이어 붙인다. 태그 이름·대문자 **정확히** 일치.
-블록 사이에 태그 없는 줄 금지. 이모지·코치 이름 접두어 금지(클라이언트가 붙임).
+블록 사이에 태그 없는 줄 금지. 코치 본문에 이모지·코치 이름 접두어 금지(클라이언트가 붙임).
 
 필수 순서(내용 없으면 빈 줄이라도 태그는 유지):
 [ANALYSIS] 현상 1~2문장. 숫자·메뉴 ** 감싸기.
 [MISSION] 명령조 실행 1~2문장.
-그 다음, **상황에 맞는 코치만** 아래 태그 중 1~3개를 사용한다. 각 태그 아래 **한 문장**만 (팩폭·팩트).
+${guests.length > 0 ? `그 다음 **각 난입 게스트**마다 [INVITE] TAG → [TAG] 한 문장 (위 [기습 등판] 순서 엄수).\n` : ""}그 다음 **리드·기타 코치** 태그 블록: 각 태그 아래 **한 문장** (팩폭·팩트).
   [DIET] | [NUTRITION] | [EXERCISE] | [MENTAL] | [ROI]
-- **필수**: 유저가 고른 1:1 코치 **${emoji} ${label}** → 태그 **${requiredCoachTag(coachId)}** 를 반드시 1회 포함한다.
+- **필수**: 유저가 고른 1:1 리드 **${emoji} ${label}** → 태그 **${requiredCoachTag(coachId)}** 를 반드시 1회 포함한다.
 - ${ctx.emergency_nutrition_mode ? "[긴급 보호 모드] 위 [🚨] — 독설·운동 강요 금지. 멘탈·분석관 톤." : "독설 허용(욕설·혐오·의학 단정 금지). 심야(22~05)에는 [MENTAL]에서 수면·리듬·호르몬 프레임, 즉시 고강도 운동 강요 금지."}
-- 규칙으로 이미 잡힌 코치 태그는 반드시 채운다 (${locked.join(", ") || "(없음)"}).
+- 규칙 선발 코치(서버)는 반드시 태그로 반영: ${locked.join(", ") || "(없음)"}.
 [DATA_CARD] 유저가 특정 음식 **허용/먹어도 되나** 질문일 때만 JSON 한 줄: {"headline":"","summary":"","bullets":[],"actions":[]}; 아니면 {}
 [QUICK_CHIPS] JSON 배열 한 줄, 정확히 3개: [{"label":"...","prompt":"..."},...]
 
