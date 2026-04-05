@@ -1,7 +1,9 @@
 import {
   delimitedStreamToCoachChatReply,
+  filterDelimitedSegmentsForInvites,
   parseCoachDelimitedStream,
 } from "@/lib/coach-delimited-stream";
+import { parseCoachPersonaId } from "@/lib/coach-personas";
 import { parseCoachJson } from "@/lib/coach-json-parse";
 import { mealUtcBoundsForCoachApi } from "@/lib/local-date";
 
@@ -47,6 +49,7 @@ export async function postCoachChat(
 ): Promise<CoachApiResult> {
   const isBootstrap = body.bootstrap === true;
   const payload = enrichCoachChatBody(body);
+  const leadPersonaId = parseCoachPersonaId(payload.coach_id);
 
   const res = await fetch("/api/chat", {
     method: "POST",
@@ -79,7 +82,13 @@ export async function postCoachChat(
       full += decoder.decode(value, { stream: true });
       opts?.onStreamRaw?.(full);
       if (!isBootstrap) {
-        opts?.onDelimitedPreview?.(parseCoachDelimitedStream(full, false));
+        const parsed = parseCoachDelimitedStream(full, false);
+        opts?.onDelimitedPreview?.({
+          segments: filterDelimitedSegmentsForInvites(
+            parsed.segments,
+            leadPersonaId
+          ),
+        });
       }
     }
   } catch {
@@ -102,7 +111,7 @@ export async function postCoachChat(
       return {
         ok: false,
         status: res.status,
-        data: delimitedStreamToCoachChatReply(full),
+        data: delimitedStreamToCoachChatReply(full, leadPersonaId),
       };
     } catch {
       return {
@@ -121,13 +130,17 @@ export async function postCoachChat(
         data: parseCoachJson<unknown>(full),
       };
     }
-    const reply = delimitedStreamToCoachChatReply(full);
+    const reply = delimitedStreamToCoachChatReply(full, leadPersonaId);
+    const finalSegs = filterDelimitedSegmentsForInvites(
+      parseCoachDelimitedStream(full, true).segments,
+      leadPersonaId
+    );
     return {
       ok: true,
       status: res.status,
       data: {
         ...reply,
-        stream_segments: parseCoachDelimitedStream(full, true).segments,
+        stream_segments: finalSegs,
       },
     };
   } catch {

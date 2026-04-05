@@ -1,19 +1,26 @@
 "use client";
 
 import type { ReactNode } from "react";
-import type {
-  CoachDelimTag,
-  CoachStreamSegment,
+import { useMemo } from "react";
+import {
+  filterDelimitedSegmentsForInvites,
+  type CoachDelimTag,
+  type CoachStreamSegment,
 } from "@/lib/coach-delimited-stream";
+import { CoachTypewriter, countCoachGraphemes } from "@/components/common/coach-typewriter";
 import { formatKoreanChatTime } from "@/lib/coach-chat-time";
 import { interventionCodename } from "@/lib/coach-intervention-triggers";
 import {
   coachMeta,
   COACH_AVATAR_SURFACE,
+  DEFAULT_COACH_PERSONA_ID,
   type CoachPersonaId,
 } from "@/lib/coach-personas";
 import { cn } from "@/lib/utils";
 import type { CoachStrategicTurn } from "@/lib/chat-coach";
+
+const TYPE_MS = 34;
+const GROUP_GAP_MS = 300;
 
 const COACH_TAG_TO_PERSONA: Partial<Record<CoachDelimTag, CoachPersonaId>> = {
   DIET: "diet",
@@ -123,12 +130,14 @@ export function SingleKakaoCoachRow({
   emoji,
   avatarClass,
   timeLabel,
+  bubbleVariant = "default",
   children,
 }: {
   displayName: string;
   emoji: string;
   avatarClass: string;
   timeLabel: string;
+  bubbleVariant?: "default" | "mission";
   children: ReactNode;
 }) {
   return (
@@ -146,7 +155,9 @@ export function SingleKakaoCoachRow({
         <p className="mb-0.5 max-w-[16.5rem] truncate pl-0.5 text-[11px] font-medium text-muted-foreground">
           {displayName}
         </p>
-        <IncomingBubble showTail>{children}</IncomingBubble>
+        <IncomingBubble showTail bubbleVariant={bubbleVariant}>
+          {children}
+        </IncomingBubble>
       </div>
       <span className="mt-7 shrink-0 self-start text-[10px] tabular-nums text-muted-foreground">
         {timeLabel}
@@ -159,20 +170,32 @@ function IncomingBubble({
   children,
   showTail,
   isPending,
+  bubbleVariant = "default",
 }: {
   children: ReactNode;
   showTail: boolean;
   isPending?: boolean;
+  bubbleVariant?: "default" | "mission";
 }) {
+  const isMission = bubbleVariant === "mission";
   return (
     <div
       className={cn(
-        "relative max-w-[min(100%,18rem)] rounded-[14px] border border-border",
-        "bg-card px-3 py-2 text-[13px] leading-snug text-foreground shadow-sm",
-        "dark:border-white/12 dark:bg-zinc-100 dark:text-zinc-900",
+        "relative max-w-[min(100%,18rem)] rounded-[14px] border px-3 py-2 text-[13px] leading-snug shadow-sm",
+        isMission
+          ? cn(
+              "border-2 border-amber-500/55 bg-amber-50 text-foreground",
+              "ring-1 ring-amber-500/25 dark:border-amber-400/50 dark:bg-amber-950/40 dark:text-amber-50"
+            )
+          : cn(
+              "border-border bg-card text-foreground",
+              "dark:border-white/12 dark:bg-zinc-100 dark:text-zinc-900"
+            ),
         isPending && "border-dashed opacity-95",
         showTail &&
-          "before:pointer-events-none before:absolute before:left-[-7px] before:top-[11px] before:h-0 before:w-0 before:border-y-[6px] before:border-r-[8px] before:border-y-transparent before:border-r-card dark:before:border-r-zinc-100"
+          (isMission
+            ? "before:pointer-events-none before:absolute before:left-[-7px] before:top-[11px] before:h-0 before:w-0 before:border-y-[6px] before:border-r-[8px] before:border-y-transparent before:border-r-amber-50 dark:before:border-r-amber-950/95"
+            : "before:pointer-events-none before:absolute before:left-[-7px] before:top-[11px] before:h-0 before:w-0 before:border-y-[6px] before:border-r-[8px] before:border-y-transparent before:border-r-card dark:before:border-r-zinc-100")
       )}
     >
       {children}
@@ -195,12 +218,43 @@ function SystemMetaRow({ seg }: { seg: CoachStreamSegment }) {
 export function KakaoDelimitedCoachStream({
   segments,
   receivedAt,
+  leadPersonaId = DEFAULT_COACH_PERSONA_ID,
 }: {
   segments: CoachStreamSegment[];
   receivedAt: Date;
+  leadPersonaId?: CoachPersonaId;
 }) {
   const timeLabel = formatKoreanChatTime(receivedAt);
-  const groups = groupSegments(segments);
+  const filtered = useMemo(
+    () => filterDelimitedSegmentsForInvites(segments, leadPersonaId),
+    [segments, leadPersonaId]
+  );
+  const groups = useMemo(() => groupSegments(filtered), [filtered]);
+  const enableTyping =
+    filtered.length > 0 && filtered.every((s) => s.complete);
+
+  const groupStartDelays = useMemo(() => {
+    let t = 0;
+    return groups.map((group) => {
+      const head = group[0];
+      if (!head) return 0;
+      const start = t;
+      if (head.tag === "QUICK_CHIPS" || head.tag === "DATA_CARD") {
+        t += 100;
+        return start;
+      }
+      if (head.tag === "INVITE") {
+        t += 160;
+        return start;
+      }
+      const chars = group.reduce(
+        (acc, s) => acc + countCoachGraphemes(s.text),
+        0
+      );
+      t += chars * TYPE_MS + GROUP_GAP_MS;
+      return start;
+    });
+  }, [groups]);
 
   return (
     <div className="space-y-3">
@@ -231,6 +285,54 @@ export function KakaoDelimitedCoachStream({
         }
 
         const meta = rowMetaForFirst(head);
+        const rowDelay = groupStartDelays[gi] ?? 0;
+        const isMission = head.tag === "MISSION";
+        const bubbleVar = isMission ? "mission" : "default";
+
+        if (enableTyping) {
+          const combined = group.map((s) => s.text).join("\n");
+          return (
+            <div
+              key={`grp-${gi}`}
+              className="flex max-w-[min(100%,20.5rem)] items-start gap-1.5"
+            >
+              <div
+                className={cn(
+                  "flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-full text-[15px]",
+                  meta.avatarClass
+                )}
+                aria-hidden
+              >
+                {meta.emoji}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="mb-0.5 max-w-[16.5rem] truncate pl-0.5 text-[11px] font-medium text-muted-foreground">
+                  {meta.displayName}
+                </p>
+                <CoachTypewriter
+                  text={combined}
+                  enabled
+                  startDelayMs={rowDelay}
+                  msPerGrapheme={TYPE_MS}
+                >
+                  {(vis) => (
+                    <IncomingBubble showTail bubbleVariant={bubbleVar}>
+                      <span className="whitespace-pre-wrap break-words">
+                        {vis
+                          ? formatInlineBold(vis, "bubble")
+                          : "…"}
+                      </span>
+                    </IncomingBubble>
+                  )}
+                </CoachTypewriter>
+              </div>
+              <span className="mt-7 shrink-0 self-start text-[10px] tabular-nums text-muted-foreground">
+                {timeLabel}
+              </span>
+            </div>
+          );
+        }
+
         return (
           <div
             key={`grp-${gi}`}
@@ -255,6 +357,9 @@ export function KakaoDelimitedCoachStream({
                     key={`${seg.tag}-${gi}-${bi}`}
                     showTail={bi === 0}
                     isPending={bi === group.length - 1 && !seg.complete}
+                    bubbleVariant={
+                      seg.tag === "MISSION" ? "mission" : "default"
+                    }
                   >
                     <span className="whitespace-pre-wrap break-words">
                       {seg.text
@@ -295,9 +400,13 @@ export function KakaoOpeningCoachMessage({
       avatarClass={COACH_AVATAR_SURFACE[coachId]}
       timeLabel={timeLabel}
     >
-      <span className="whitespace-pre-wrap break-words">
-        {formatInlineBold(text, "bubble")}
-      </span>
+      <CoachTypewriter text={text} enabled msPerGrapheme={TYPE_MS}>
+        {(vis) => (
+          <span className="whitespace-pre-wrap break-words">
+            {formatInlineBold(vis, "bubble")}
+          </span>
+        )}
+      </CoachTypewriter>
     </SingleKakaoCoachRow>
   );
 }
@@ -313,6 +422,41 @@ export function KakaoStrategicTurnView({
   const quips =
     turn.coach_quips?.filter((q) => q.zinger?.trim()) ?? [];
   const showQuipGroup = quips.length > 0;
+  const hasRoast = Boolean(!showQuipGroup && turn.roast?.trim());
+
+  const typingScheduleKey = [
+    turn.analysis,
+    turn.mission,
+    turn.roast,
+    showQuipGroup ? quips.map((q) => `${q.persona_id}:${q.zinger}`).join("\x1e") : "",
+  ].join("\x1f");
+
+  /* typingScheduleKey에 quips·문장 전부 반영 → deps 단일화 */
+  const { analysisStart, quipStarts, missionStart } = useMemo(() => {
+    let t = 0;
+    const aStart = t;
+    t +=
+      countCoachGraphemes(turn.analysis ?? "") * TYPE_MS + GROUP_GAP_MS;
+    const starts: number[] = [];
+    if (showQuipGroup) {
+      for (const q of quips) {
+        starts.push(t);
+        t +=
+          countCoachGraphemes(q.zinger ?? "") * TYPE_MS + GROUP_GAP_MS;
+      }
+    } else if (hasRoast) {
+      starts.push(t);
+      t +=
+        countCoachGraphemes(turn.roast?.trim() ?? "") * TYPE_MS +
+        GROUP_GAP_MS;
+    }
+    const mStart = t;
+    return {
+      analysisStart: aStart,
+      quipStarts: starts,
+      missionStart: mStart,
+    };
+  }, [typingScheduleKey]);
 
   return (
     <div className="space-y-3">
@@ -322,15 +466,25 @@ export function KakaoStrategicTurnView({
         avatarClass="bg-gradient-to-br from-slate-600 to-zinc-800 ring-2 ring-indigo-500/40 shadow-md shadow-black/20"
         timeLabel={timeLabel}
       >
-        <span className="whitespace-pre-wrap break-words">
-          {formatInlineBold(turn.analysis, "bubble")}
-        </span>
+        <CoachTypewriter
+          text={turn.analysis}
+          enabled
+          startDelayMs={analysisStart}
+          msPerGrapheme={TYPE_MS}
+        >
+          {(vis) => (
+            <span className="whitespace-pre-wrap break-words">
+              {formatInlineBold(vis, "bubble")}
+            </span>
+          )}
+        </CoachTypewriter>
       </SingleKakaoCoachRow>
 
       {showQuipGroup ? (
         <>
           {quips.map((q, idx) => {
             const m = coachMeta(q.persona_id);
+            const start = quipStarts[idx] ?? 0;
             return (
               <SingleKakaoCoachRow
                 key={`${q.persona_id}-${idx}`}
@@ -339,23 +493,41 @@ export function KakaoStrategicTurnView({
                 avatarClass={COACH_AVATAR_SURFACE[q.persona_id]}
                 timeLabel={timeLabel}
               >
-                <span className="whitespace-pre-wrap break-words italic">
-                  {formatInlineBold(q.zinger, "roast")}
-                </span>
+                <CoachTypewriter
+                  text={q.zinger}
+                  enabled
+                  startDelayMs={start}
+                  msPerGrapheme={TYPE_MS}
+                >
+                  {(vis) => (
+                    <span className="whitespace-pre-wrap break-words italic">
+                      {formatInlineBold(vis, "roast")}
+                    </span>
+                  )}
+                </CoachTypewriter>
               </SingleKakaoCoachRow>
             );
           })}
         </>
-      ) : turn.roast?.trim() ? (
+      ) : hasRoast ? (
         <SingleKakaoCoachRow
           displayName={`${coachMeta("diet").label} 코치 (냉정)`}
           emoji={coachMeta("diet").emoji}
           avatarClass={COACH_AVATAR_SURFACE.diet}
           timeLabel={timeLabel}
         >
-          <span className="whitespace-pre-wrap break-words italic">
-            {formatInlineBold(turn.roast, "roast")}
-          </span>
+          <CoachTypewriter
+            text={turn.roast!.trim()}
+            enabled
+            startDelayMs={quipStarts[0] ?? 0}
+            msPerGrapheme={TYPE_MS}
+          >
+            {(vis) => (
+              <span className="whitespace-pre-wrap break-words italic">
+                {formatInlineBold(vis, "roast")}
+              </span>
+            )}
+          </CoachTypewriter>
         </SingleKakaoCoachRow>
       ) : null}
 
@@ -364,10 +536,20 @@ export function KakaoStrategicTurnView({
         emoji="🎯"
         avatarClass="bg-gradient-to-br from-teal-700 to-teal-950 ring-2 ring-violet-500/35 shadow-md shadow-black/20"
         timeLabel={timeLabel}
+        bubbleVariant="mission"
       >
-        <span className="whitespace-pre-wrap break-words">
-          {formatInlineBold(turn.mission, "bubble")}
-        </span>
+        <CoachTypewriter
+          text={turn.mission}
+          enabled
+          startDelayMs={missionStart}
+          msPerGrapheme={TYPE_MS}
+        >
+          {(vis) => (
+            <span className="whitespace-pre-wrap break-words">
+              {formatInlineBold(vis, "bubble")}
+            </span>
+          )}
+        </CoachTypewriter>
       </SingleKakaoCoachRow>
     </div>
   );

@@ -783,6 +783,7 @@ export function ChatFab({
                               : msg.streamSegments) ?? []
                           }
                           receivedAt={receivedAt}
+                          leadPersonaId={coachPersona}
                         />
                       ) : msg.coachTurn ? (
                         <KakaoStrategicTurnView

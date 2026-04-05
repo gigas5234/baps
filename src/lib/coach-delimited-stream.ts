@@ -10,7 +10,10 @@ import {
   COACH_STREAM_FALLBACK_MESSAGE,
   coachStreamIsCorruptLeak,
 } from "@/lib/coach-stream-guard";
-import type { CoachPersonaId } from "@/lib/coach-personas";
+import {
+  type CoachPersonaId,
+  DEFAULT_COACH_PERSONA_ID,
+} from "@/lib/coach-personas";
 
 const DELIM_RE =
   /\[(ANALYSIS|MISSION|INVITE|DIET|NUTRITION|EXERCISE|MENTAL|ROI|QUICK_CHIPS|DATA_CARD)\]/gi;
@@ -40,6 +43,46 @@ const TAG_TO_PERSONA: Partial<Record<CoachDelimTag, CoachPersonaId>> = {
   MENTAL: "mental",
   ROI: "roi",
 };
+
+const PERSONA_TO_DELIM: Record<CoachPersonaId, CoachDelimTag> = {
+  diet: "DIET",
+  nutrition: "NUTRITION",
+  exercise: "EXERCISE",
+  mental: "MENTAL",
+  roi: "ROI",
+};
+
+/**
+ * [INVITE] 가 하나라도 있으면: 난입으로 초대된 코치 태그 + 1:1 리드 코치 태그만 말풍선으로 남긴다.
+ * (모델이 [코치 3명] 규칙 때문에 초대받지 않은 코치도 말하는 경우 UI에서 제거)
+ */
+export function filterDelimitedSegmentsForInvites(
+  segments: CoachStreamSegment[],
+  leadPersonaId: CoachPersonaId
+): CoachStreamSegment[] {
+  const invited = new Set<CoachDelimTag>();
+  for (const s of segments) {
+    if (s.tag !== "INVITE") continue;
+    const code = s.text.trim().toUpperCase() as CoachDelimTag;
+    if (TAG_TO_PERSONA[code]) invited.add(code);
+  }
+  if (invited.size === 0) return segments;
+
+  const leadTag = PERSONA_TO_DELIM[leadPersonaId] ?? "DIET";
+  return segments.filter((s) => {
+    if (
+      s.tag === "ANALYSIS" ||
+      s.tag === "MISSION" ||
+      s.tag === "INVITE" ||
+      s.tag === "QUICK_CHIPS" ||
+      s.tag === "DATA_CARD"
+    ) {
+      return true;
+    }
+    if (!TAG_TO_PERSONA[s.tag]) return true;
+    return invited.has(s.tag) || s.tag === leadTag;
+  });
+}
 
 export function buildStreamCorruptFallbackReply(): CoachChatReply {
   return {
@@ -127,19 +170,26 @@ function parseDataCardJson(s: string): DataCardPayload | null {
 }
 
 /** 스트림 완료 후 단일 객체로 병합 → 기존 UI·normalizeCoachReply와 호환 */
-export function delimitedStreamToCoachChatReply(raw: string): CoachChatReply {
+export function delimitedStreamToCoachChatReply(
+  raw: string,
+  leadPersonaId: CoachPersonaId = DEFAULT_COACH_PERSONA_ID
+): CoachChatReply {
   if (coachStreamIsCorruptLeak(raw, true)) {
     return buildStreamCorruptFallbackReply();
   }
 
   const { segments } = parseCoachDelimitedStream(raw, true);
+  const segmentsFiltered = filterDelimitedSegmentsForInvites(
+    segments,
+    leadPersonaId
+  );
   let analysis = "";
   let mission = "";
   const coach_quips: CoachQuip[] = [];
   let data_card: DataCardPayload = emptyDataCard();
   let quick_chips: QuickChip[] = [];
 
-  for (const { tag, text } of segments) {
+  for (const { tag, text } of segmentsFiltered) {
     if (tag === "ANALYSIS") {
       analysis = text;
       continue;
