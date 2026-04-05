@@ -13,7 +13,7 @@ interface HomeLandingProps {
 }
 
 /** 히어로 위 얇은 홀로그램 그리드·데이터 포인트·스캔 빔 */
-function LandingHeroHud() {
+export function LandingHeroHud() {
   const gid = useId().replace(/:/g, "");
 
   return (
@@ -128,8 +128,14 @@ export function HomeLanding({ phase }: HomeLandingProps) {
   return (
     <div className="relative flex min-h-[100dvh] flex-col bg-background text-foreground">
       <div className="relative min-h-[64vh] w-full shrink-0 sm:min-h-[70vh]">
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-[5] px-5 pt-[max(1.25rem,env(safe-area-inset-top))] sm:px-8">
-          <p className="font-mono text-[2.85rem] font-bold leading-none tracking-tight text-white drop-shadow-[0_2px_14px_rgba(0,0,0,0.5)] sm:text-6xl">
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-[5] flex flex-col items-center px-5 pt-[max(1.25rem,env(safe-area-inset-top))] text-center sm:px-8">
+          <p
+            className={cn(
+              "font-mono text-[2.85rem] font-bold leading-none tracking-tight sm:text-6xl",
+              "text-black dark:text-white",
+              "drop-shadow-[0_1px_10px_rgba(255,255,255,0.55)] dark:drop-shadow-[0_2px_14px_rgba(0,0,0,0.55)]"
+            )}
+          >
             BAPS
           </p>
         </div>

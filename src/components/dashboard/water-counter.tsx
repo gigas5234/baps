@@ -1,8 +1,9 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Droplets, Minus, Plus } from "lucide-react";
+import { Minus, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { WaterBottleVisual } from "@/components/dashboard/water-bottle-visual";
 
 interface WaterCounterProps {
   cups: number;
@@ -43,75 +44,86 @@ export function WaterCounter({
         "bg-card/65 backdrop-blur-xl dark:border-white/10 dark:bg-card/40"
       )}
     >
-      <div className="flex items-start gap-3">
-        <div className="relative w-10 h-10 shrink-0 rounded-xl bg-scanner/15 flex items-center justify-center dark:bg-scanner/20">
-          <Droplets className="w-5 h-5 text-scanner" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold">물 섭취</p>
-          <p className="text-xs text-muted-foreground dark:text-foreground/70 mt-0.5">
-            목표 {safeTarget}잔 · {goalMl.toLocaleString()}ml
-          </p>
-          <p className="text-[10px] text-muted-foreground dark:text-foreground/65 mt-0.5 leading-snug">
-            권장 약 {recommendedMl.toLocaleString()}ml (체중·성별·나이·BMR·목표 칼로리)
-          </p>
-        </div>
-      </div>
-
-      {readOnly ? (
-        <p className="mt-2 text-[11px] leading-snug text-muted-foreground dark:text-foreground/70">
-          로그인 후 물 섭취를 기록할 수 있어요.
-        </p>
-      ) : null}
-
-      {/* Progress bar */}
-      <div className="mt-3 h-2 bg-muted rounded-full overflow-hidden">
-        <motion.div
-          className="h-full bg-scanner rounded-full"
-          initial={{ width: 0 }}
-          animate={{ width: `${percentage}%` }}
-          transition={{ duration: 0.4, ease: "easeOut" }}
+      <div className="flex items-center gap-4 sm:gap-5">
+        <WaterBottleVisual
+          progress={percentage}
+          className="w-[7.25rem] sm:w-32"
         />
-      </div>
 
-      {/* − / 잔 수 / + : 넓은 터치 영역, 실수로 +만 누르기 어렵게 분리 */}
-      <div className="mt-4 flex items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={onDecrement}
-          disabled={!canDecrement}
-          aria-label="1잔 빼기"
-          className={cn(
-            "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border-2 border-border bg-background text-foreground shadow-sm transition-transform active:scale-95",
-            "disabled:opacity-35 disabled:pointer-events-none",
-            "hover:bg-muted/80"
-          )}
-        >
-          <Minus className="w-5 h-5 stroke-[2.5]" aria-hidden />
-        </button>
+        <div className="min-w-0 flex-1 space-y-3">
+          <div>
+            <p className="text-sm font-semibold">물 섭취</p>
+            <p className="text-xs text-muted-foreground dark:text-foreground/70">
+              목표 <span className="font-data font-medium">{safeTarget}</span>
+              잔 ·{" "}
+              <span className="font-data">{goalMl.toLocaleString()}</span>
+              ml
+            </p>
+          </div>
 
-        <div className="flex min-w-0 flex-1 flex-col items-center px-2 text-center">
-          <span className="font-data text-2xl font-bold tabular-nums tracking-tight">
-            {cups}
-          </span>
-          <span className="text-xs text-muted-foreground dark:text-foreground/70">
-            1잔 {cupMl}ml · 누적 {totalMl}ml
-          </span>
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={onDecrement}
+              disabled={!canDecrement}
+              aria-label="1잔 빼기"
+              className={cn(
+                "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border-2 border-border bg-background text-foreground shadow-sm transition-transform active:scale-95",
+                "disabled:opacity-35 disabled:pointer-events-none",
+                "hover:bg-muted/80"
+              )}
+            >
+              <Minus className="w-5 h-5 stroke-[2.5]" aria-hidden />
+            </button>
+
+            <div className="flex min-w-0 flex-1 flex-col items-center px-1 text-center">
+              <motion.span
+                key={cups}
+                className="font-data text-3xl font-bold tabular-nums tracking-tight text-scanner"
+                initial={{ scale: 1.06, opacity: 0.85 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: "spring", stiffness: 400, damping: 28 }}
+              >
+                {cups}
+                <span className="text-lg font-semibold text-muted-foreground dark:text-foreground/55">
+                  {" "}
+                  / {safeTarget}
+                </span>
+              </motion.span>
+              <span className="text-[11px] text-muted-foreground dark:text-foreground/65">
+                1잔 {cupMl}ml · 누적 {totalMl}ml
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={onIncrement}
+              disabled={!canIncrement}
+              aria-label="1잔 더하기"
+              className={cn(
+                "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-scanner text-scanner-foreground shadow-md shadow-scanner/25 transition-transform active:scale-95",
+                "disabled:opacity-50 disabled:pointer-events-none",
+                "hover:brightness-95 dark:hover:brightness-110"
+              )}
+            >
+              <Plus className="w-5 h-5 stroke-[2.5]" aria-hidden />
+            </button>
+          </div>
+
+          <p className="text-[10px] leading-snug text-muted-foreground dark:text-foreground/60">
+            권장 약 {recommendedMl.toLocaleString()}ml
+            <span className="hidden sm:inline">
+              {" "}
+              (체중·BMR·목표 칼로리 반영)
+            </span>
+          </p>
+
+          {readOnly ? (
+            <p className="text-[11px] leading-snug text-muted-foreground dark:text-foreground/70">
+              로그인 후 물 섭취를 기록할 수 있어요.
+            </p>
+          ) : null}
         </div>
-
-        <button
-          type="button"
-          onClick={onIncrement}
-          disabled={!canIncrement}
-          aria-label="1잔 더하기"
-          className={cn(
-            "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-scanner text-scanner-foreground shadow-md shadow-scanner/25 transition-transform active:scale-95",
-            "disabled:opacity-50 disabled:pointer-events-none",
-            "hover:brightness-95 dark:hover:brightness-110"
-          )}
-        >
-          <Plus className="w-5 h-5 stroke-[2.5]" aria-hidden />
-        </button>
       </div>
     </div>
   );

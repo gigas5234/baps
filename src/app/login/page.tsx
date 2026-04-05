@@ -1,15 +1,18 @@
 "use client";
 
 import { createClient } from "@/lib/supabase-browser";
+import { GoogleSignInButtonBlock } from "@/components/common/google-sign-in-button-block";
+import { LandingHeroHud } from "@/components/home/home-landing";
+import { cn } from "@/lib/utils";
 
 /** Supabase에 Kakao OAuth 연동 후 `true`로 전환 */
 const ENABLE_KAKAO_LOGIN = false;
 
 export default function LoginPage() {
-  const handleSocialLogin = async (provider: "kakao" | "google") => {
+  const handleKakao = async () => {
     const supabase = createClient();
     await supabase.auth.signInWithOAuth({
-      provider,
+      provider: "kakao",
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
       },
@@ -17,23 +20,106 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen px-6">
-      <div className="w-full max-w-sm space-y-8">
-        {/* Logo */}
-        <div className="text-center">
-          <h1 className="text-4xl font-bold">BAPS</h1>
-          <p className="text-muted-foreground mt-2">
+    <div className="relative flex min-h-[100dvh] flex-col bg-background text-foreground">
+      <div className="relative min-h-[64vh] w-full shrink-0 sm:min-h-[70vh]">
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-[5] flex flex-col items-center px-5 pt-[max(1.25rem,env(safe-area-inset-top))] text-center sm:px-8">
+          <h1
+            className={cn(
+              "font-mono text-[2.85rem] font-bold leading-none tracking-tight sm:text-6xl",
+              "text-black dark:text-white",
+              "drop-shadow-[0_1px_10px_rgba(255,255,255,0.55)] dark:drop-shadow-[0_2px_14px_rgba(0,0,0,0.55)]"
+            )}
+          >
+            BAPS
+          </h1>
+          <p
+            className={cn(
+              "mt-2 max-w-sm font-sans text-sm leading-snug sm:text-base",
+              "text-black/80 dark:text-white/85"
+            )}
+          >
             AI가 관리하는 나의 식단
           </p>
         </div>
 
-        {/* Social Login Buttons */}
-        <div className="space-y-3">
+        <video
+          className="absolute inset-0 h-full w-full object-cover contrast-[1.03] saturate-[1.06] dark:opacity-90"
+          autoPlay
+          muted
+          loop
+          playsInline
+          aria-label="BAPS 앱 소개 영상"
+        >
+          <source src="/main.mp4" type="video/mp4" />
+        </video>
+        <div
+          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.07] via-transparent to-transparent dark:from-white/[0.04]"
+          aria-hidden
+        />
+        <div
+          className={cn(
+            "pointer-events-none absolute inset-0 bg-gradient-to-b",
+            "from-background/55 via-background/15 to-background/85",
+            "dark:from-background/40 dark:via-black/25 dark:to-background"
+          )}
+          aria-hidden
+        />
+        <div
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_95%_75%_at_50%_35%,transparent_0%,rgba(0,0,0,0.08)_100%)] dark:bg-[radial-gradient(ellipse_95%_75%_at_50%_35%,transparent_0%,rgba(0,0,0,0.38)_100%)]"
+          aria-hidden
+        />
+
+        <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-[0.76] dark:opacity-[0.88]">
+          <LandingHeroHud />
+        </div>
+      </div>
+
+      <div className="relative z-10 -mt-16 flex flex-1 flex-col px-5 pb-36 pt-2 sm:-mt-20 sm:px-8 sm:pb-40">
+        <div
+          className={cn(
+            "mx-auto w-full max-w-lg rounded-2xl border px-5 py-6 shadow-xl",
+            "border-white/12 bg-black/60 text-white backdrop-blur-sm",
+            "dark:border-white/10 dark:bg-black/65"
+          )}
+        >
+          <p
+            className={cn(
+              "font-mono text-[11px] font-semibold uppercase tracking-[0.28em]",
+              "text-scanner"
+            )}
+          >
+            BAPS
+          </p>
+          <h2 className="mt-3 font-sans text-[1.55rem] font-bold leading-snug tracking-tight sm:text-[1.75rem] sm:leading-tight">
+            사진 한 장으로 완성하는
+            <br />
+            완벽한 식단 기록
+          </h2>
+          <p className="mt-3 font-sans text-[0.9375rem] leading-relaxed text-white/85 sm:text-base">
+            사진만 찍으면 AI가 칼로리와 탄단지 영양소를 자동으로 분석해
+            드립니다. 물 섭취량과 체중 변화까지 한곳에서 관리하며, 복잡한
+            입력 없이 간편하게 건강한 습관을 만들어 가세요.
+          </p>
+        </div>
+      </div>
+
+      <div
+        className={cn(
+          "fixed bottom-0 left-0 right-0 z-20 border-t border-border",
+          "bg-background/90 backdrop-blur-xl supports-[backdrop-filter]:bg-background/80"
+        )}
+      >
+        <div
+          className="mx-auto w-full max-w-lg space-y-3 px-5 py-4 sm:px-8"
+          style={{
+            paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
+          }}
+        >
           {ENABLE_KAKAO_LOGIN ? (
             <button
               type="button"
-              onClick={() => handleSocialLogin("kakao")}
-              className="w-full flex items-center justify-center gap-3 rounded-xl py-3.5 px-4 font-medium text-sm transition-colors"
+              onClick={() => void handleKakao()}
+              className="flex w-full items-center justify-center gap-3 rounded-xl py-3.5 px-4 text-sm font-medium transition-colors"
               style={{ backgroundColor: "#FEE500", color: "#191919" }}
             >
               <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
@@ -45,32 +131,7 @@ export default function LoginPage() {
               카카오로 시작하기
             </button>
           ) : null}
-
-          <button
-            type="button"
-            onClick={() => handleSocialLogin("google")}
-            className="w-full flex items-center justify-center gap-3 rounded-xl py-3.5 px-4 font-medium text-sm border bg-white text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18">
-              <path
-                fill="#4285F4"
-                d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"
-              />
-              <path
-                fill="#34A853"
-                d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.997 8.997 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"
-              />
-              <path
-                fill="#EA4335"
-                d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"
-              />
-            </svg>
-            Google로 시작하기
-          </button>
+          <GoogleSignInButtonBlock />
         </div>
       </div>
     </div>

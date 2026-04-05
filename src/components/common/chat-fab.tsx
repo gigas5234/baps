@@ -12,12 +12,19 @@ import { MessageCircle, X, Send, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Meal } from "@/types/database";
 import type { MacroTotals } from "@/lib/meal-macros";
-import type { DataCardPayload, QuickChip } from "@/lib/chat-coach";
+import {
+  encodeCoachTurnForHistory,
+  type CoachStrategicTurn,
+  type DataCardPayload,
+  type QuickChip,
+} from "@/lib/chat-coach";
 
 interface ChatMessage {
   id: string;
   message: string;
   is_ai: boolean;
+  /** opening만 문자열 / 턴 응답은 구조화 */
+  coachTurn?: CoachStrategicTurn;
   data_card?: DataCardPayload | null;
 }
 
@@ -34,21 +41,61 @@ interface ChatFabProps {
   macros: MacroTotals;
 }
 
-function formatInlineBold(text: string): ReactNode {
+function formatInlineBold(
+  text: string,
+  variant: "default" | "coach" = "default"
+): ReactNode {
+  const strongCls =
+    variant === "coach"
+      ? "font-bold text-primary tabular-nums"
+      : "font-semibold text-foreground tabular-nums";
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return (
-        <strong
-          key={i}
-          className="font-semibold text-foreground tabular-nums"
-        >
+        <strong key={i} className={strongCls}>
           {part.slice(2, -2)}
         </strong>
       );
     }
     return <span key={i}>{part}</span>;
   });
+}
+
+function CoachStrategicTurnView({ turn }: { turn: CoachStrategicTurn }) {
+  return (
+    <div className="space-y-2.5 text-sm leading-relaxed">
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+          분석
+        </p>
+        <p className="mt-0.5 text-foreground/95">
+          {formatInlineBold(turn.analysis, "coach")}
+        </p>
+      </div>
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+          경고
+        </p>
+        <p className="mt-0.5 text-foreground/95">
+          {formatInlineBold(turn.roast, "coach")}
+        </p>
+      </div>
+      <div
+        className={cn(
+          "rounded-xl border border-primary/30 bg-primary/[0.07] px-2.5 py-2",
+          "dark:border-primary/35 dark:bg-primary/[0.12]"
+        )}
+      >
+        <p className="text-[10px] font-bold uppercase tracking-wider text-primary">
+          미션
+        </p>
+        <p className="mt-0.5 text-foreground/95">
+          {formatInlineBold(turn.mission, "coach")}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 function CoachDataCardView({
@@ -129,10 +176,10 @@ function QuickChipRow({
           disabled={disabled}
           onClick={() => onPick(c.prompt)}
           className={cn(
-            "shrink-0 max-w-[85vw] rounded-2xl border border-border bg-muted/45 px-3 py-2 text-left",
+            "shrink-0 max-w-[85vw] rounded-2xl border border-primary/25 bg-primary/[0.06] px-3 py-2 text-left",
             "text-[11px] font-medium leading-snug text-foreground shadow-sm",
-            "transition-colors hover:bg-muted/80 disabled:pointer-events-none disabled:opacity-45",
-            "dark:border-white/12 dark:bg-muted/35"
+            "transition-colors hover:bg-primary/12 disabled:pointer-events-none disabled:opacity-45",
+            "dark:border-primary/30 dark:bg-primary/10"
           )}
         >
           {c.label}
@@ -312,7 +359,10 @@ export function ChatFab({
 
     try {
       const historyForApi = prior.map((m) => ({
-        message: m.message,
+        message:
+          m.is_ai && m.coachTurn
+            ? encodeCoachTurnForHistory(m.coachTurn)
+            : m.message,
         is_ai: m.is_ai,
       }));
 
@@ -328,7 +378,11 @@ export function ChatFab({
 
       const data = await res.json();
 
-      if (data.error && !data.reply) {
+      if (
+        data.error &&
+        typeof data.analysis !== "string" &&
+        typeof (data as { reply?: string }).reply !== "string"
+      ) {
         const errBubble: ChatMessage = {
           id: `ai-${Date.now()}`,
           is_ai: true,
@@ -344,10 +398,21 @@ export function ChatFab({
         return;
       }
 
-      const reply =
-        typeof data.reply === "string"
-          ? data.reply
-          : "응답 형식이 이상해. 다시 보내줘.";
+      let analysis =
+        typeof data.analysis === "string" ? data.analysis.trim() : "";
+      let roast = typeof data.roast === "string" ? data.roast.trim() : "";
+      let mission = typeof data.mission === "string" ? data.mission.trim() : "";
+      const legacyReply =
+        typeof (data as { reply?: string }).reply === "string"
+          ? (data as { reply: string }).reply.trim()
+          : "";
+      if (!analysis && legacyReply) analysis = legacyReply;
+      if (!analysis) analysis = "응답 형식이 이상해.";
+      if (!roast) roast = "—";
+      if (!mission) mission = "다시 보내줘.";
+
+      const coachTurn: CoachStrategicTurn = { analysis, roast, mission };
+
       const dataCard = data.data_card as DataCardPayload | undefined;
       const chips: QuickChip[] = Array.isArray(data.quick_chips)
         ? data.quick_chips.slice(0, 3)
@@ -356,7 +421,8 @@ export function ChatFab({
       const aiBubble: ChatMessage = {
         id: `ai-${Date.now()}`,
         is_ai: true,
-        message: reply,
+        message: encodeCoachTurnForHistory(coachTurn),
+        coachTurn,
         data_card: dataCard ?? null,
       };
       const t = [...messagesRef.current, aiBubble];
@@ -391,7 +457,7 @@ export function ChatFab({
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
               <div>
-                <h2 className="text-base font-bold">팩폭 코치</h2>
+                <h2 className="text-base font-bold">전략 코칭</h2>
                 <p className="text-[10px] text-muted-foreground dark:text-foreground/65">
                   오늘 {totalCal}kcal · 목표 {targetCal}kcal · 단백{" "}
                   {Math.round(macros.proteinG)}g
@@ -428,7 +494,11 @@ export function ChatFab({
                         : "bg-primary text-primary-foreground"
                     )}
                   >
-                    <div>{formatInlineBold(msg.message)}</div>
+                    {msg.is_ai && msg.coachTurn ? (
+                      <CoachStrategicTurnView turn={msg.coachTurn} />
+                    ) : (
+                      <div>{formatInlineBold(msg.message)}</div>
+                    )}
                     {msg.is_ai && msg.data_card ? (
                       <CoachDataCardView
                         card={msg.data_card}
@@ -486,7 +556,7 @@ export function ChatFab({
           type="button"
           onClick={() => setIsOpen(true)}
           className="fixed bottom-6 right-4 z-40 rounded-2xl bg-primary p-3.5 text-primary-foreground shadow-lg shadow-primary/50 ring-1 ring-primary/30 active:scale-95 transition-transform"
-          aria-label="팩폭 코치 열기"
+          aria-label="전략 코칭 열기"
         >
           <MessageCircle className="w-5 h-5" />
         </button>

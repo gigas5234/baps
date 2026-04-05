@@ -243,21 +243,31 @@ export default function HomePage() {
 
   const handleConfirmAnalysis = async ({
     saveAsFrequent,
+    portionPct,
   }: {
     saveAsFrequent: boolean;
+    portionPct: number;
   }) => {
     if (!analyzeResult || !userId) return;
+    const p = Math.min(100, Math.max(0, portionPct)) / 100;
+    if (p <= 0) return;
+
     setIsSaving(true);
+
+    const cal = Math.round(analyzeResult.cal * p);
+    const carbs = Math.round(analyzeResult.carbs * p * 10) / 10;
+    const protein = Math.round(analyzeResult.protein * p * 10) / 10;
+    const fat = Math.round(analyzeResult.fat * p * 10) / 10;
 
     try {
       const supabase = createClient();
       const { error: mealErr } = await supabase.from("meals").insert({
         user_id: userId,
         food_name: analyzeResult.food_name,
-        cal: analyzeResult.cal,
-        carbs: analyzeResult.carbs,
-        protein: analyzeResult.protein,
-        fat: analyzeResult.fat,
+        cal,
+        carbs,
+        protein,
+        fat,
         image_url: imageUrl,
       });
       if (mealErr) throw mealErr;
@@ -292,9 +302,21 @@ export default function HomePage() {
     protein: number;
     fat: number;
     saveAsFrequent: boolean;
+    baseForFrequent: {
+      cal: number;
+      carbs: number;
+      protein: number;
+      fat: number;
+    };
   }) => {
     if (!userId) return;
     setIsManualSaving(true);
+
+    const fatBudgetG = Math.max((target * 0.35) / 9, 1);
+    const fatAfterLog = macroTotals.fatG + data.fat;
+    const fatBomb =
+      fatAfterLog >= fatBudgetG * 0.85 &&
+      data.fat > 0;
 
     try {
       const supabase = createClient();
@@ -310,12 +332,13 @@ export default function HomePage() {
       if (mealErr) throw mealErr;
 
       if (data.saveAsFrequent) {
+        const b = data.baseForFrequent;
         await upsertFrequentMealRow(supabase, userId, {
           food_name: data.food_name,
-          cal: data.cal,
-          carbs: data.carbs,
-          protein: data.protein,
-          fat: data.fat,
+          cal: b.cal,
+          carbs: b.carbs,
+          protein: b.protein,
+          fat: b.fat,
           image_url: null,
         });
       }
@@ -323,8 +346,15 @@ export default function HomePage() {
       queryClient.invalidateQueries({ queryKey: ["meals", userId, selectedDate] });
       queryClient.invalidateQueries({ queryKey: ["frequentMeals", userId] });
       setManualOpen(false);
-      if (data.saveAsFrequent) setToast("자주 먹는 메뉴에도 저장했어요");
-      else setToast("식단에 추가되었습니다");
+      if (fatBomb) {
+        setToast(
+          `${data.food_name}까지 더하니… 오늘 지방이 이미 빠듯해. 데이터가 널 보고 있어.`
+        );
+      } else if (data.saveAsFrequent) {
+        setToast("자주 먹는 메뉴에도 저장했어요");
+      } else {
+        setToast("식단에 추가되었습니다");
+      }
     } finally {
       setIsManualSaving(false);
     }
@@ -563,6 +593,11 @@ export default function HomePage() {
         onClose={() => setManualOpen(false)}
         onSubmit={handleManualSubmit}
         isSaving={isManualSaving}
+        dietContext={{
+          targetCal: target,
+          currentCal: totalCalories,
+          fatGToday: macroTotals.fatG,
+        }}
       />
 
       <ProfileSettingsSheet

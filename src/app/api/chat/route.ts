@@ -105,10 +105,10 @@ async function generateBootstrap(
 ${COACH_TIME_BAND_HINT}
 
 [부트스트랩 작업 — 구조화 출력만]
-- 채팅을 연 직후. 네가 **먼저** opening 한 줄(최대 2문장)로 말한다.
-- opening·quick_chips 모두 **아래 컨텍스트에 있는 숫자·이름만** 근거로 한다. 없으면 추측하지 않는다.
-- quick_chips는 정확히 **3개**. 각 prompt 문장 안에 오늘 수치(예: 남은 kcal, 단백질 g, 물 ml)를 **최소 한 번** 넣어 개인화한다.
-- label은 짧은 버튼 텍스트(약 22자 이내). prompt는 유저가 그대로 전송할 **완전한 한국어 문장**.
+- 채팅을 연 직후. 네가 **먼저** opening 한 줄(최대 2문장). 톤: **전략적 감시 코칭**(팩트·냉정·실행 압박).
+- opening·quick_chips 모두 **아래 컨텍스트 숫자·메뉴명만** 근거. 없으면 추측 금지.
+- quick_chips **정확히 3개**. 각 prompt에 오늘 수치(남은 kcal, 단백 g, 물 ml 등) **최소 1회**. 라벨은 단백 보충·야식·물 등 **오늘 데이터**와 연결.
+- label은 약 22자 이내. prompt는 유저가 그대로 전송할 **완전한 한국어 문장**.
 - 출력은 스키마 JSON뿐.
 
 컨텍스트:
@@ -150,11 +150,11 @@ async function generateCoachReply(
   const prompt = `${COACH_PERSONA}
 ${COACH_TIME_BAND_HINT}
 
-[턴 응답 — Flash-Lite 추출·분류]
-- 매 요청의 컨텍스트는 **최신 스냅샷**이다. 숫자 인용은 **이 블록에 있는 것만** 허용.
-- 유저가 특정 음식·행동의 **허용/가능/먹어도 되나**를 묻는 경우에만 data_card를 채운다: headline(한 줄 결론), summary(1문장), bullets(근거 1~3줄, **컨텍스트 숫자 인용**), actions **정확히 2개**(서로 다른 다음 행동; 각 prompt는 유저 턴으로 보낼 완전한 문장). 그 외 질문이면 data_card는 비워 ""·[].
-- reply는 3문장 이내, **항상 마지막에 실행 가능한 대안 1개**.
-- quick_chips **정확히 3개**: 상황·탄단지·물·남은 kcal 중 실제 데이터와 연결된 후속 질문. prompt에 오늘 수치 1회 이상 포함.
+[턴 응답 — 구조화 출력]
+- 컨텍스트는 **최신 스냅샷**. 숫자 인용은 **여기 있는 것만**.
+- **analysis / roast / mission** 필수. 각 1~2문장. 장문·설교 금지. COACH_PERSONA의 숫자·메뉴 **감싸기 규칙 준수.
+- 유저가 특정 음식·행동 **허용/가능/먹어도 되나**를 묻는 경우에만 data_card 채움: headline, summary, bullets(근거 1~3, 컨텍스트 숫자 ** 인용), actions **정확히 2개**. 그 외는 ""·[].
+- quick_chips **정확히 3개**: 남은 kcal·단백·지방·탄수·물·시간대와 **직접 연결**된 후속(예: 단백 추천, 야식 참기, 물 보충). prompt에 오늘 수치 **최소 1회**.
 
 컨텍스트:
 ${formatContextBlock(ctx)}
@@ -225,11 +225,14 @@ export async function POST(request: Request) {
         ctx.user_profile.target_cal - ctx.user_profile.current_cal,
         0
       );
+      const failMsg =
+        error instanceof Error
+          ? `지금 AI 응답 생성에 실패했어. 로컬 데이터만 말하면 남은 여유는 **${rem}kcal**야. 잠시 후 다시 눌러봐.`
+          : "응답 생성에 실패했습니다. 다시 시도해 주세요.";
       return NextResponse.json({
-        reply:
-          error instanceof Error
-            ? `지금 AI 응답 생성에 실패했어. 로컬 데이터만 말하면 남은 여유는 **${rem}kcal**야. 잠시 후 다시 눌러봐.`
-            : "응답 생성에 실패했습니다. 다시 시도해 주세요.",
+        analysis: "AI 엔진 응답 실패.",
+        roast: "재시도 전까지는 로컬 숫자만 믿어라.",
+        mission: failMsg,
         data_card: emptyDataCard(),
         quick_chips: [
           {

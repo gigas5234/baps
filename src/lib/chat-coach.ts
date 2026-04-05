@@ -34,8 +34,17 @@ export type DataCardPayload = {
   actions: DataCardAction[];
 };
 
+/** 턴 응답 — [분석][경고][미션] 구조 (UI·히스토리 공통) */
+export type CoachStrategicTurn = {
+  analysis: string;
+  roast: string;
+  mission: string;
+};
+
 export type CoachChatReply = {
-  reply: string;
+  analysis: string;
+  roast: string;
+  mission: string;
   data_card: DataCardPayload;
   quick_chips: QuickChip[];
 };
@@ -46,24 +55,28 @@ export type CoachBootstrapReply = {
 };
 
 /**
- * Gemini 3.1 Flash-Lite Preview에 맞춘 코치 지시.
- * 문서상 강점: 저지연·고빈도·구조화 추출·경량 에이전트·명확히 경계가 있는 작업.
+ * 전략적 감시 코칭 — Flash-Lite 구조화 출력용.
  */
-const COACH_PERSONA = `너는 BAPS 앱의 「데이터 기반 팩폭」 다이어트 코치다. 호출 모델은 **Gemini 3.1 Flash-Lite**에 맞게 동작한다.
+const COACH_PERSONA = `너는 냉정하지만 유능한 데이터 코치 **BAPS**다. 단순 잡답이 아니라 **전략적 감시 코칭**만 한다. (Flash-Lite: 짧고 구조화.)
 
-[Flash-Lite에 맞는 행동 — ai.google.dev 가이드 정렬]
-- 이 모델은 **저지연·대량 호출**과 **JSON 구조화 출력·가벼운 데이터 추출**에 최적화되어 있다. 장황한 설교·같은 말 반복·긴 은유는 금지.
-- 내부적으로만 다음 순서를 밟는다: (1) 컨텍스트 JSON에서 **읽을 수 있는 사실만** 추출 (2) 유저 발화 유형 분류 — 사실 질문 / 판정·허용 여부 / 추천 요청 / 잡담 (3) **추출한 숫자로만** 결론 (4) 스키마 필드·reply를 채운다.
-- 컨텍스트에 **없는** 메뉴명·섭취량·영양수치를 지어내지 마. 없으면 "오늘 기록에는 없다"고 짧게 말한다.
+[내부 판단 — 유저 발화에 적용]
+1) 컨텍스트에서 **남은 칼로리**(target_cal−current_cal), **탄·단·지(g)**, **물**, **local_hour**, **최근 메뉴**를 읽는다.
+2) 유형 가늠: 메뉴 추천("뭐 먹을까") / 허용·판정("치킨 되나") / 공복·욕구("배고파") / 잡담.
+3) 데이터에 없는 수치·메뉴를 **지어내지 않는다.**
 
-[톤·안전]
-- 냉정·직설. 욕설·혐오·집단 비하·의학적 단정(치료·치유 보장) 금지.
-- 근거는 오직 제공된 프로필·식사·물 데이터와 대화 내용.
+[출력 블록 — 각 1~2문장, 장문 금지]
+- **analysis**: 현상 한 줄. 예: 탄수 과잉·단백 부족, 남은 여유 **380kcal** 등 **팩트만**.
+- **roast**: 나태·위험 선택을 짧고 굵게. 욕설·혐오·집단 비하·의학 치료 보장 금지.
+- **mission**: **명령조**로 지금 할 **최선 행동·대체 메뉴 1개**. 컨텍스트와 모순 없게.
 
-[사용자에게 보이는 답변 규칙]
-- reply 본문: **3문장 이내**. 데이터 카드의 summary는 **2문장 이내**.
-- **숫자·단위**(예: **455kcal**, **32g**, **1650ml**)는 반드시 ** 로 감싼다.
-- 마지막 문장에 **지금 당장 실행 가능한 대안**을 1개 넣는다(구체 수치가 있으면 컨텍스트와 모순되지 않게).`;
+[마크다운 강조]
+- 핵심 숫자·단위·추천 음식명·권장 행동은 반드시 앞뒤 ** 로 감싼다. 예: **1200kcal**, **닭가슴살**, **물 300ml**
+
+[data_card]
+- 특정 음식·행동 **허용/가능/먹어도 되나** 질문일 때만 채운다. 그 외는 빈 값·[].
+
+[quick_chips]
+- 정확히 3개. 오늘 **남은 kcal·단백·물·시간대** 중 실제 데이터와 연결. prompt에 오늘 수치 최소 1회.`;
 
 /** 부트스트랩·후속 프롬프트에서 쓰는 시간대 힌트 (Flash-Lite가 맥락 고정에 유리) */
 const COACH_TIME_BAND_HINT = `
@@ -72,7 +85,7 @@ const COACH_TIME_BAND_HINT = `
 - 11–15: 점심
 - 16–22: 저녁
 - 그 외: 심야/간식 시간대
-opening·quick_chips는 이 밴드와 **오늘 수치**가 자연스럽게 맞도록 작성한다.`;
+opening·quick_chips는 이 밴드와 **오늘 수치**가 맞고, **전략 코칭** 톤(짧은 팩트+압박)이 나게 한다.`;
 
 export function formatContextBlock(ctx: CoachApiContext): string {
   const lines = [
@@ -146,19 +159,30 @@ export const bootstrapResponseSchema: Schema = {
 export const chatResponseSchema: Schema = {
   type: SchemaType.OBJECT,
   properties: {
-    reply: {
+    analysis: {
       type: SchemaType.STRING,
       description:
-        "본 답변. 숫자는 ** 감싸기. 3문장 이내 권장.",
+        "[분석] 현상 1~2문장. 숫자·메뉴명은 ** 감싸기.",
+    },
+    roast: {
+      type: SchemaType.STRING,
+      description:
+        "[경고] 팩폭 1~2문장. ** 로 감싼 수치 인용.",
+    },
+    mission: {
+      type: SchemaType.STRING,
+      description:
+        "[미션] 명령조 대안 1~2문장. 추천 행동·음식·핵심 수치는 ** 감싸기.",
     },
     data_card: dataCardSchema,
     quick_chips: {
       type: SchemaType.ARRAY,
       items: chipItemSchema,
-      description: "후속 추천 칩 3개.",
+      description:
+        "후속 칩 3개. 단백 보충·야식·물 등 **현재 컨텍스트**에 맞춤.",
     },
   },
-  required: ["reply", "data_card", "quick_chips"],
+  required: ["analysis", "roast", "mission", "data_card", "quick_chips"],
 };
 
 /** 키 없거나 장애 시 클라이언트도 쓸 수 있는 규칙 기반 부트스트랩 */
@@ -284,11 +308,36 @@ export function emptyDataCard(): DataCardPayload {
   };
 }
 
-export function normalizeCoachReply(raw: CoachChatReply): CoachChatReply {
+type RawCoachReply = Partial<CoachChatReply> & { reply?: string };
+
+export function encodeCoachTurnForHistory(turn: CoachStrategicTurn): string {
+  const a = (turn.analysis ?? "").trim();
+  const r = (turn.roast ?? "").trim();
+  const m = (turn.mission ?? "").trim();
+  return `[분석] ${a}\n[경고] ${r}\n[미션] ${m}`;
+}
+
+export function normalizeCoachReply(raw: RawCoachReply): CoachChatReply {
   const card = raw.data_card ?? emptyDataCard();
   const qc = Array.isArray(raw.quick_chips) ? raw.quick_chips.slice(0, 3) : [];
+
+  let analysis = typeof raw.analysis === "string" ? raw.analysis.trim() : "";
+  let roast = typeof raw.roast === "string" ? raw.roast.trim() : "";
+  let mission = typeof raw.mission === "string" ? raw.mission.trim() : "";
+
+  if (!analysis && typeof raw.reply === "string" && raw.reply.trim()) {
+    analysis = raw.reply.trim();
+    roast = roast || "데이터만 보면 아직 네가 선택한 건 기록에 없다.";
+    mission = mission || "구체적으로 다시 질문해.";
+  }
+  if (!analysis) analysis = "컨텍스트만으로는 판단이 불완전하다.";
+  if (!roast) roast = "기록을 더 쌓아야 코칭 밀도가 나온다.";
+  if (!mission) mission = "다음 식사를 기록한 뒤 같은 질문을 반복해.";
+
   return {
-    reply: raw.reply ?? "",
+    analysis,
+    roast,
+    mission,
     data_card: {
       headline: card.headline ?? "",
       summary: card.summary ?? "",
