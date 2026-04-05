@@ -11,7 +11,11 @@ import {
 } from "@/lib/coach-stream-guard";
 export type EmergencyNutritionTrigger =
   | "low_intake_today"
-  | "low_intake_3d_avg";
+  | "low_intake_3d_avg"
+  /** 목표 대비 진행률 — 16~20시, ~40% 미만 */
+  | "intake_pace_mild"
+  /** 목표 대비 진행률 — 21시 이후 ~60% 미만 */
+  | "intake_pace_severe";
 
 /** 클라이언트 → API 공통 컨텍스트 */
 export type CoachApiContext = {
@@ -271,40 +275,79 @@ export const chatResponseSchema: Schema = {
 export function fallbackBootstrap(ctx: CoachApiContext): CoachBootstrapReply {
   if (ctx.emergency_nutrition_mode) {
     const avg = ctx.recent_three_day_cal_average;
+    const { current_cal, target_cal } = ctx.user_profile;
+    const triggers = ctx.emergency_triggers;
+    const pct =
+      target_cal > 0 ? Math.round((current_cal / target_cal) * 100) : 0;
+    const rem = Math.max(0, target_cal - current_cal);
     const parts: string[] = [];
-    if (ctx.emergency_triggers.includes("low_intake_3d_avg") && avg != null) {
+
+    if (triggers.includes("low_intake_3d_avg") && avg != null) {
       parts.push(
-        `**저섭취 구간** 관제: 최근 3일 평균 **${Math.round(avg)}kcal/일**. 의도적 감량 vs **기록 누락** 감사 필요. **근손실·대사 저하** 신호일 수 있어—무리한 결식 대신 **균형·수면·전문가** 채널을 같이 본다.`
+        `**3일 추이** 관제: 일평균 **${Math.round(avg)}kcal/일**. 의도적 감량 vs **기록 누락** 감사 필요. **근손실·대사 저하** 신호일 수 있어—무리한 결식 대신 **균형·수면·전문가** 채널을 같이 본다.`
       );
     }
-    if (ctx.emergency_triggers.includes("low_intake_today")) {
+    if (triggers.includes("intake_pace_mild")) {
       parts.push(
-        `오늘 기록 **${ctx.user_profile.current_cal}kcal**. 데이터만 보면 에너지 대시보드 **적자**—**소량·균형** 식사를 먼저 넣는 게 관제 프로토콜상 1순위야.`
+        `일일 진행 **${pct}%** — 오후 기준 목표 대비 **다소 느림**. 저녁 끼니로 **보정 가능**한 구간이야.`
       );
     }
+    if (triggers.includes("intake_pace_severe")) {
+      parts.push(
+        `일일 진행 **${pct}%** — 야간까지 **저섭취** 플래그. 남은 **${rem}kcal**를 **시간 대비**로 어떻게 채울지 먼저 본다.`
+      );
+    }
+    if (triggers.includes("low_intake_today")) {
+      parts.push(
+        `오늘 기록 **${current_cal}kcal**. 에너지 대시보드 **적자**—**소량·균형** 식사를 먼저 넣는 게 관제 프로토콜 1순위야.`
+      );
+    }
+
     const opening =
       parts.join(" ") ||
-      `**저섭취 구간** 플래그. 관제 모드에서도 **안전 한도**는 넘지 마라—**의료·영양 전문가** 병행이 기본 룰.`;
+      `**저섭취·진행률** 플래그. 관제 모드에서도 **안전 한도**는 넘지 마—**의료·영양 전문가** 병행이 기본 룰이야.`;
     const avgRounded = avg != null ? Math.round(avg) : null;
+    const chips: QuickChip[] = [];
+
+    if (triggers.includes("low_intake_3d_avg")) {
+      chips.push({
+        label: "3일 추이·기록 누락 감사",
+        prompt:
+          avgRounded != null
+            ? `최근 3일 평균 **${avgRounded}kcal/일**·오늘 **${current_cal}kcal**만 보고 **기록 누락**과 **진짜 저섭취**를 어떻게 감별할지 데이터 관점에서 짧게 명령해.`
+            : `오늘 **${current_cal}kcal** 기준 누락 가능성 vs 실제 적자를 어떻게 감사할지 짧게 명령해.`,
+      });
+    }
+    if (triggers.includes("intake_pace_mild")) {
+      chips.push({
+        label: "저녁 끼니 보강 설계",
+        prompt: `현재 **${current_cal}kcal**·목표 **${target_cal}kcal**·진행 **${pct}%** 기준, 저녁에 메우기 좋은 한 끼 후보 2개를 **kcal·단백 g**로 제시해.`,
+      });
+    }
+    if (
+      triggers.includes("intake_pace_severe") ||
+      triggers.includes("low_intake_today")
+    ) {
+      chips.push({
+        label: "균형 한 끼·야간 보정",
+        prompt: `남은 **${rem}kcal**·현재 **${current_cal}kcal** 기준 부담 낮은 **균형 한 끼** 후보 2개만 **kcal·단백 g**로 명령해.`,
+      });
+    }
+    chips.push({
+      label: "수분·전해질 인상 계획",
+      prompt: `지금 오늘 **${Math.round(ctx.water_intake_ml)}ml** 수분 기준으로, 지금 구간에서 **ml 단위** 보충 각도를 팩트로 짧게 명령해.`,
+    });
+
+    while (chips.length < 3) {
+      chips.push({
+        label: "남은 칼로리 시간 배분",
+        prompt: `목표 **${target_cal}kcal**·현재 **${current_cal}kcal**·로컬 **${ctx.local_hour}시** 기준으로 남은 시간에 끼니를 어떻게 쪼개면 좋은지 3줄로 명령해.`,
+      });
+    }
+
     return {
       opening,
-      quick_chips: [
-        {
-          label: "기록 누락 vs 실제 적자 감사",
-          prompt:
-            avgRounded != null
-              ? `최근 3일 평균 **${avgRounded}kcal/일**·오늘 **${ctx.user_profile.current_cal}kcal**만 보고 **기록 누락**과 **진짜 저섭취**를 어떻게 감별할지 데이터 관점에서 짧게 명령해.`
-              : `오늘 **${ctx.user_profile.current_cal}kcal** 기록만으로 누락 가능성 vs 실제 적자를 어떻게 감사할지 짧게 명령해.`,
-        },
-        {
-          label: "수분·전해질 인상 계획",
-          prompt: `지금 체중·오늘 **${Math.round(ctx.water_intake_ml)}ml** 수분 기준으로, 저섭취 구간에서 **ml 단위** 보충·나트륨 각도를 팩트로 짧게 명령해.`,
-        },
-        {
-          label: "균형 한 끼 강제안",
-          prompt: `오늘 **${ctx.user_profile.current_cal}kcal**·목표 **${ctx.user_profile.target_cal}kcal** 범위에서 부담 낮은 **균형 한 끼** 후보 2개만 수치 붙여 명령해.`,
-        },
-      ],
+      quick_chips: chips.slice(0, 3),
     };
   }
 
@@ -380,26 +423,48 @@ export function fallbackBootstrap(ctx: CoachApiContext): CoachBootstrapReply {
       }
     );
   } else {
-    opening =
-      user_profile.current_cal <= 0
-        ? `오늘 섭취 **0kcal** 확정. 기록 공백 = **데이터 파기**. 다음 질의를 입력해라.`
-        : `오늘 **${user_profile.current_cal}kcal** 섭취. 시스템은 **당신의 다음 실수**를 대기 중이다.`;
-    chips.push(
-      {
-        label: "오늘의 설계 결함 분석",
-        prompt:
-          "오늘 기록된 데이터에서 가장 치명적인 결함 3가지만 짚어줘.",
-      },
-      {
-        label: "남은 예산 최적 집행",
-        prompt: `목표까지 남은 **${rem}kcal**를 어떻게 써야 '적자'를 면할지 대안을 명령해.`,
-      },
-      {
-        label: "야식 욕구 회로 차단",
-        prompt:
-          "지금 뭔가 먹고 싶은 게 생리적 허기인지 심리적 오류인지 분석하고 팩폭 날려줘.",
-      }
-    );
+    const morningPrep =
+      local_hour >= 5 &&
+      local_hour < 12 &&
+      user_profile.current_cal <= 0;
+    if (morningPrep) {
+      opening = `엔진 **공복 가동 중**. 오늘 목표 **${user_profile.target_cal}kcal** 설계를 시작할 시간이야—**첫 끼**는 단백·포만 중심으로 잡는 편이 데이터상 유리해.`;
+      chips.push(
+        {
+          label: "오늘의 첫 끼 추천",
+          prompt: `목표 **${user_profile.target_cal}kcal**·현재 **0kcal** 기준 첫 식사 후보 2개를 **kcal·단백 g**로 제시해.`,
+        },
+        {
+          label: "공복 운동 가이드",
+          prompt: `공복 상태에서 가벼운 활동 vs 중강도 각각 **리스크·효율**을 수치 감각으로 짧게 정리해.`,
+        },
+        {
+          label: "오늘 작전 수립",
+          prompt: `하루 **${user_profile.target_cal}kcal**를 끼니별로 어떻게 쪼개면 밸런스가 나는지 3줄로 명령해.`,
+        }
+      );
+    } else {
+      opening =
+        user_profile.current_cal <= 0
+          ? `오늘 섭취 **0kcal** 확정. 기록 공백 = **데이터 파기**. 다음 질의를 입력해라.`
+          : `오늘 **${user_profile.current_cal}kcal** 섭취. 시스템은 **당신의 다음 실수**를 대기 중이다.`;
+      chips.push(
+        {
+          label: "오늘의 설계 결함 분석",
+          prompt:
+            "오늘 기록된 데이터에서 가장 치명적인 결함 3가지만 짚어줘.",
+        },
+        {
+          label: "남은 예산 최적 집행",
+          prompt: `목표까지 남은 **${rem}kcal**를 어떻게 써야 '적자'를 면할지 대안을 명령해.`,
+        },
+        {
+          label: "야식 욕구 회로 차단",
+          prompt:
+            "지금 뭔가 먹고 싶은 게 생리적 허기인지 심리적 오류인지 분석하고 팩폭 날려줘.",
+        }
+      );
+    }
   }
 
   while (chips.length < 3) {

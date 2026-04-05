@@ -179,8 +179,10 @@ export async function buildCoachApiContext(
   const { active: emergency_nutrition_mode, triggers: emergency_triggers } =
     computeEmergencyNutrition({
       bmr,
+      target_cal: targetCal,
       current_cal: currentCal,
       recent_three_day_cal_average,
+      local_hour,
     });
 
   return {
