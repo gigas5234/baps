@@ -21,6 +21,10 @@ interface DailyQuipBannerProps {
   className?: string;
   /** 게이지와 붙일 때: 작은 말풍선 */
   compact?: boolean;
+  /** Gemini 메인 인사이트(없으면 규칙 기반 fallback) */
+  aiLine?: string | null;
+  /** AI 요청 중(본문은 fallback 유지 가능) */
+  aiPending?: boolean;
 }
 
 export function DailyQuipBanner({
@@ -35,6 +39,8 @@ export function DailyQuipBanner({
   zone,
   className,
   compact = false,
+  aiLine = null,
+  aiPending = false,
 }: DailyQuipBannerProps) {
   const line = useMemo(() => {
     const nick = displayName?.trim() || "님";
@@ -88,45 +94,85 @@ export function DailyQuipBanner({
     zone,
   ]);
 
+  const shownLine =
+    aiLine != null && aiLine.trim() !== "" ? aiLine.trim() : line;
+
   return (
-    <div
-      className={cn(
-        "relative rounded-2xl border shadow-sm",
-        compact
-          ? "border-primary/12 px-3 py-2.5"
-          : "mx-4 px-3.5 py-3",
-        "border-primary/15 bg-gradient-to-br from-primary/6 via-background/80 to-scanner/8",
-        "backdrop-blur-md dark:from-primary/15 dark:to-scanner/12",
-        className
-      )}
-    >
-      <div className={cn("flex", compact ? "gap-2" : "gap-2.5")}>
-        <div
+    <div className={cn("space-y-2", className)}>
+      <div className="px-0.5">
+        <h2
           className={cn(
-            "mt-0.5 shrink-0 rounded-lg bg-primary/10 dark:bg-primary/20",
-            compact ? "p-1" : "p-1.5"
+            "font-bold tracking-tight text-foreground",
+            compact ? "text-sm" : "text-base"
           )}
         >
-          <Sparkles
-            className={cn("text-primary", compact ? "h-3.5 w-3.5" : "h-4 w-4")}
-            aria-hidden
-          />
-        </div>
+          데일리 인사이트
+        </h2>
         <p
           className={cn(
-            "leading-snug text-foreground/90",
-            compact ? "text-xs" : "text-sm"
+            "text-muted-foreground",
+            compact ? "text-[10px]" : "text-xs"
           )}
         >
-          {line}
+          Daily Insight
         </p>
       </div>
-      {!compact ? (
-        <span
-          className="absolute -bottom-1 left-6 h-2 w-2 rotate-45 border-b border-r border-primary/12 bg-gradient-to-br from-primary/5 to-transparent"
-          aria-hidden
-        />
-      ) : null}
+      <div
+        className={cn(
+          "relative rounded-2xl border",
+          "shadow-[0_1px_3px_rgba(15,23,42,0.06),0_0_14px_rgba(99,102,241,0.2)]",
+          "dark:shadow-[0_1px_3px_rgba(0,0,0,0.35),0_0_20px_rgba(99,102,241,0.22)]",
+          compact
+            ? "border-primary/12 px-3 py-2.5"
+            : "mx-0 px-3.5 py-3",
+          "border-primary/15 bg-gradient-to-br from-primary/6 via-background/80 to-scanner/8",
+          "backdrop-blur-md dark:from-primary/15 dark:to-scanner/12"
+        )}
+      >
+        <p
+          className={cn(
+            "mb-1.5 font-semibold text-primary/90",
+            compact ? "text-[10px]" : "text-xs"
+          )}
+        >
+          AI의 한마디
+          {aiPending ? (
+            <span className="ml-1.5 font-normal text-muted-foreground">
+              · 분석 중
+            </span>
+          ) : null}
+        </p>
+        <div className={cn("flex", compact ? "gap-2" : "gap-2.5")}>
+          <div
+            className={cn(
+              "mt-0.5 shrink-0 rounded-lg bg-primary/10 dark:bg-primary/20",
+              compact ? "p-1" : "p-1.5"
+            )}
+          >
+            <Sparkles
+              className={cn(
+                "text-primary",
+                compact ? "h-3.5 w-3.5" : "h-4 w-4"
+              )}
+              aria-hidden
+            />
+          </div>
+          <p
+            className={cn(
+              "leading-snug text-foreground/90",
+              compact ? "text-xs" : "text-sm"
+            )}
+          >
+            {shownLine}
+          </p>
+        </div>
+        {!compact ? (
+          <span
+            className="absolute -bottom-1 left-6 h-2 w-2 rotate-45 border-b border-r border-primary/12 bg-gradient-to-br from-primary/5 to-transparent"
+            aria-hidden
+          />
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -78,7 +78,7 @@ JSON 스키마 형태:
 {"opening":"문자열", "quick_chips":[{"label":"문자열","prompt":"문자열"}, ... 정확히 3개]}
 
 규칙:
-- 지금 화면의 **1:1 담당 코치**: ${emoji} **${label} 코치**. opening은 이 코치 톤.
+- 선택 코치: ${emoji} **${label}**. opening은 이 관점·톤으로 (「○○ 코치」 같은 메타 설명 문구는 쓰지 않는다).
 - ${ctx.emergency_nutrition_mode ? "**긴급 보호 모드** — 위 [🚨] 절대 준수." : "톤: **전략적 감시 코칭**(팩트·냉정·실행 압박)."}
 - opening 한 줄~최대 2문장.
 - opening·quick_chips는 **아래 컨텍스트** 숫자·메뉴명만 근거.

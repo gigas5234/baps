@@ -275,3 +275,52 @@
   background-size: 240% 100%;
   animation: landing-cta-ring-shift 3.8s ease-in-out infinite;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Top bar → calendar "cyber scan" divider                                      */
+/* -------------------------------------------------------------------------- */
+
+@keyframes baps-topbar-scan-sweep {
+  0% {
+    transform: translateX(-5%);
+    opacity: 0.35;
+  }
+  12% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(255%);
+    opacity: 0.3;
+  }
+}
+
+.baps-topbar-scan-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 42%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(56, 189, 248, 0.08) 18%,
+    rgba(99, 102, 241, 0.95) 48%,
+    rgba(56, 189, 248, 0.1) 72%,
+    transparent 100%
+  );
+  box-shadow: 0 0 6px rgba(129, 140, 248, 0.55), 0 0 14px rgba(56, 189, 248, 0.25);
+  filter: blur(0.4px);
+  animation: baps-topbar-scan-sweep 2.85s ease-in-out infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .baps-topbar-scan-glow {
+    animation: none;
+    transform: translateX(45%);
+    opacity: 0.55;
+  }
+}

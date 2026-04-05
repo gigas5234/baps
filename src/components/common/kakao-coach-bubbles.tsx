@@ -181,11 +181,11 @@ function IncomingBubble({
 }
 
 function SystemMetaRow({ seg }: { seg: CoachStreamSegment }) {
-  const label = seg.tag === "QUICK_CHIPS" ? "추천 질문 동기화" : "데이터 카드";
+  const label = seg.tag === "QUICK_CHIPS" ? "빠른 요청" : "분석 카드";
   return (
     <div className="flex justify-center py-1">
       <p className="rounded-full border border-border bg-muted px-3 py-1 text-[10px] text-muted-foreground">
-        {label} · 서식 정리 중…
+        {label} · 불러오는 중…
       </p>
     </div>
   );

@@ -27,31 +27,31 @@ export const COACH_PERSONAS_UI: CoachPersonaMeta[] = [
     id: "diet",
     emoji: "🚨",
     label: "다이어트",
-    description: "칼로리·의지력 (가장 차가움)",
+    description: "의지력 감시",
   },
   {
     id: "nutrition",
     emoji: "🥗",
     label: "영양",
-    description: "탄단지·성분",
+    description: "탄단지",
   },
   {
     id: "exercise",
     emoji: "👟",
     label: "운동",
-    description: "섭취 → 운동 환산",
+    description: "활동 환산",
   },
   {
     id: "mental",
     emoji: "🧠",
     label: "멘탈",
-    description: "공복·가짜 배고픔",
+    description: "공복·야식",
   },
   {
     id: "roi",
     emoji: "📉",
     label: "가성비",
-    description: "kcal 예산 효율",
+    description: "kcal 예산",
   },
 ];
 

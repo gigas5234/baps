@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, Pencil, Plus, Sparkles } from "lucide-react";
+import { Camera, Minus, Pencil, Plus, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { FrequentMeal } from "@/types/database";
 
@@ -15,8 +15,8 @@ interface QuickLogSliderProps {
   onOpenManual: () => void;
   /** 헤더 · 빈 화면에서 자주 먹는 식단 직접 등록 */
   onAddFrequent?: () => void;
-  /** 카드별 수정 */
-  onEditFrequent?: (item: FrequentMeal) => void;
+  /** 카드별 자주 먹는 식단 항목 삭제 */
+  onDeleteFrequent?: (item: FrequentMeal) => void;
 }
 
 export function QuickLogSlider({
@@ -27,7 +27,7 @@ export function QuickLogSlider({
   onOpenCamera,
   onOpenManual,
   onAddFrequent,
-  onEditFrequent,
+  onDeleteFrequent,
 }: QuickLogSliderProps) {
   const visible = items.filter((m) => Number(m.count) >= MIN_COUNT_SHOW);
 
@@ -162,7 +162,7 @@ export function QuickLogSlider({
                 "dark:border-white/12"
               )}
             >
-              {onEditFrequent ? (
+              {onDeleteFrequent ? (
                 <span className="absolute right-1 top-1 z-10">
                   <span
                     role="button"
@@ -170,24 +170,24 @@ export function QuickLogSlider({
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      onEditFrequent(m);
+                      onDeleteFrequent(m);
                     }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
                         e.stopPropagation();
-                        onEditFrequent(m);
+                        onDeleteFrequent(m);
                       }
                     }}
                     className={cn(
                       "flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg",
                       "border border-border/80 bg-background/90 text-muted-foreground shadow-sm",
-                      "transition-colors hover:border-primary/40 hover:text-foreground",
+                      "transition-colors hover:border-destructive/45 hover:text-destructive",
                       "dark:border-white/12 dark:bg-zinc-900/95"
                     )}
-                    aria-label={`${m.food_name} 편집`}
+                    aria-label={`${m.food_name} 자주 먹는 식단에서 삭제`}
                   >
-                    <Pencil className="h-3.5 w-3.5" aria-hidden />
+                    <Minus className="h-3.5 w-3.5" aria-hidden strokeWidth={2.5} />
                   </span>
                 </span>
               ) : null}

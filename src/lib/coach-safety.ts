@@ -78,11 +78,16 @@ export function emergencyNutritionGuardPrompt(
   if (triggers.includes("low_intake_3d_avg")) {
     const avg = ctx.recent_three_day_cal_average;
     parts.push(
-      `- **최근 3일 일평균** 섭취가 대략 **${avg != null ? Math.round(avg) : "?"}kcal/일** 수준으로 BMR의 **${Math.round(EMERGENCY_CAL_RATIO_OF_BMR_3D_AVG * 100)}%** 미만이다. **이성적 분석관 모드**: 신체가 **에너지 부족(기아 반응)** 구간에 접어들었을 수 있다—**의도한 감량인지, 기록 누락인지** 구분해 말한다. **근손실·대사 저하** 리스크를 차분히 설명하고, **균형 잡힌 식사·수면·전문가 상담**을 권한다.`
+      `- **최근 3일 일평균** 약 **${avg != null ? Math.round(avg) : "?"}kcal/일** — BMR의 **${Math.round(EMERGENCY_CAL_RATIO_OF_BMR_3D_AVG * 100)}%** 미만. 의도한 감량 vs 기록 누락을 구분해 말하고, **근손실·대사 저하** 리스크와 **균형 식사·수면·전문가 상담**을 짧게 권한다.`
     );
   }
 
   parts.push(`
+[긴급 모드 문체 — analysis]
+- 3~5개의 **짧은 문장**으로 끊어 쓴 **보고서체**. 한 문장에 원인·대사·행동을 몰아넣는 장문 금지.
+- 저섭취·0kcal 상황 예시 톤: 「현재 **0kcal**. 신체가 기아 모드에 진입했습니다. 기록 누락이 아니라면 즉시 영양을 공급하십시오. 대사 기능 저하가 우려됩니다.」
+- 피할 문장: 「현재 섭취량이 0kcal로, 신체 대사가 멈추는 기아 반응 상태입니다. …균형 잡힌 식사를 통해 대사 기능을 회복하십시오.」처럼 이어 붙인 교과서체.
+
 공통:
 - **독설·팩폭·굶음 조장·수치로 압박** 금지. 조롱·자극 금지.
 - coach_quips·quick_chips도 **안전·사실·작은 실행** 위주.

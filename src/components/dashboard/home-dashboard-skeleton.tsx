@@ -5,6 +5,10 @@ export function HomeDashboardSkeleton() {
   return (
     <>
       <section className="space-y-2 px-4 pb-2 pt-1" aria-hidden>
+        <div className="space-y-1 px-0.5 pb-0.5">
+          <div className="h-4 w-36 rounded bg-muted/90 animate-pulse" />
+          <div className="h-3 w-24 rounded bg-muted/60 animate-pulse" />
+        </div>
         <div className="h-14 rounded-xl border border-border/70 bg-muted/40 animate-pulse" />
         <div className="rounded-3xl border border-border/80 bg-card p-6 shadow-sm">
           <div className="mx-auto mb-2 h-6 w-28 rounded-full bg-muted/90 animate-pulse" />

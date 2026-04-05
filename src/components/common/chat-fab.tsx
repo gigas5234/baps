@@ -7,7 +7,6 @@ import {
   X,
   Send,
   Loader2,
-  Headset,
   ListTodo,
   ChevronDown,
   ChevronUp,
@@ -136,10 +135,6 @@ function CoachPersonaPicker({
         "dark:border-rose-400/18 dark:bg-rose-500/[0.07]"
       )}
     >
-      <p className="flex items-center gap-1.5 px-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-600 dark:text-rose-300">
-        <Headset className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        담당 코치 (말투·초점)
-      </p>
       <div
         className={cn(
           "flex gap-1.5 overflow-x-auto pb-0.5 -mx-0.5 px-0.5 scrollbar-thin",
@@ -200,10 +195,7 @@ function QuickChipRow({
     >
       <p className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
         <ListTodo className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        추천 질문
-        <span className="font-normal normal-case text-[9px] text-muted-foreground/85">
-          · 탭하면 입력 없이 전송
-        </span>
+        빠른 요청
       </p>
       <div className="flex flex-col gap-1.5">
         {chips.map((c, i) => (
@@ -249,7 +241,7 @@ export function ChatFab({
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [bootLoading, setBootLoading] = useState(false);
-  /** 코치·추천 질문 영역 접기 (대화 가리지 않도록) */
+  /** 코치 교대·빠른 요청 영역 접기 (대화 가리지 않도록) */
   const [accessoryExpanded, setAccessoryExpanded] = useState(true);
   const wasChatOpenRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -715,14 +707,12 @@ export function ChatFab({
           >
             <div className="flex items-center justify-between border-b border-border bg-background px-4 py-3">
               <div>
-                <h2 className="text-base font-bold text-foreground">감시 단톡</h2>
-                <p className="text-[9px] font-medium text-muted-foreground">
-                  카톡형 코칭 · 아래 추천 질문은 말풍선 밖 템플릿
-                </p>
+                <h2 className="text-base font-bold text-foreground">BAPS 분석실</h2>
                 <p className="mt-0.5 text-[10px] font-medium text-primary">
-                  {coachMeta(coachPersona).emoji}{" "}
-                  {coachMeta(coachPersona).label} 코치 ·{" "}
-                  {coachMeta(coachPersona).description}
+                  {coachMeta(coachPersona).emoji} {coachMeta(coachPersona).label}
+                  {coachMeta(coachPersona).description
+                    ? ` · ${coachMeta(coachPersona).description}`
+                    : ""}
                 </p>
                 <p className="text-[10px] text-muted-foreground">
                   오늘 {totalCal}kcal · 목표 {targetCal}kcal · 단백{" "}
@@ -832,10 +822,10 @@ export function ChatFab({
                 aria-expanded={accessoryExpanded}
               >
                 <span className="text-[11px] font-semibold text-muted-foreground">
-                  담당 코치 · 추천 질문{" "}
+                  코치 교대
                   {quickChips.length > 0 ? (
-                    <span className="font-normal text-muted-foreground/85">
-                      ({quickChips.length})
+                    <span className="ml-1 font-normal text-muted-foreground/85">
+                      · 빠른 요청 {quickChips.length}
                     </span>
                   ) : null}
                 </span>
@@ -873,7 +863,7 @@ export function ChatFab({
                   onKeyDown={(e) => {
                     if (e.key === "Enter") void sendWithText(input, "input");
                   }}
-                  placeholder="추천 칩은 누르면 바로 전송. 여기는 직접 입력 후 보내기"
+                  placeholder="코치에게 보고하기…"
                   className="flex-1 rounded-full border border-border bg-background px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   disabled={isLoading || bootLoading}
                 />
@@ -882,7 +872,7 @@ export function ChatFab({
                   onClick={() => void sendWithText(input, "input")}
                   disabled={!input.trim() || isLoading || bootLoading}
                   className="rounded-2xl bg-primary p-2.5 text-primary-foreground shadow-lg shadow-primary/45 ring-1 ring-primary/25 disabled:opacity-40 active:scale-95 transition-transform"
-                  aria-label="직접 입력 전송"
+                  aria-label="보고 전송"
                 >
                   <Send className="w-4 h-4" />
                 </button>
@@ -897,7 +887,7 @@ export function ChatFab({
           type="button"
           onClick={() => setIsOpen(true)}
           className="fixed right-4 z-40 rounded-2xl bg-primary p-3.5 text-primary-foreground shadow-lg shadow-primary/50 ring-1 ring-primary/30 transition-transform active:scale-95 max-[480px]:bottom-[7.5rem] min-[481px]:bottom-28"
-          aria-label="전략 코칭 열기"
+          aria-label="BAPS 분석실 열기"
         >
           <MessageCircle className="w-5 h-5" />
         </button>

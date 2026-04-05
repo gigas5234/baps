@@ -97,8 +97,6 @@ interface WeightSparkStripProps {
   profileKg: number | null | undefined;
   targetWeightKg: number | null | undefined;
   onSavedProfile?: () => void;
-  /** 차트 점 선택 시 메인 캘린더 등과 같은 날짜로 맞춤 */
-  onNavigateToDate?: (ymd: string) => void;
   compact?: boolean;
 }
 
@@ -108,7 +106,6 @@ export function WeightSparkStrip({
   profileKg,
   targetWeightKg,
   onSavedProfile,
-  onNavigateToDate,
   compact = false,
 }: WeightSparkStripProps) {
   const clipUid = useId().replace(/:/g, "");
@@ -123,12 +120,6 @@ export function WeightSparkStrip({
   const [kgInt, setKgInt] = useState("70");
   const [kgDec, setKgDec] = useState("0");
   const [saving, setSaving] = useState(false);
-  /** 차트 점 클릭으로 고른 포인트만 안내(휠로 날짜 바꾸면 해제) */
-  const [chartTap, setChartTap] = useState<{
-    date: string;
-    kg: number;
-  } | null>(null);
-
   const [lcdEditing, setLcdEditing] = useState(false);
   const [lcdDraft, setLcdDraft] = useState("");
   const lcdInputRef = useRef<HTMLInputElement>(null);
@@ -161,18 +152,10 @@ export function WeightSparkStrip({
     }
   }, [selectedDate, dateOptions]);
 
-  useEffect(() => {
-    if (chartTap && chartTap.date !== pickDate) setChartTap(null);
-  }, [pickDate, chartTap]);
-
-  const handleChartPointPick = useCallback(
-    (p: ChartPoint) => {
-      setChartTap({ date: p.date, kg: p.kg });
-      setPickDate(p.date);
-      onNavigateToDate?.(p.date);
-    },
-    [onNavigateToDate]
-  );
+  /** 차트 점: 체중계 날짜만 변경(메인 캘린더·식단 일자는 그대로) */
+  const handleChartPointPick = useCallback((p: ChartPoint) => {
+    setPickDate(p.date);
+  }, []);
 
   const closeLcdEdit = useCallback(() => {
     setLcdEditing(false);
@@ -320,29 +303,15 @@ export function WeightSparkStrip({
           "dark:border-white/10 dark:bg-muted/10"
         )}
       >
-        <div className="flex items-start justify-between gap-1.5 px-0.5 pb-1.5">
-          <div className="flex min-w-0 items-center gap-1.5 text-foreground">
-            <Scale
-              className="h-4 w-4 shrink-0 text-primary"
-              strokeWidth={2}
-              aria-hidden
-            />
-            <h3 className="text-sm font-semibold leading-tight tracking-tight">
-              체중계
-            </h3>
-          </div>
-          <div className="flex flex-col items-end gap-0.5 text-right text-[11px] leading-tight text-muted-foreground tabular-nums">
-            <span>
-              목표:{" "}
-              {targetWeightKg != null && targetWeightKg > 0
-                ? `${Number(targetWeightKg).toFixed(1)} kg`
-                : "—"}
-            </span>
-            <span>
-              프로필:{" "}
-              {profileKg != null ? `${Number(profileKg).toFixed(1)} kg` : "—"}
-            </span>
-          </div>
+        <div className="flex items-center gap-1.5 px-0.5 pb-1.5">
+          <Scale
+            className="h-4 w-4 shrink-0 text-primary"
+            strokeWidth={2}
+            aria-hidden
+          />
+          <h3 className="text-sm font-semibold leading-tight tracking-tight text-foreground">
+            체중계
+          </h3>
         </div>
 
         <div
@@ -440,29 +409,6 @@ export function WeightSparkStrip({
           최근 기록 <span className="font-mono font-semibold">{CHART_POINTS}회</span>
           추이 · 목표선 점선
         </p>
-        {chartTap ? (
-          <div
-            className={cn(
-              "mt-1.5 rounded-lg border border-teal-600/30 bg-teal-500/10 px-2.5 py-2",
-              "dark:border-teal-500/35 dark:bg-teal-500/10"
-            )}
-            role="status"
-            aria-live="polite"
-          >
-            <p className="text-[11px] font-medium text-foreground">
-              <span className="font-mono tabular-nums">
-                {formatCompactMday(chartTap.date)}
-              </span>
-              <span className="mx-1 text-muted-foreground">·</span>
-              <span className="font-data tabular-nums font-semibold">
-                {chartTap.kg.toFixed(1)} kg
-              </span>
-            </p>
-            <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-              아래 날짜·체중을 바꾼 뒤「측정 저장」하면 바로 반영됩니다.
-            </p>
-          </div>
-        ) : null}
 
         <div
           className={cn(
@@ -482,7 +428,7 @@ export function WeightSparkStrip({
                 preserveAspectRatio="none"
                 overflow="hidden"
                 role="img"
-                aria-label="체중 최근 기록 추이 · 점을 누르면 해당 날짜로 이동"
+                aria-label="체중 최근 기록 추이 · 점을 누르면 체중계 날짜만 해당 일로 맞춤"
               >
                 <defs>
                   <clipPath id={`wchart-clip-${clipUid}`}>
@@ -529,7 +475,7 @@ export function WeightSparkStrip({
                     />
                   ) : null}
                   {pts.map((p) => {
-                    const selectedDot = chartTap?.date === p.date;
+                    const selectedDot = pickDate === p.date;
                     return (
                       <g key={p.date}>
                         <circle
@@ -547,7 +493,7 @@ export function WeightSparkStrip({
                           }}
                           role="button"
                           tabIndex={0}
-                          aria-label={`${p.date}, ${p.kg.toFixed(1)}킬로그램, 탭하여 이 날짜로 이동`}
+                          aria-label={`${p.date}, ${p.kg.toFixed(1)}킬로그램, 탭하여 체중계 날짜만 변경`}
                         />
                         <circle
                           cx={p.x}
@@ -580,61 +526,53 @@ export function WeightSparkStrip({
         </div>
       </div>
 
-      <div className="mt-2 space-y-1 px-0.5">
-        <div className="flex items-stretch gap-1.5">
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="pl-0.5 text-[11px] font-medium text-muted-foreground">
-              날짜{" "}
-              <span className="font-normal text-muted-foreground/85">(MM.DD)</span>
+      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)] gap-x-1.5 gap-y-1 px-0.5">
+        <span className="pl-0.5 text-sm font-medium leading-none text-muted-foreground">
+          날짜
+        </span>
+        <span className="pl-0.5 text-sm font-medium leading-none text-muted-foreground">
+          체중
+        </span>
+        <DigitalWheelColumn
+          values={dateOptions}
+          selected={pickDate}
+          onSelect={setPickDate}
+          formatDisplay={(ymd) => formatCompactMday(ymd)}
+          tone="date"
+          heightPx={WHEEL_VIEWPORT_PX}
+          ariaLabel="기록 날짜"
+          className="min-w-0"
+        />
+        <div
+          className="flex min-h-0 min-w-0 items-stretch gap-1"
+          style={{ minHeight: WHEEL_VIEWPORT_PX }}
+        >
+          <DigitalWheelColumn
+            values={KG_INTS}
+            selected={kgInt}
+            onSelect={setKgInt}
+            tone="weight"
+            heightPx={WHEEL_VIEWPORT_PX}
+            ariaLabel="체중 정수 kg"
+            className="min-w-0 flex-1"
+          />
+          <div
+            className="flex w-4 shrink-0 items-center justify-center self-stretch"
+            style={{ minHeight: WHEEL_VIEWPORT_PX }}
+          >
+            <span className="font-data text-sm font-semibold text-muted-foreground">
+              .
             </span>
-            <DigitalWheelColumn
-              values={dateOptions}
-              selected={pickDate}
-              onSelect={setPickDate}
-              formatDisplay={(ymd) => formatCompactMday(ymd)}
-              tone="date"
-              heightPx={WHEEL_VIEWPORT_PX}
-              ariaLabel="기록 날짜"
-              className="min-w-0"
-            />
           </div>
-          <div className="flex min-w-0 flex-[1.35] flex-col gap-0.5">
-            <span className="pl-0.5 text-[11px] font-medium text-muted-foreground">
-              체중{" "}
-              <span className="font-normal text-muted-foreground/85">(kg)</span>
-            </span>
-            <div
-              className="flex min-h-0 items-stretch gap-1"
-              style={{ minHeight: WHEEL_VIEWPORT_PX }}
-            >
-              <DigitalWheelColumn
-                values={KG_INTS}
-                selected={kgInt}
-                onSelect={setKgInt}
-                tone="weight"
-                heightPx={WHEEL_VIEWPORT_PX}
-                ariaLabel="체중 정수 kg"
-                className="min-w-0 flex-1"
-              />
-              <div
-                className="flex w-4 shrink-0 items-center justify-center self-stretch"
-                style={{ minHeight: WHEEL_VIEWPORT_PX }}
-              >
-                <span className="font-data text-sm font-semibold text-muted-foreground">
-                  .
-                </span>
-              </div>
-              <DigitalWheelColumn
-                values={KG_DECS}
-                selected={kgDec}
-                onSelect={setKgDec}
-                tone="weight"
-                heightPx={WHEEL_VIEWPORT_PX}
-                ariaLabel="체중 소수 첫째 자리"
-                className="w-12 shrink-0"
-              />
-            </div>
-          </div>
+          <DigitalWheelColumn
+            values={KG_DECS}
+            selected={kgDec}
+            onSelect={setKgDec}
+            tone="weight"
+            heightPx={WHEEL_VIEWPORT_PX}
+            ariaLabel="체중 소수 첫째 자리"
+            className="w-12 shrink-0"
+          />
         </div>
       </div>
 

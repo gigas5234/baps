@@ -152,7 +152,7 @@ export function DigitalWheelColumn({
                 role="option"
                 aria-selected={isSel}
                 className={cn(
-                  "flex h-9 w-full shrink-0 snap-center snap-always items-center justify-center whitespace-nowrap font-mono text-[13px] tabular-nums transition-colors",
+                  "flex h-9 w-full shrink-0 snap-center snap-always items-center justify-center whitespace-nowrap font-mono text-sm tabular-nums transition-colors",
                   isSel
                     ? "font-semibold text-teal-800 dark:text-teal-300"
                     : "text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-400"

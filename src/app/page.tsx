@@ -37,6 +37,7 @@ import {
   useDailyCalories,
   useProfile,
   useDeleteMeal,
+  useMainDashboardInsight,
 } from "@/lib/queries";
 import { rankFrequentMealsForNow } from "@/lib/frequent-meals-rank";
 import { bumpFrequentMealLog } from "@/lib/frequent-meals";
@@ -100,6 +101,22 @@ export default function HomePage() {
   const totalCalories = useDailyCalories(meals);
   const macroTotals = sumMealMacros(meals);
   const calorieZone = getCalorieZone(totalCalories, target);
+
+  const mainInsightFingerprint = useMemo(() => {
+    const mealKey = meals.map((m) => m.id).join(",");
+    return [
+      totalCalories,
+      meals.length,
+      Math.round(macroTotals.carbsG),
+      Math.round(macroTotals.proteinG),
+      Math.round(macroTotals.fatG),
+      waterLog?.cups ?? 0,
+      mealKey,
+    ].join("|");
+  }, [totalCalories, meals, macroTotals, waterLog?.cups]);
+
+  const { data: mainInsightLine, isPending: mainInsightPending } =
+    useMainDashboardInsight(userId, selectedDate, mainInsightFingerprint);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -476,6 +493,26 @@ export default function HomePage() {
     }
   };
 
+  const handleDeleteFrequent = async (item: FrequentMeal) => {
+    if (!userId || quickLogBusyId) return;
+    setQuickLogBusyId(item.id);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("frequent_meals")
+        .delete()
+        .eq("id", item.id)
+        .eq("user_id", userId);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ["frequentMeals", userId] });
+      setToast("자주 먹는 식단에서 삭제했어요");
+    } catch {
+      setToast("삭제에 실패했어요");
+    } finally {
+      setQuickLogBusyId(null);
+    }
+  };
+
   const handleDeleteMeal = async (meal: Meal) => {
     if (!userId || mealDeletingId) return;
     setMealDeletingId(meal.id);
@@ -518,18 +555,21 @@ export default function HomePage() {
         onChange={handleFileChange}
       />
 
-      {/* Fixed glass top bar — 스크롤 시 블러·슬림·중앙 잔여 kcal */}
+      {/* Fixed glass top bar — 사이버 스캔 라인 + 인디고 글래스 */}
       <header
         className={cn(
           "fixed inset-x-0 top-0 z-40 transition-[box-shadow,border-color,background-color] duration-300 ease-out",
+          "relative border-b border-white/10 backdrop-blur-md",
+          "bg-gradient-to-b from-indigo-500/[0.08] via-white/40 to-white/72",
+          "dark:from-indigo-600/[0.14] dark:via-indigo-950/45 dark:to-slate-950/60",
           topBarCompact
-            ? "border-b border-border/35 bg-background/72 shadow-[0_1px_12px_-4px_rgba(0,0,0,0.12)] backdrop-blur-xl dark:border-white/10 dark:bg-background/58 dark:shadow-[0_1px_16px_-4px_rgba(0,0,0,0.45)]"
-            : "border-b border-transparent bg-transparent"
+            ? "shadow-[0_1px_12px_-4px_rgba(99,102,241,0.15)] dark:shadow-[0_1px_18px_-4px_rgba(0,0,0,0.55)]"
+            : "shadow-[0_2px_20px_-8px_rgba(99,102,241,0.08)]"
         )}
       >
         <div
           className={cn(
-            "mx-auto flex w-full max-w-md items-center px-4 transition-[padding] duration-300 ease-out",
+            "relative z-10 mx-auto flex w-full max-w-md items-center px-4 transition-[padding] duration-300 ease-out",
             topBarCompact
               ? "min-h-11 justify-between gap-2 py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))]"
               : "justify-between gap-3 pb-2 pt-[max(1.5rem,env(safe-area-inset-top))]"
@@ -609,6 +649,13 @@ export default function HomePage() {
             </>
           )}
         </div>
+        <div
+          className="pointer-events-none absolute bottom-0 left-0 right-0 z-[1] h-px overflow-hidden"
+          aria-hidden
+        >
+          <div className="absolute inset-0 bg-white/15 dark:bg-indigo-400/25" />
+          <div className="baps-topbar-scan-glow" />
+        </div>
       </header>
       <div
         className="shrink-0 transition-[height] duration-300 ease-out"
@@ -620,8 +667,8 @@ export default function HomePage() {
         aria-hidden
       />
 
-      {/* Weekly Calendar */}
-      <section className="px-4 pb-3 pt-1">
+      {/* Weekly Calendar — 탑바와 층 분리된 포커스 카드 */}
+      <section className="mx-4 rounded-2xl bg-slate-200/35 px-4 pb-3 pt-3 dark:bg-slate-900/50">
         <WeeklyCalendar />
       </section>
 
@@ -644,6 +691,8 @@ export default function HomePage() {
                 zone={calorieZone}
                 compact
                 className="mx-0"
+                aiLine={mainInsightLine ?? null}
+                aiPending={mainInsightPending}
               />
             ) : null}
             <CalorieGauge
@@ -668,10 +717,7 @@ export default function HomePage() {
                 setFrequentEditorInitial(null);
                 setFrequentEditorOpen(true);
               }}
-              onEditFrequent={(item) => {
-                setFrequentEditorInitial(item);
-                setFrequentEditorOpen(true);
-              }}
+              onDeleteFrequent={handleDeleteFrequent}
             />
           ) : null}
 
@@ -741,7 +787,6 @@ export default function HomePage() {
                   profileKg={profile?.weight ?? null}
                   targetWeightKg={profile?.target_weight ?? null}
                   compact
-                  onNavigateToDate={setSelectedDate}
                   onSavedProfile={() =>
                     void queryClient.invalidateQueries({
                       queryKey: ["profile", userId],
