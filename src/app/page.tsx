@@ -1,65 +1,73 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { QuickActionButton } from "@/components/common/quick-action-button";
+import { ChatFab } from "@/components/common/chat-fab";
+import { WeeklyCalendar } from "@/components/dashboard/weekly-calendar";
+import { CalorieGauge } from "@/components/dashboard/calorie-gauge";
+import { MealTimeline } from "@/components/dashboard/meal-timeline";
+import { WaterCounter } from "@/components/dashboard/water-counter";
+import { useMealStore } from "@/store/use-meal-store";
+import { useProfileStore } from "@/store/use-profile-store";
+import { useMeals, useWaterLog, useAddWater, useDailyCalories } from "@/lib/queries";
+
+export default function HomePage() {
+  const { selectedDate } = useMealStore();
+  const { userName, targetCal } = useProfileStore();
+
+  // TODO: 실제 user ID는 Supabase auth에서 가져와야 함
+  const userId: string | undefined = undefined;
+
+  const { data: meals = [] } = useMeals(userId, selectedDate);
+  const { data: waterLog } = useWaterLog(userId, selectedDate);
+  const addWater = useAddWater(userId, selectedDate);
+  const totalCalories = useDailyCalories(meals);
+
+  const target = targetCal || 2000;
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <main className="flex-1 pb-28 max-w-md mx-auto w-full">
+      {/* Header */}
+      <header className="px-4 pt-6 pb-2 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold">BAPS</h1>
+          <p className="text-sm text-muted-foreground">
+            {userName ? `${userName}님, 오늘도 건강하게!` : "오늘도 건강하게!"}
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      </header>
+
+      {/* Weekly Calendar */}
+      <section className="px-4 py-2">
+        <WeeklyCalendar />
+      </section>
+
+      {/* Calorie Gauge */}
+      <section className="px-4 py-3">
+        <CalorieGauge current={totalCalories} target={target} />
+      </section>
+
+      {/* Water Counter */}
+      <section className="px-4 py-2">
+        <WaterCounter
+          cups={waterLog?.cups ?? 0}
+          onAdd={() => addWater.mutate(waterLog?.cups ?? 0)}
+          isAdding={addWater.isPending}
+        />
+      </section>
+
+      {/* Meal Timeline */}
+      <section className="px-4 py-3">
+        <h2 className="text-sm font-semibold text-muted-foreground mb-3">
+          오늘 먹은 것
+        </h2>
+        <MealTimeline meals={meals} />
+      </section>
+
+      {/* Floating Actions */}
+      <QuickActionButton
+        onWater={() => addWater.mutate(waterLog?.cups ?? 0)}
+      />
+      <ChatFab />
+    </main>
   );
 }
