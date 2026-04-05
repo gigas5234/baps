@@ -12,6 +12,7 @@ import { DailyQuipBanner } from "@/components/dashboard/daily-quip-banner";
 import { CalorieGauge } from "@/components/dashboard/calorie-gauge";
 import { WeightSparkStrip } from "@/components/dashboard/weight-spark-strip";
 import { MealTimeline } from "@/components/dashboard/meal-timeline";
+import { QuickLogSlider } from "@/components/dashboard/quick-log-slider";
 import { HomeDashboardSkeleton } from "@/components/dashboard/home-dashboard-skeleton";
 import { WaterCounter } from "@/components/dashboard/water-counter";
 import { HomeLanding } from "@/components/home/home-landing";
@@ -22,11 +23,18 @@ import { useProfileStore } from "@/store/use-profile-store";
 import { useAuth } from "@/lib/use-auth";
 import {
   useMeals,
+  useFrequentMeals,
   useWaterLog,
   useAdjustWater,
   useDailyCalories,
   useProfile,
 } from "@/lib/queries";
+import { rankFrequentMealsForNow } from "@/lib/frequent-meals-rank";
+import {
+  upsertFrequentMealRow,
+  bumpFrequentMealLog,
+} from "@/lib/frequent-meals";
+import type { FrequentMeal } from "@/types/database";
 import { compressImageForAnalysis } from "@/lib/image-compress";
 import { uploadMealImage } from "@/lib/storage";
 import { getCalorieZone } from "@/lib/calorie-zone";
@@ -65,6 +73,15 @@ export default function HomePage() {
   const { data: meals = [], isPending: mealsPending } = useMeals(
     userId,
     selectedDate
+  );
+  const {
+    data: frequentMealsRaw = [],
+    isPending: frequentMealsPending,
+  } = useFrequentMeals(userId);
+
+  const quickLogItems = useMemo(
+    () => rankFrequentMealsForNow(frequentMealsRaw, new Date(), 5),
+    [frequentMealsRaw]
   );
   const { data: waterLog } = useWaterLog(userId, selectedDate);
   const adjustWater = useAdjustWater(userId, selectedDate);
@@ -149,6 +166,15 @@ export default function HomePage() {
   const [manualOpen, setManualOpen] = useState(false);
   const [isManualSaving, setIsManualSaving] = useState(false);
 
+  const [toast, setToast] = useState<string | null>(null);
+  const [quickLogBusyId, setQuickLogBusyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = window.setTimeout(() => setToast(null), 2200);
+    return () => window.clearTimeout(t);
+  }, [toast]);
+
   const openCameraPicker = () => {
     cameraInputRef.current?.click();
   };
@@ -212,13 +238,17 @@ export default function HomePage() {
     }
   };
 
-  const handleConfirmAnalysis = async () => {
+  const handleConfirmAnalysis = async ({
+    saveAsFrequent,
+  }: {
+    saveAsFrequent: boolean;
+  }) => {
     if (!analyzeResult || !userId) return;
     setIsSaving(true);
 
     try {
       const supabase = createClient();
-      await supabase.from("meals").insert({
+      const { error: mealErr } = await supabase.from("meals").insert({
         user_id: userId,
         food_name: analyzeResult.food_name,
         cal: analyzeResult.cal,
@@ -227,10 +257,24 @@ export default function HomePage() {
         fat: analyzeResult.fat,
         image_url: imageUrl,
       });
+      if (mealErr) throw mealErr;
 
-      // 메인 화면 데이터 갱신
+      if (saveAsFrequent) {
+        await upsertFrequentMealRow(supabase, userId, {
+          food_name: analyzeResult.food_name,
+          cal: analyzeResult.cal,
+          carbs: analyzeResult.carbs,
+          protein: analyzeResult.protein,
+          fat: analyzeResult.fat,
+          image_url: imageUrl,
+        });
+      }
+
       queryClient.invalidateQueries({ queryKey: ["meals", userId, selectedDate] });
+      queryClient.invalidateQueries({ queryKey: ["frequentMeals", userId] });
       setAnalyzeOpen(false);
+      if (saveAsFrequent) setToast("자주 먹는 메뉴에도 저장했어요");
+      else setToast("식단에 추가되었습니다");
     } catch {
       setAnalyzeError("저장에 실패했어요.");
     } finally {
@@ -244,13 +288,14 @@ export default function HomePage() {
     carbs: number;
     protein: number;
     fat: number;
+    saveAsFrequent: boolean;
   }) => {
     if (!userId) return;
     setIsManualSaving(true);
 
     try {
       const supabase = createClient();
-      await supabase.from("meals").insert({
+      const { error: mealErr } = await supabase.from("meals").insert({
         user_id: userId,
         food_name: data.food_name,
         cal: data.cal,
@@ -259,11 +304,52 @@ export default function HomePage() {
         fat: data.fat,
         image_url: null,
       });
+      if (mealErr) throw mealErr;
+
+      if (data.saveAsFrequent) {
+        await upsertFrequentMealRow(supabase, userId, {
+          food_name: data.food_name,
+          cal: data.cal,
+          carbs: data.carbs,
+          protein: data.protein,
+          fat: data.fat,
+          image_url: null,
+        });
+      }
 
       queryClient.invalidateQueries({ queryKey: ["meals", userId, selectedDate] });
+      queryClient.invalidateQueries({ queryKey: ["frequentMeals", userId] });
       setManualOpen(false);
+      if (data.saveAsFrequent) setToast("자주 먹는 메뉴에도 저장했어요");
+      else setToast("식단에 추가되었습니다");
     } finally {
       setIsManualSaving(false);
+    }
+  };
+
+  const handleQuickLogPick = async (item: FrequentMeal) => {
+    if (!userId || quickLogBusyId) return;
+    setQuickLogBusyId(item.id);
+    try {
+      const supabase = createClient();
+      const { error: mealErr } = await supabase.from("meals").insert({
+        user_id: userId,
+        food_name: item.food_name,
+        cal: item.cal,
+        carbs: Number(item.carbs),
+        protein: Number(item.protein),
+        fat: Number(item.fat),
+        image_url: item.image_url,
+      });
+      if (mealErr) throw mealErr;
+      await bumpFrequentMealLog(supabase, item.id);
+      queryClient.invalidateQueries({ queryKey: ["meals", userId, selectedDate] });
+      queryClient.invalidateQueries({ queryKey: ["frequentMeals", userId] });
+      setToast("식단에 추가되었습니다");
+    } catch {
+      setToast("추가에 실패했어요");
+    } finally {
+      setQuickLogBusyId(null);
     }
   };
 
@@ -308,22 +394,14 @@ export default function HomePage() {
         ) : (
           <>
             <div className="min-w-0">
-              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <h1 className="text-xl font-bold tracking-tight">
-                  <Link
-                    href="/"
-                    className="rounded-md outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                  >
-                    BAPS
-                  </Link>
-                </h1>
+              <h1 className="text-xl font-bold tracking-tight">
                 <Link
                   href="/intro"
-                  className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                  className="rounded-md outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
-                  소개
+                  BAPS
                 </Link>
-              </div>
+              </h1>
               <p className="text-sm text-muted-foreground truncate">
                 {displayName
                   ? `${displayName}님, 오늘도 건강하게!`
@@ -415,6 +493,15 @@ export default function HomePage() {
             </div>
           ) : null}
 
+          <QuickLogSlider
+            items={quickLogItems}
+            isLoading={frequentMealsPending}
+            busyId={quickLogBusyId}
+            onPick={handleQuickLogPick}
+            onOpenCamera={openCameraPicker}
+            onOpenManual={() => setManualOpen(true)}
+          />
+
           <section className="px-4 py-3">
             <h2 className="text-sm font-semibold text-muted-foreground mb-3">
               오늘 먹은 것
@@ -473,6 +560,15 @@ export default function HomePage() {
         profileQueryError={profileQueryError}
         onRetryProfile={() => void refetchProfile()}
       />
+
+      {toast ? (
+        <div
+          className="pointer-events-none fixed bottom-24 left-1/2 z-[70] max-w-[min(90vw,20rem)] -translate-x-1/2 rounded-2xl border border-border bg-card/95 px-4 py-3 text-center text-sm font-medium text-foreground shadow-lg backdrop-blur-md"
+          role="status"
+        >
+          {toast}
+        </div>
+      ) : null}
     </main>
   );
 }

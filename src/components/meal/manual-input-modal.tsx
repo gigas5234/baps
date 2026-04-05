@@ -1,20 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Loader2 } from "lucide-react";
 import { MEAL_QUICK_PRESETS } from "@/lib/meal-presets";
+import { cn } from "@/lib/utils";
+
+export interface ManualMealSubmitPayload {
+  food_name: string;
+  cal: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+  saveAsFrequent: boolean;
+}
 
 interface ManualInputModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: {
-    food_name: string;
-    cal: number;
-    carbs: number;
-    protein: number;
-    fat: number;
-  }) => void;
+  onSubmit: (data: ManualMealSubmitPayload) => void;
   isSaving: boolean;
 }
 
@@ -29,22 +33,28 @@ export function ManualInputModal({
   const [carbs, setCarbs] = useState("");
   const [protein, setProtein] = useState("");
   const [fat, setFat] = useState("");
+  const [saveAsFrequent, setSaveAsFrequent] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) setSaveAsFrequent(false);
+  }, [isOpen]);
 
   const handleSubmit = () => {
     if (!foodName || !cal) return;
     onSubmit({
       food_name: foodName,
-      cal: parseInt(cal),
+      cal: parseInt(cal, 10),
       carbs: parseFloat(carbs) || 0,
       protein: parseFloat(protein) || 0,
       fat: parseFloat(fat) || 0,
+      saveAsFrequent,
     });
-    // Reset
     setFoodName("");
     setCal("");
     setCarbs("");
     setProtein("");
     setFat("");
+    setSaveAsFrequent(false);
   };
 
   return (
@@ -90,7 +100,6 @@ export function ManualInputModal({
               ))}
             </div>
 
-            {/* Food name */}
             <div className="space-y-1.5">
               <label className="text-sm font-medium">음식 이름 *</label>
               <input
@@ -102,7 +111,6 @@ export function ManualInputModal({
               />
             </div>
 
-            {/* Calories */}
             <div className="space-y-1.5">
               <label className="text-sm font-medium">칼로리 (kcal) *</label>
               <input
@@ -111,11 +119,10 @@ export function ManualInputModal({
                 placeholder="500"
                 value={cal}
                 onChange={(e) => setCal(e.target.value)}
-                className="w-full rounded-xl border px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                className="font-data w-full rounded-xl border px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
 
-            {/* Macros row */}
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">탄수화물 (g)</label>
@@ -125,7 +132,7 @@ export function ManualInputModal({
                   placeholder="0"
                   value={carbs}
                   onChange={(e) => setCarbs(e.target.value)}
-                  className="w-full rounded-xl border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="font-data w-full rounded-xl border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
               <div className="space-y-1.5">
@@ -136,7 +143,7 @@ export function ManualInputModal({
                   placeholder="0"
                   value={protein}
                   onChange={(e) => setProtein(e.target.value)}
-                  className="w-full rounded-xl border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="font-data w-full rounded-xl border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
               <div className="space-y-1.5">
@@ -147,9 +154,37 @@ export function ManualInputModal({
                   placeholder="0"
                   value={fat}
                   onChange={(e) => setFat(e.target.value)}
-                  className="w-full rounded-xl border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="font-data w-full rounded-xl border px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-muted/25 px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground">
+                  자주 먹는 식단으로 등록
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                  Quick Log에 바로 뜨도록 저장해요.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={saveAsFrequent}
+                onClick={() => setSaveAsFrequent((v) => !v)}
+                className={cn(
+                  "relative h-8 w-14 shrink-0 rounded-full transition-colors",
+                  saveAsFrequent ? "bg-primary" : "bg-muted"
+                )}
+              >
+                <span
+                  className={cn(
+                    "absolute top-1 left-1 h-6 w-6 rounded-full bg-background shadow transition-transform",
+                    saveAsFrequent ? "translate-x-6" : "translate-x-0"
+                  )}
+                />
+              </button>
             </div>
 
             <button

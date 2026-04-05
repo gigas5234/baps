@@ -30,6 +30,21 @@ export interface Meal {
   created_at: string;
 }
 
+/** 자주 먹는 메뉴 (Quick Log) */
+export interface FrequentMeal {
+  id: string;
+  user_id: string;
+  food_name: string;
+  cal: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+  image_url: string | null;
+  count: number;
+  last_eaten_at: string;
+  created_at: string;
+}
+
 export interface WaterLog {
   id: string;
   user_id: string;
@@ -68,6 +83,13 @@ export type Database = {
         Row: Meal;
         Insert: Omit<Meal, "id" | "created_at">;
         Update: Partial<Omit<Meal, "id">>;
+        Relationships: [];
+      };
+      frequent_meals: {
+        Row: FrequentMeal;
+        Insert: Omit<FrequentMeal, "id" | "created_at"> &
+          Partial<Pick<FrequentMeal, "count" | "last_eaten_at">>;
+        Update: Partial<Omit<FrequentMeal, "id">>;
         Relationships: [];
       };
       water_logs: {

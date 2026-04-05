@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase-browser";
-import type { Meal, Profile, WaterLog } from "@/types/database";
+import type { FrequentMeal, Meal, Profile, WaterLog } from "@/types/database";
 
 function getSupabase() {
   return createClient();
@@ -47,6 +47,28 @@ export function useMeals(userId: string | undefined, date: string) {
 
       if (error) throw error;
       return (data ?? []) as Meal[];
+    },
+    enabled: !!userId,
+  });
+}
+
+// --- Frequent meals (Quick Log) ---
+
+export function useFrequentMeals(userId: string | undefined) {
+  return useQuery({
+    queryKey: ["frequentMeals", userId],
+    queryFn: async () => {
+      if (!userId) return [];
+
+      const { data, error } = await getSupabase()
+        .from("frequent_meals")
+        .select("*")
+        .eq("user_id", userId)
+        .order("count", { ascending: false })
+        .limit(40);
+
+      if (error) throw error;
+      return (data ?? []) as FrequentMeal[];
     },
     enabled: !!userId,
   });

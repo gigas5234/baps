@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Loader2, Check, AlertCircle } from "lucide-react";
 import Image from "next/image";
@@ -22,7 +22,7 @@ interface AnalyzeModalProps {
   result: AnalyzeResult | null;
   isAnalyzing: boolean;
   error: string | null;
-  onConfirm: () => void;
+  onConfirm: (options: { saveAsFrequent: boolean }) => void | Promise<void>;
   isSaving: boolean;
 }
 
@@ -36,6 +36,12 @@ export function AnalyzeModal({
   onConfirm,
   isSaving,
 }: AnalyzeModalProps) {
+  const [saveAsFrequent, setSaveAsFrequent] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) setSaveAsFrequent(false);
+  }, [isOpen, result?.food_name]);
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -138,9 +144,27 @@ export function AnalyzeModal({
                   ))}
                 </div>
 
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border bg-muted/25 px-4 py-3.5 text-left transition-colors hover:bg-muted/40 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring">
+                  <input
+                    type="checkbox"
+                    checked={saveAsFrequent}
+                    onChange={(e) => setSaveAsFrequent(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-input text-primary focus:ring-primary"
+                  />
+                  <span className="text-sm leading-snug">
+                    <span className="font-medium text-foreground">
+                      자주 먹는 메뉴로 저장
+                    </span>
+                    <span className="mt-1 block text-xs text-muted-foreground">
+                      이 메뉴를 앞으로도 자주 드실 건가요? 감시 리스트(자주 찾는
+                      식단)에 추가해 두겠습니다.
+                    </span>
+                  </span>
+                </label>
+
                 {/* Confirm button */}
                 <button
-                  onClick={onConfirm}
+                  onClick={() => void onConfirm({ saveAsFrequent })}
                   disabled={isSaving}
                   className="w-full py-3.5 rounded-xl bg-primary text-primary-foreground font-medium text-sm flex items-center justify-center gap-2 disabled:opacity-50"
                 >

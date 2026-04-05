@@ -224,3 +224,54 @@
 .animate-gauge-wobble {
   animation: gauge-wobble 0.45s ease-in-out infinite;
 }
+
+/* Landing hero: analysis HUD & CTA ring */
+@keyframes landing-scan-beam {
+  0% {
+    transform: translateY(-120%);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.65;
+  }
+  88% {
+    opacity: 0.65;
+  }
+  100% {
+    transform: translateY(420%);
+    opacity: 0;
+  }
+}
+
+.landing-scan-beam {
+  animation: landing-scan-beam 4.5s ease-in-out infinite;
+}
+
+@keyframes landing-hud-glint {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.landing-hud-glint {
+  animation: landing-hud-glint 2.8s ease-in-out infinite;
+}
+
+@keyframes landing-cta-ring-shift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.landing-cta-gradient-ring {
+  background-size: 240% 100%;
+  animation: landing-cta-ring-shift 3.8s ease-in-out infinite;
+}
