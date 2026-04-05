@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Radar, UtensilsCrossed, X } from "lucide-react";
 import type { Meal } from "@/types/database";
 import { cn } from "@/lib/utils";
+import { foodEmojiForName } from "@/lib/food-emoji";
 import { SwipeDeleteRow } from "@/components/dashboard/swipe-delete-row";
 
 interface MealTimelineProps {
@@ -168,8 +169,11 @@ export function MealTimeline({
                             sizes="56px"
                           />
                         ) : (
-                          <div className="flex h-full w-full items-center justify-center text-xl">
-                            🍽️
+                          <div
+                            className="flex h-full w-full items-center justify-center text-2xl leading-none"
+                            aria-hidden
+                          >
+                            {foodEmojiForName(meal.food_name)}
                           </div>
                         )}
                       </div>

@@ -2,6 +2,7 @@
 
 import { Camera, Minus, Pencil, Plus, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { foodEmojiForName } from "@/lib/food-emoji";
 import type { FrequentMeal } from "@/types/database";
 
 const MIN_COUNT_SHOW = 1;
@@ -209,8 +210,11 @@ export function QuickLogSlider({
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/18 to-scanner/16 text-lg">
-                    🍽️
+                  <div
+                    className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/18 to-scanner/16 text-[1.35rem] leading-none"
+                    aria-hidden
+                  >
+                    {foodEmojiForName(m.food_name)}
                   </div>
                 )}
                 {busy ? (
