@@ -6,24 +6,34 @@ import { cn } from "@/lib/utils";
 
 interface WaterCounterProps {
   cups: number;
+  /** 1잔당 ml (설정에서 변경) */
+  cupMl?: number;
   onIncrement: () => void;
   onDecrement: () => void;
   isUpdating?: boolean;
 }
 
-const TARGET_CUPS = 8; // 하루 목표: 8잔 (2L)
+const TARGET_CUPS = 8; // 하루 목표 잔 수 (2L @ 250ml)
 
 export function WaterCounter({
   cups,
+  cupMl = 250,
   onIncrement,
   onDecrement,
   isUpdating,
 }: WaterCounterProps) {
   const percentage = Math.min((cups / TARGET_CUPS) * 100, 100);
+  const totalMl = cups * cupMl;
+  const targetMl = TARGET_CUPS * cupMl;
   const canDecrement = cups > 0 && !isUpdating;
 
   return (
-    <div className="bg-card rounded-2xl p-4 shadow-sm border">
+    <div
+      className={cn(
+        "rounded-2xl border border-white/25 p-4 shadow-md",
+        "bg-card/65 backdrop-blur-xl dark:border-white/10 dark:bg-card/40"
+      )}
+    >
       <div className="flex items-start gap-3">
         <div className="relative w-10 h-10 shrink-0 rounded-xl bg-cyan-50 flex items-center justify-center">
           <Droplets className="w-5 h-5 text-cyan-500" />
@@ -31,7 +41,7 @@ export function WaterCounter({
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold">물 섭취</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            목표 {TARGET_CUPS}잔 · {cups * 250}ml
+            목표 {TARGET_CUPS}잔 · {targetMl}ml
           </p>
         </div>
       </div>
@@ -66,7 +76,9 @@ export function WaterCounter({
           <span className="text-2xl font-bold tabular-nums tracking-tight">
             {cups}
           </span>
-          <span className="text-xs text-muted-foreground">잔 (1잔 250ml)</span>
+          <span className="text-xs text-muted-foreground">
+            1잔 {cupMl}ml · 누적 {totalMl}ml
+          </span>
         </div>
 
         <button

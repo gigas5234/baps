@@ -1,14 +1,14 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+import { createGenAI, getGeminiModelName } from "@/lib/gemini";
 
 function buildSystemPrompt(context: {
   todayMeals: { food_name: string; cal: number }[];
   totalCal: number;
   targetCal: number;
   waterCups: number;
+  waterCupMl?: number;
 }) {
+  const cupMl = context.waterCupMl ?? 250;
   const mealList = context.todayMeals.length > 0
     ? context.todayMeals.map((m) => `- ${m.food_name} (${m.cal}kcal)`).join("\n")
     : "- 아직 기록 없음";
@@ -24,12 +24,32 @@ ${mealList}
 
 총 섭취: ${context.totalCal}kcal / 목표: ${context.targetCal}kcal
 남은 칼로리: ${remaining}kcal
-물 섭취: ${context.waterCups}잔 (${context.waterCups * 250}ml)`;
+물 섭취: ${context.waterCups}잔 (${context.waterCups * cupMl}ml, 1잔 ${cupMl}ml 기준)`;
 }
 
 export async function POST(request: Request) {
   try {
-    const { message, context, history } = await request.json();
+    const genAI = createGenAI();
+    if (!genAI) {
+      return NextResponse.json(
+        {
+          error:
+            "AI API 키가 설정되지 않았습니다. Vercel 환경 변수에 GEMINI_API_KEY(또는 GOOGLE_GENERATIVE_AI_API_KEY)를 추가해 주세요.",
+          code: "MISSING_GEMINI_KEY",
+        },
+        { status: 503 }
+      );
+    }
+
+    const body = await request.json();
+    const { message, history } = body;
+    const context = body.context ?? {
+      todayMeals: [],
+      totalCal: 0,
+      targetCal: 2000,
+      waterCups: 0,
+      waterCupMl: 250,
+    };
 
     if (!message) {
       return NextResponse.json(
@@ -38,7 +58,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const modelName = getGeminiModelName();
+    const model = genAI.getGenerativeModel({ model: modelName });
     const systemPrompt = buildSystemPrompt(context);
 
     // 대화 히스토리 구성
@@ -70,8 +91,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ reply });
   } catch (error) {
     console.error("Gemini chat error:", error);
+    const msg =
+      error instanceof Error ? error.message : "AI 응답 생성에 실패했습니다.";
     return NextResponse.json(
-      { error: "AI 응답 생성에 실패했습니다." },
+      {
+        error: "AI 응답 생성에 실패했습니다.",
+        detail: process.env.NODE_ENV === "development" ? msg : undefined,
+      },
       { status: 500 }
     );
   }

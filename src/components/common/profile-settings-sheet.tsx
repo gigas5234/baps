@@ -6,6 +6,8 @@ import { X, Loader2 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase-browser";
 import { calculateBMR } from "@/lib/bmr";
+import { normalizeWaterCupMl, WATER_CUP_ML_OPTIONS } from "@/lib/water-cup";
+import { cn } from "@/lib/utils";
 import { useProfileStore } from "@/store/use-profile-store";
 import type { Gender, Profile } from "@/types/database";
 
@@ -38,6 +40,7 @@ export function ProfileSettingsSheet({
   const [age, setAge] = useState("");
   const [bmrInput, setBmrInput] = useState("");
   const [targetCalInput, setTargetCalInput] = useState("");
+  const [cupMlSetting, setCupMlSetting] = useState(250);
   const [saveError, setSaveError] = useState<string | null>(null);
   /** 한 번 열릴 때 프로필로 폼을 한 번만 채움 (refetch로 객체가 바뀌어도 입력 유지) */
   const hydratedForOpenRef = useRef(false);
@@ -58,6 +61,7 @@ export function ProfileSettingsSheet({
     setTargetCalInput(
       profile.target_cal != null ? String(profile.target_cal) : ""
     );
+    setCupMlSetting(normalizeWaterCupMl(profile.water_cup_ml));
     setSaveError(null);
     hydratedForOpenRef.current = true;
   }, [isOpen, profile]);
@@ -84,6 +88,8 @@ export function ProfileSettingsSheet({
       if (!metricsOk) throw new Error("키·몸무게·나이를 입력해주세요");
 
       const supabase = createClient();
+      const cupMl = normalizeWaterCupMl(cupMlSetting);
+
       const { error } = await supabase
         .from("profiles")
         .update({
@@ -94,6 +100,7 @@ export function ProfileSettingsSheet({
           gender,
           bmr,
           target_cal: targetCal,
+          water_cup_ml: cupMl,
         })
         .eq("id", userId);
 
@@ -103,10 +110,12 @@ export function ProfileSettingsSheet({
       if (!userId) return;
       const bmr = parseInt(bmrInput, 10);
       const targetCal = parseInt(targetCalInput, 10);
+      const cupMl = normalizeWaterCupMl(cupMlSetting);
       setProfileStore({
         userName: userName.trim(),
         bmr,
         targetCal,
+        waterCupMl: cupMl,
       });
       queryClient.invalidateQueries({ queryKey: ["profile", userId] });
       onClose();
@@ -269,6 +278,32 @@ export function ProfileSettingsSheet({
                       onChange={(e) => setTargetCalInput(e.target.value)}
                       className="w-full rounded-xl border bg-background px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                     />
+                  </div>
+
+                  <div className="rounded-xl border border-dashed border-border/80 bg-muted/25 px-3 py-3 space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      물 한 잔 용량
+                    </p>
+                    <p className="text-[11px] leading-snug text-muted-foreground">
+                      잔 수는 그대로 두고, 한 잔이 몇 ml인지만 맞춰요.
+                    </p>
+                    <div className="flex gap-1.5">
+                      {WATER_CUP_ML_OPTIONS.map((ml) => (
+                        <button
+                          key={ml}
+                          type="button"
+                          onClick={() => setCupMlSetting(ml)}
+                          className={cn(
+                            "flex-1 rounded-lg py-2 text-xs font-medium border transition-colors",
+                            cupMlSetting === ml
+                              ? "border-cyan-600/80 bg-cyan-50 text-cyan-950 dark:bg-cyan-950/40 dark:text-cyan-50"
+                              : "border-transparent bg-background/80 text-foreground hover:bg-muted/80"
+                          )}
+                        >
+                          {ml}ml
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   {saveError ? (

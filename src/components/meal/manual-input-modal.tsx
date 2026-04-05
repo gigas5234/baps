@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Loader2 } from "lucide-react";
+import { MEAL_QUICK_PRESETS } from "@/lib/meal-presets";
 
 interface ManualInputModalProps {
   isOpen: boolean;
@@ -64,9 +65,29 @@ export function ManualInputModal({
           >
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold">직접 입력</h2>
-              <button onClick={onClose}>
+              <button type="button" onClick={onClose} aria-label="닫기">
                 <X className="w-5 h-5" />
               </button>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {MEAL_QUICK_PRESETS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  title={p.hint}
+                  onClick={() => {
+                    setFoodName(p.food_name);
+                    setCal(String(p.cal));
+                    setCarbs(String(p.carbs));
+                    setProtein(String(p.protein));
+                    setFat(String(p.fat));
+                  }}
+                  className="rounded-full border border-dashed border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                >
+                  {p.label}
+                </button>
+              ))}
             </div>
 
             {/* Food name */}
@@ -132,6 +153,7 @@ export function ManualInputModal({
             </div>
 
             <button
+              type="button"
               onClick={handleSubmit}
               disabled={!foodName || !cal || isSaving}
               className="w-full py-3.5 rounded-xl bg-primary text-primary-foreground font-medium text-sm flex items-center justify-center gap-2 disabled:opacity-40"

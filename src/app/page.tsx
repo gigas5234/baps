@@ -1,14 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { Menu } from "lucide-react";
 import { QuickActionButton } from "@/components/common/quick-action-button";
 import { ChatFab } from "@/components/common/chat-fab";
 import { ProfileSettingsSheet } from "@/components/common/profile-settings-sheet";
 import { WeeklyCalendar } from "@/components/dashboard/weekly-calendar";
+import { DailyQuipBanner } from "@/components/dashboard/daily-quip-banner";
 import { CalorieGauge } from "@/components/dashboard/calorie-gauge";
+import { WeightSparkStrip } from "@/components/dashboard/weight-spark-strip";
 import { MealTimeline } from "@/components/dashboard/meal-timeline";
+import { HomeDashboardSkeleton } from "@/components/dashboard/home-dashboard-skeleton";
 import { WaterCounter } from "@/components/dashboard/water-counter";
 import { AnalyzeModal } from "@/components/meal/analyze-modal";
 import { ManualInputModal } from "@/components/meal/manual-input-modal";
@@ -23,6 +27,10 @@ import {
   useProfile,
 } from "@/lib/queries";
 import { uploadMealImage, fileToBase64 } from "@/lib/storage";
+import { getCalorieZone } from "@/lib/calorie-zone";
+import { sumMealMacros } from "@/lib/meal-macros";
+import { syncSelectedDateToLocalTodayOnce } from "@/lib/local-date";
+import { normalizeWaterCupMl } from "@/lib/water-cup";
 import { createClient } from "@/lib/supabase-browser";
 
 interface AnalyzeResult {
@@ -35,10 +43,10 @@ interface AnalyzeResult {
 }
 
 export default function HomePage() {
-  const { selectedDate } = useMealStore();
-  const { userName, targetCal } = useProfileStore();
+  const { selectedDate, setSelectedDate } = useMealStore();
+  const { userName, targetCal, waterCupMl } = useProfileStore();
   const setProfileStore = useProfileStore((s) => s.setProfile);
-  const { userId } = useAuth();
+  const { userId, loading: authLoading } = useAuth();
   const queryClient = useQueryClient();
 
   const {
@@ -48,15 +56,24 @@ export default function HomePage() {
     isError: profileQueryError,
   } = useProfile(userId);
 
-  const { data: meals = [] } = useMeals(userId, selectedDate);
+  const { data: meals = [], isPending: mealsPending } = useMeals(
+    userId,
+    selectedDate
+  );
   const { data: waterLog } = useWaterLog(userId, selectedDate);
   const adjustWater = useAdjustWater(userId, selectedDate);
-  const totalCalories = useDailyCalories(meals);
-
   const displayName = profile?.user_name?.trim() || userName;
   const target = profile?.target_cal ?? targetCal ?? 2000;
+  const totalCalories = useDailyCalories(meals);
+  const macroTotals = sumMealMacros(meals);
+  const calorieZone = getCalorieZone(totalCalories, target);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  /** 첫 로드 시 로컬 오늘로 맞춤(UTC 초기값·날짜 밀림 방지). 같은 탭에서 재방문 시 선택 유지 */
+  useLayoutEffect(() => {
+    syncSelectedDateToLocalTodayOnce(setSelectedDate);
+  }, [setSelectedDate]);
 
   useEffect(() => {
     if (!profile) return;
@@ -64,14 +81,30 @@ export default function HomePage() {
       userName: profile.user_name ?? "",
       bmr: profile.bmr ?? 0,
       targetCal: profile.target_cal ?? 0,
+      ...(profile.water_cup_ml != null
+        ? { waterCupMl: normalizeWaterCupMl(profile.water_cup_ml) }
+        : {}),
     });
   }, [
     profile?.updated_at,
     profile?.user_name,
     profile?.bmr,
     profile?.target_cal,
+    profile?.water_cup_ml,
     setProfileStore,
   ]);
+
+  const cupMl = normalizeWaterCupMl(
+    profile?.water_cup_ml ?? waterCupMl
+  );
+
+  const showDashboardSkeleton =
+    authLoading ||
+    (!!userId &&
+      profileLoading &&
+      !profile &&
+      !profileQueryError) ||
+    (!!userId && mealsPending);
 
   useEffect(() => {
     if (settingsOpen && userId) void refetchProfile();
@@ -226,24 +259,43 @@ export default function HomePage() {
 
       {/* Header */}
       <header className="px-4 pt-6 pb-2 flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-xl font-bold">BAPS</h1>
-          <p className="text-sm text-muted-foreground truncate">
-            {displayName
-              ? `${displayName}님, 오늘도 건강하게!`
-              : "오늘도 건강하게!"}
-          </p>
-        </div>
-        {userId ? (
-          <button
-            type="button"
-            onClick={() => setSettingsOpen(true)}
-            className="shrink-0 rounded-xl border p-2.5 hover:bg-muted transition-colors"
-            aria-label="개인 설정"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-        ) : null}
+        {authLoading ? (
+          <div className="flex w-full items-center justify-between gap-3">
+            <div className="min-w-0 space-y-2">
+              <div className="h-6 w-20 rounded-md bg-muted animate-pulse" />
+              <div className="h-4 w-48 max-w-[70%] rounded bg-muted/80 animate-pulse" />
+            </div>
+            <div className="h-11 w-11 shrink-0 rounded-xl bg-muted animate-pulse" />
+          </div>
+        ) : (
+          <>
+            <div className="min-w-0">
+              <h1 className="text-xl font-bold tracking-tight">
+                <Link
+                  href="/"
+                  className="rounded-md outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                >
+                  BAPS
+                </Link>
+              </h1>
+              <p className="text-sm text-muted-foreground truncate">
+                {displayName
+                  ? `${displayName}님, 오늘도 건강하게!`
+                  : "오늘도 건강하게!"}
+              </p>
+            </div>
+            {userId ? (
+              <button
+                type="button"
+                onClick={() => setSettingsOpen(true)}
+                className="shrink-0 rounded-xl border p-2.5 hover:bg-muted transition-colors"
+                aria-label="개인 설정"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+            ) : null}
+          </>
+        )}
       </header>
 
       {/* Weekly Calendar */}
@@ -251,51 +303,93 @@ export default function HomePage() {
         <WeeklyCalendar />
       </section>
 
-      {/* Calorie Gauge */}
-      <section className="px-4 py-3">
-        <CalorieGauge current={totalCalories} target={target} />
-      </section>
+      {!authLoading && !showDashboardSkeleton && userId ? (
+        <div className="pb-1 pt-1">
+          <DailyQuipBanner
+            displayName={displayName}
+            totalCal={totalCalories}
+            target={target}
+            mealCount={meals.length}
+            macros={macroTotals}
+            waterCups={waterLog?.cups ?? 0}
+            cupMl={cupMl}
+            zone={calorieZone}
+          />
+        </div>
+      ) : null}
 
-      {/* Water Counter */}
-      <section className="px-4 py-2">
-        <WaterCounter
-          cups={waterLog?.cups ?? 0}
-          onIncrement={() =>
-            adjustWater.mutate({
-              currentCups: waterLog?.cups ?? 0,
-              delta: 1,
-            })
-          }
-          onDecrement={() =>
-            adjustWater.mutate({
-              currentCups: waterLog?.cups ?? 0,
-              delta: -1,
-            })
-          }
-          isUpdating={adjustWater.isPending}
-        />
-      </section>
+      {showDashboardSkeleton ? (
+        <HomeDashboardSkeleton />
+      ) : (
+        <>
+          <section className="px-4 py-3">
+            <CalorieGauge
+              current={totalCalories}
+              target={target}
+              macros={macroTotals}
+            />
+          </section>
 
-      {/* Meal Timeline */}
-      <section className="px-4 py-3">
-        <h2 className="text-sm font-semibold text-muted-foreground mb-3">
-          오늘 먹은 것
-        </h2>
-        <MealTimeline meals={meals} />
-      </section>
+          <section className="px-4 py-2">
+            <WaterCounter
+              cups={waterLog?.cups ?? 0}
+              cupMl={cupMl}
+              onIncrement={() =>
+                adjustWater.mutate({
+                  currentCups: waterLog?.cups ?? 0,
+                  delta: 1,
+                })
+              }
+              onDecrement={() =>
+                adjustWater.mutate({
+                  currentCups: waterLog?.cups ?? 0,
+                  delta: -1,
+                })
+              }
+              isUpdating={adjustWater.isPending}
+            />
+          </section>
 
-      {/* Floating Actions */}
-      <QuickActionButton
-        onCamera={openCameraPicker}
-        onGallery={openGalleryPicker}
-        onManualInput={() => setManualOpen(true)}
-      />
-      <ChatFab
-        meals={meals}
-        totalCal={totalCalories}
-        targetCal={target}
-        waterCups={waterLog?.cups ?? 0}
-      />
+          {userId ? (
+            <div className="pb-3">
+              <WeightSparkStrip
+                userId={userId}
+                selectedDate={selectedDate}
+                profileKg={profile?.weight ?? null}
+                onSavedProfile={() =>
+                  void queryClient.invalidateQueries({
+                    queryKey: ["profile", userId],
+                  })
+                }
+              />
+            </div>
+          ) : null}
+
+          <section className="px-4 py-3">
+            <h2 className="text-sm font-semibold text-muted-foreground mb-3">
+              오늘 먹은 것
+            </h2>
+            <MealTimeline meals={meals} />
+          </section>
+        </>
+      )}
+
+      {!authLoading && userId && !showDashboardSkeleton ? (
+        <>
+          <QuickActionButton
+            onCamera={openCameraPicker}
+            onGallery={openGalleryPicker}
+            onManualInput={() => setManualOpen(true)}
+          />
+          <ChatFab
+            meals={meals}
+            totalCal={totalCalories}
+            targetCal={target}
+            waterCups={waterLog?.cups ?? 0}
+            waterCupMl={cupMl}
+          />
+        </>
+      ) : null}
 
       {/* Analyze Modal */}
       <AnalyzeModal

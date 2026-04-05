@@ -9,6 +9,8 @@ export interface Profile {
   gender: Gender | null;
   bmr: number;
   target_cal: number;
+  /** 물 기록 1잔당 ml (기본 250, 마이그레이션 전에는 없을 수 있음) */
+  water_cup_ml?: number | null;
   is_onboarded: boolean;
   created_at: string;
   updated_at: string;

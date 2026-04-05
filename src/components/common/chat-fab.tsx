@@ -17,9 +17,16 @@ interface ChatFabProps {
   totalCal: number;
   targetCal: number;
   waterCups: number;
+  waterCupMl?: number;
 }
 
-export function ChatFab({ meals, totalCal, targetCal, waterCups }: ChatFabProps) {
+export function ChatFab({
+  meals,
+  totalCal,
+  targetCal,
+  waterCups,
+  waterCupMl = 250,
+}: ChatFabProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -56,6 +63,7 @@ export function ChatFab({ meals, totalCal, targetCal, waterCups }: ChatFabProps)
             totalCal,
             targetCal,
             waterCups,
+            waterCupMl,
           },
           history: messages.slice(-10), // 최근 10개 컨텍스트
         }),

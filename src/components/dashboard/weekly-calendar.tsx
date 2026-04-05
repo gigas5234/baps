@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
+import { getLocalYmd } from "@/lib/local-date";
 import { useMealStore } from "@/store/use-meal-store";
 import { cn } from "@/lib/utils";
 
@@ -27,13 +28,19 @@ export function WeeklyCalendar() {
   const { selectedDate, setSelectedDate } = useMealStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   const todayRef = useRef<HTMLButtonElement>(null);
-  const todayStr = formatDate(new Date());
+  /** SSR 타임존 ≠ 브라우저 타임존 시 날짜 UI 불일치 → #418 방지 */
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-  // 오늘을 기준으로 앞뒤 14일
-  const dates = getDateRange(new Date(), 14);
+  const todayStr = mounted ? getLocalYmd() : "";
+  const centerDate = mounted ? new Date() : new Date(0);
+
+  // 오늘을 기준으로 앞뒤 14일 (클라이언트에서만 의미 있게 렌더)
+  const dates = getDateRange(centerDate, 14);
 
   // 초기 마운트 시 선택된 날짜(오늘)로 스크롤
   useEffect(() => {
+    if (!mounted) return;
     if (todayRef.current && scrollRef.current) {
       const container = scrollRef.current;
       const el = todayRef.current;
@@ -41,21 +48,37 @@ export function WeeklyCalendar() {
         el.offsetLeft - container.clientWidth / 2 + el.clientWidth / 2;
       container.scrollTo({ left: scrollLeft, behavior: "instant" });
     }
-  }, []);
+  }, [mounted, selectedDate]);
 
   // 현재 월 표시
-  const selectedDateObj = new Date(selectedDate);
+  const selectedDateObj = new Date(selectedDate + "T12:00:00");
   const monthLabel = selectedDateObj.toLocaleDateString("ko-KR", {
     year: "numeric",
     month: "long",
   });
+
+  if (!mounted) {
+    return (
+      <div className="space-y-3">
+        <div className="h-4 w-24 rounded bg-muted animate-pulse" />
+        <div className="flex gap-1 -mx-4 px-4">
+          {Array.from({ length: 7 }).map((_, i) => (
+            <div
+              key={i}
+              className="min-w-[44px] h-[72px] rounded-2xl bg-muted/80 animate-pulse shrink-0"
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
       {/* Month header */}
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">{monthLabel}</h2>
-        {selectedDate !== todayStr && (
+        {todayStr && selectedDate !== todayStr && (
           <button
             onClick={() => {
               setSelectedDate(todayStr);
@@ -81,7 +104,7 @@ export function WeeklyCalendar() {
           const dateStr = formatDate(date);
           const dayOfWeek = date.getDay();
           const isSelected = dateStr === selectedDate;
-          const isToday = dateStr === todayStr;
+          const isToday = !!todayStr && dateStr === todayStr;
           const isSunday = dayOfWeek === 0;
 
           return (
