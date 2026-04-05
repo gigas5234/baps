@@ -59,6 +59,19 @@ export function mealSlotFromLocalDate(d: Date): MealSlot {
   return "latenight";
 }
 
+/** 이 슬롯으로 드롭 시 적용될 대표 시각을 한 줄로 안내 */
+export function mealSlotDropReassuranceLabel(slot: MealSlot, ymd: string): string {
+  const iso = defaultEatenAtIsoForSlot(slot, ymd);
+  const d = new Date(iso);
+  const timeStr = d.toLocaleTimeString("ko-KR", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  const meta = MEAL_SLOT_SECTION[slot];
+  return `${timeStr}, ${meta.title} 식사 시각으로 맞춥니다`;
+}
+
 /** 선택한 달력일 + 슬롯 대표 시각 → ISO (UTC). 드래그 드롭·수동 기본값. */
 export function defaultEatenAtIsoForSlot(slot: MealSlot, ymd: string): string {
   const mid: Record<MealSlot, [number, number]> = {

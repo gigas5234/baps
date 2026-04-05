@@ -94,8 +94,8 @@ export function QuickLogSlider({
           <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/15 text-primary">
             <Plus className="h-6 w-6" strokeWidth={2.5} aria-hidden />
           </span>
-          <span className="text-sm font-bold text-foreground">
-            + 자주 먹는 메뉴 등록하기
+          <span className="text-center text-sm font-bold leading-snug text-foreground">
+            카메라로 찍어서 등록하거나 직접 입력해서 등록하세요
           </span>
           <span className="text-center text-[11px] leading-relaxed text-muted-foreground">
             음식명·영양·식비만 저장하면 퀵 로그에서 원탭으로 기록할 수 있어요

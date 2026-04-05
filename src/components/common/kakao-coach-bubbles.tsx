@@ -113,7 +113,7 @@ function rowMetaForFirst(seg: CoachStreamSegment): {
   if (pid) {
     const m = coachMeta(pid);
     return {
-      displayName: `${m.label} 코치 (냉정)`,
+      displayName: `${m.label} 코치`,
       emoji: m.emoji,
       avatarClass: COACH_AVATAR_SURFACE[pid],
     };
@@ -220,31 +220,6 @@ export function KakaoDelimitedCoachStream({
     [segments, leadPersonaId]
   );
   const groups = useMemo(() => groupSegments(filtered), [filtered]);
-  const enableTyping =
-    filtered.length > 0 && filtered.every((s) => s.complete);
-
-  const groupStartDelays = useMemo(() => {
-    let t = 0;
-    return groups.map((group) => {
-      const head = group[0];
-      if (!head) return 0;
-      const start = t;
-      if (head.tag === "QUICK_CHIPS" || head.tag === "DATA_CARD") {
-        t += 100;
-        return start;
-      }
-      if (head.tag === "INVITE") {
-        t += 160;
-        return start;
-      }
-      const chars = group.reduce(
-        (acc, s) => acc + countCoachGraphemes(s.text),
-        0
-      );
-      t += chars * TYPE_MS + GROUP_GAP_MS;
-      return start;
-    });
-  }, [groups]);
 
   return (
     <div className="space-y-3">
@@ -275,53 +250,12 @@ export function KakaoDelimitedCoachStream({
         }
 
         const meta = rowMetaForFirst(head);
-        const rowDelay = groupStartDelays[gi] ?? 0;
         const isMission = head.tag === "MISSION";
         const bubbleVar = isMission ? "mission" : "default";
-
-        if (enableTyping) {
-          const combined = group.map((s) => s.text).join("\n");
-          return (
-            <div
-              key={`grp-${gi}`}
-              className="flex max-w-[min(100%,20.5rem)] items-start gap-1.5"
-            >
-              <div
-                className={cn(
-                  "flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-full text-[15px]",
-                  meta.avatarClass
-                )}
-                aria-hidden
-              >
-                {meta.emoji}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="mb-0.5 max-w-[16.5rem] truncate pl-0.5 text-[11px] font-medium text-muted-foreground">
-                  {meta.displayName}
-                </p>
-                <CoachTypewriter
-                  text={combined}
-                  enabled
-                  startDelayMs={rowDelay}
-                  msPerGrapheme={TYPE_MS}
-                >
-                  {(vis) => (
-                    <IncomingBubble showTail bubbleVariant={bubbleVar}>
-                      <span className="whitespace-pre-wrap break-words">
-                        {vis
-                          ? formatInlineBold(vis, "bubble")
-                          : "…"}
-                      </span>
-                    </IncomingBubble>
-                  )}
-                </CoachTypewriter>
-              </div>
-              <span className="mt-7 shrink-0 self-start text-[10px] tabular-nums text-muted-foreground">
-                {timeLabel}
-              </span>
-            </div>
-          );
-        }
+        const combined = group.map((s) => s.text).join("\n");
+        const groupComplete = group.every((s) => s.complete);
+        const hasText = combined.trim().length > 0;
+        const showWaitLabel = !hasText && !groupComplete;
 
         return (
           <div
@@ -341,26 +275,21 @@ export function KakaoDelimitedCoachStream({
               <p className="mb-0.5 max-w-[16.5rem] truncate pl-0.5 text-[11px] font-medium text-muted-foreground">
                 {meta.displayName}
               </p>
-              <div className="flex flex-col gap-1">
-                {group.map((seg, bi) => (
-                  <IncomingBubble
-                    key={`${seg.tag}-${gi}-${bi}`}
-                    showTail={bi === 0}
-                    isPending={bi === group.length - 1 && !seg.complete}
-                    bubbleVariant={
-                      seg.tag === "MISSION" ? "mission" : "default"
-                    }
-                  >
-                    <span className="whitespace-pre-wrap break-words">
-                      {seg.text
-                        ? formatInlineBold(seg.text, "bubble")
-                        : !seg.complete
-                          ? "…"
-                          : null}
+              <IncomingBubble
+                showTail
+                bubbleVariant={bubbleVar}
+                isPending={!groupComplete}
+              >
+                <span className="whitespace-pre-wrap break-words">
+                  {showWaitLabel ? (
+                    <span className="text-[12px] text-muted-foreground">
+                      입력 대기중
                     </span>
-                  </IncomingBubble>
-                ))}
-              </div>
+                  ) : (
+                    formatInlineBold(combined, "bubble")
+                  )}
+                </span>
+              </IncomingBubble>
             </div>
             <span className="mt-7 shrink-0 self-start text-[10px] tabular-nums text-muted-foreground">
               {timeLabel}
@@ -385,7 +314,7 @@ export function KakaoOpeningCoachMessage({
   const timeLabel = formatKoreanChatTime(receivedAt);
   return (
     <SingleKakaoCoachRow
-      displayName={`${m.label} 코치 (냉정)`}
+      displayName={`${m.label} 코치`}
       emoji={m.emoji}
       avatarClass={COACH_AVATAR_SURFACE[coachId]}
       timeLabel={timeLabel}
@@ -478,7 +407,7 @@ export function KakaoStrategicTurnView({
             return (
               <SingleKakaoCoachRow
                 key={`${q.persona_id}-${idx}`}
-                displayName={`${m.label} 코치 (냉정)`}
+                displayName={`${m.label} 코치`}
                 emoji={m.emoji}
                 avatarClass={COACH_AVATAR_SURFACE[q.persona_id]}
                 timeLabel={timeLabel}
@@ -501,7 +430,7 @@ export function KakaoStrategicTurnView({
         </>
       ) : hasRoast ? (
         <SingleKakaoCoachRow
-          displayName={`${coachMeta("diet").label} 코치 (냉정)`}
+          displayName={`${coachMeta("diet").label} 코치`}
           emoji={coachMeta("diet").emoji}
           avatarClass={COACH_AVATAR_SURFACE.diet}
           timeLabel={timeLabel}

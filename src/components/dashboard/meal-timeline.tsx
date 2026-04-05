@@ -23,6 +23,7 @@ import {
   MEAL_SLOT_IDS,
   MEAL_SLOT_SECTION,
   isLateNightSlot,
+  mealSlotDropReassuranceLabel,
   type MealSlot,
 } from "@/lib/meal-slots";
 import { traysIntoBuckets, sumTrayCal, slotForTray } from "@/lib/meal-tray";
@@ -72,20 +73,90 @@ function DraggableTray({
   );
 }
 
-function DroppableBucket({
+/** 빈 슬롯은 평소 얇게, 드래그 중·isOver 시 인디고 톤으로 확장 */
+function MealSlotSurface({
   slot,
+  isEmpty,
+  isDragActive,
+  dndEnabled,
+  selectedDateYmd,
   children,
 }: {
   slot: MealSlot;
+  isEmpty: boolean;
+  isDragActive: boolean;
+  dndEnabled: boolean;
+  selectedDateYmd: string;
   children: React.ReactNode;
 }) {
-  const { isOver, setNodeRef } = useDroppable({ id: `slot:${slot}` });
+  const { isOver, setNodeRef } = useDroppable({
+    id: `slot:${slot}`,
+    disabled: !dndEnabled,
+  });
+  const meta = MEAL_SLOT_SECTION[slot];
+
+  if (isEmpty && dndEnabled) {
+    const reassurance = mealSlotDropReassuranceLabel(slot, selectedDateYmd);
+    return (
+      <div
+        ref={setNodeRef}
+        className={cn(
+          "flex flex-col items-center justify-center overflow-hidden rounded-xl border-2 border-dashed transition-all duration-300 ease-in-out",
+          isOver
+            ? "min-h-[10rem] border-indigo-500 bg-indigo-500/10 py-3 dark:border-indigo-400 dark:bg-indigo-400/12"
+            : cn(
+                "h-12 min-h-[3rem] border-muted-foreground/20 bg-transparent dark:border-white/12",
+                isDragActive &&
+                  "border-primary/40 bg-primary/[0.07] opacity-[0.92] ring-1 ring-primary/30 dark:border-primary/45 dark:ring-primary/25"
+              )
+        )}
+      >
+        {isOver ? (
+          <>
+            <span className="animate-pulse text-sm font-bold text-indigo-600 dark:text-indigo-300">
+              여기에 놓기
+            </span>
+            <span className="mt-2 max-w-[17rem] px-2 text-center text-[10px] leading-snug text-indigo-800/90 dark:text-indigo-200/90">
+              {reassurance}
+            </span>
+          </>
+        ) : (
+          <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <span className="text-base leading-none" aria-hidden>
+              {meta.emoji}
+            </span>
+            {meta.title} 식사 추가
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  if (isEmpty && !dndEnabled) {
+    return (
+      <div
+        ref={setNodeRef}
+        className={cn(
+          "flex h-12 min-h-[3rem] items-center justify-center rounded-xl border-2 border-dashed border-muted-foreground/15 px-3 dark:border-white/10"
+        )}
+      >
+        <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <span className="text-base leading-none" aria-hidden>
+            {meta.emoji}
+          </span>
+          기록 없음
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div
       ref={setNodeRef}
       className={cn(
-        "min-h-[4.5rem] rounded-2xl transition-[box-shadow,background-color]",
-        isOver && "bg-primary/8 ring-2 ring-primary/40 ring-offset-2 ring-offset-background"
+        "rounded-2xl transition-[box-shadow,background-color,min-height] duration-300 ease-in-out",
+        isOver &&
+          "bg-primary/8 ring-2 ring-primary/40 ring-offset-2 ring-offset-background"
       )}
     >
       {children}
@@ -310,6 +381,8 @@ export function MealTimeline({
     return inner;
   };
 
+  const isDragActive = dndEnabled && activeId !== null;
+
   const sections = MEAL_SLOT_IDS.map((slot) => {
     const meta = MEAL_SLOT_SECTION[slot];
     const list = buckets[slot];
@@ -333,26 +406,23 @@ export function MealTimeline({
           </div>
         </div>
 
-        <DroppableBucket slot={slot}>
-          {list.length === 0 ? (
-            <div
-              className={cn(
-                "flex min-h-[4.5rem] items-center justify-center rounded-2xl border border-dashed px-3 py-4 text-center text-[11px] text-muted-foreground",
-                dndEnabled
-                  ? "border-muted-foreground/25 bg-muted/15"
-                  : "border-muted-foreground/15"
-              )}
+        <MealSlotSurface
+          slot={slot}
+          isEmpty={list.length === 0}
+          isDragActive={isDragActive}
+          dndEnabled={dndEnabled}
+          selectedDateYmd={selectedDateYmd}
+        >
+          {list.length === 0 ? null : (
+            <ul
+              className="flex list-none gap-2.5 overflow-x-auto pb-1 pl-0.5 pr-1 scrollbar-hide"
+              role="list"
             >
-              {dndEnabled
-                ? "비어 있음 · 다른 슬롯에서 끼니를 끌어다 놓기"
-                : "기록 없음"}
-            </div>
-          ) : (
-            <ul className="list-none space-y-2.5 p-0" role="list">
               {list.map((tray) => (
                 <motion.li
                   key={tray[0]?.meal_group_id ?? tray[0]?.id}
                   layout
+                  className="w-[min(100%,20rem)] min-w-[min(100%,18.5rem)] shrink-0 sm:min-w-[18.5rem]"
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                 >
@@ -361,7 +431,7 @@ export function MealTimeline({
               ))}
             </ul>
           )}
-        </DroppableBucket>
+        </MealSlotSurface>
       </motion.div>
     );
   });

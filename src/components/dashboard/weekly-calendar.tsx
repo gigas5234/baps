@@ -14,9 +14,14 @@ function formatDate(d: Date) {
   return `${y}-${m}-${day}`;
 }
 
-function getDateRange(centerDate: Date, range: number): Date[] {
+/** 과거·당일 선택용 스트립: 이전 N일 ~ 오늘 ~ 앞 M일(비표시용 자리만, 비활성) */
+function getDateRange(
+  centerDate: Date,
+  pastDays: number,
+  futureDays: number
+): Date[] {
   const dates: Date[] = [];
-  for (let i = -range; i <= range; i++) {
+  for (let i = -pastDays; i <= futureDays; i++) {
     const d = new Date(centerDate);
     d.setDate(d.getDate() + i);
     dates.push(d);
@@ -35,7 +40,12 @@ export function WeeklyCalendar() {
   const todayStr = mounted ? getLocalYmd() : "";
   const centerDate = mounted ? new Date() : new Date(0);
 
-  const dates = getDateRange(centerDate, 14);
+  const dates = getDateRange(centerDate, 14, 3);
+
+  useEffect(() => {
+    if (!mounted || !todayStr) return;
+    if (selectedDate > todayStr) setSelectedDate(todayStr);
+  }, [mounted, todayStr, selectedDate, setSelectedDate]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -62,7 +72,7 @@ export function WeeklyCalendar() {
           {Array.from({ length: 7 }).map((_, i) => (
             <div
               key={i}
-              className="min-w-[44px] h-[72px] rounded-2xl bg-muted/80 animate-pulse shrink-0"
+              className="h-[58px] min-w-[36px] shrink-0 rounded-xl bg-muted/80 animate-pulse"
             />
           ))}
         </div>
@@ -109,44 +119,70 @@ export function WeeklyCalendar() {
           const isSelected = dateStr === selectedDate;
           const isToday = !!todayStr && dateStr === todayStr;
           const isSunday = dayOfWeek === 0;
+          const isFuture = !!todayStr && dateStr > todayStr;
 
           return (
             <button
               key={dateStr}
               type="button"
               ref={isToday ? todayRef : undefined}
-              onClick={() => setSelectedDate(dateStr)}
+              disabled={isFuture}
+              onClick={() => {
+                if (!isFuture) setSelectedDate(dateStr);
+              }}
               className={cn(
-                "flex flex-col items-center gap-1.5 min-w-[44px] py-2.5 px-1 rounded-2xl transition-all snap-center shrink-0",
-                isSelected
-                  ? "border-transparent bg-primary text-primary-foreground shadow-md ring-2 ring-primary/35 scale-105"
-                  : cn(
-                      "border border-slate-300/80 bg-white/85 text-foreground shadow-sm",
-                      "hover:bg-white hover:border-slate-400/90 active:scale-95",
-                      "dark:border-zinc-600/85 dark:bg-zinc-800/95 dark:text-zinc-100 dark:shadow-black/25",
-                      "dark:hover:border-zinc-500 dark:hover:bg-zinc-700/95"
-                    )
+                "flex snap-center shrink-0 flex-col items-center gap-1 rounded-xl px-1 py-2 min-w-[36px] transition-all",
+                isFuture &&
+                  "cursor-not-allowed opacity-45 shadow-none ring-0 saturate-0",
+                isSelected && !isFuture
+                  ? "bg-primary text-primary-foreground shadow-md ring-2 ring-primary/30"
+                  : !isFuture &&
+                      cn(
+                        "border border-slate-300/80 bg-white/85 text-foreground shadow-sm",
+                        "hover:bg-white hover:border-slate-400/90 active:scale-[0.98]",
+                        "dark:border-zinc-600/85 dark:bg-zinc-800/95 dark:text-zinc-100 dark:shadow-black/25",
+                        "dark:hover:border-zinc-500 dark:hover:bg-zinc-700/95"
+                      ),
+                isFuture &&
+                  cn(
+                    "border border-dashed border-muted-foreground/25 bg-muted/20 text-muted-foreground",
+                    "dark:border-zinc-600/40 dark:bg-zinc-900/40"
+                  )
               )}
             >
               <span
                 className={cn(
-                  "text-[10px] font-medium",
+                  "text-[9px] font-medium leading-none",
                   isSunday &&
                     !isSelected &&
-                    "text-red-600 dark:text-red-400"
+                    !isFuture &&
+                    "text-red-600 dark:text-red-400",
+                  isFuture && "text-muted-foreground"
                 )}
               >
                 {DAY_LABELS[dayOfWeek]}
               </span>
-              <span className="text-sm font-bold">{date.getDate()}</span>
-              {isToday ? (
-                <div
-                  className={cn(
-                    "w-1 h-1 rounded-full",
-                    isSelected ? "bg-primary-foreground" : "bg-primary"
-                  )}
-                />
-              ) : null}
+              <span
+                className={cn(
+                  "text-xs font-bold leading-none tabular-nums",
+                  isFuture && "text-muted-foreground"
+                )}
+              >
+                {date.getDate()}
+              </span>
+              <span
+                className="flex h-1 items-center justify-center"
+                aria-hidden
+              >
+                {isToday ? (
+                  <span
+                    className={cn(
+                      "h-1 w-1 rounded-full",
+                      isSelected ? "bg-primary-foreground" : "bg-primary"
+                    )}
+                  />
+                ) : null}
+              </span>
             </button>
           );
         })}
