@@ -9,7 +9,6 @@ import type { Gender } from "@/types/database";
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const supabase = createClient();
   const setProfile = useProfileStore((s) => s.setProfile);
 
   const [step, setStep] = useState<1 | 2>(1);
@@ -33,6 +32,7 @@ export default function OnboardingPage() {
     if (!finalBmr) return;
     setSaving(true);
 
+    const supabase = createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
