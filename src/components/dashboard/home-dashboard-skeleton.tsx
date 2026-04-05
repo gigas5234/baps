@@ -4,12 +4,15 @@
 export function HomeDashboardSkeleton() {
   return (
     <>
-      <section className="space-y-[1.05rem] px-4 pb-[1.4rem] pt-[1.05rem]" aria-hidden>
-        <div className="space-y-2">
+      <section className="px-4 pb-[1.4rem] pt-[1.05rem]" aria-hidden>
+        <div className="mb-[1.05rem]">
           <div className="h-7 w-44 rounded-md bg-muted/90 animate-pulse" />
-          <div className="h-14 rounded-xl border border-border/70 bg-muted/40 animate-pulse" />
         </div>
-        <div className="h-7 w-48 rounded-md bg-muted/90 animate-pulse" />
+        <div className="h-14 rounded-xl border border-border/70 bg-muted/40 animate-pulse" />
+      </section>
+
+      <section className="px-4 pb-[1.4rem] pt-[1.05rem]" aria-hidden>
+        <div className="mb-[1.05rem] h-7 w-48 rounded-md bg-muted/90 animate-pulse" />
         <div className="rounded-3xl border border-border/80 bg-card p-6 shadow-sm">
           <div className="mx-auto mb-2 h-6 w-28 rounded-full bg-muted/90 animate-pulse" />
           <div className="flex flex-col items-center">

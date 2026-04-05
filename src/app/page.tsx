@@ -884,10 +884,9 @@ export default function HomePage() {
         <HomeDashboardSkeleton />
       ) : (
         <>
-          {/* 데일리 인사이트(AI) → 오늘의 영양 지표 제목 → 칼로리 히어로 */}
-          <section className="space-y-[1.05rem] px-4 pb-[1.4rem] pt-[1.05rem]">
-            {!authLoading && userId ? (
-              <div className="space-y-2">
+          {!authLoading && userId ? (
+            <section className="px-4 pb-[1.4rem] pt-[1.05rem]">
+              <div className="mb-[1.05rem]">
                 <h2 className="flex min-w-0 items-center gap-2 text-lg font-bold tracking-tight text-foreground">
                   <Sparkles
                     className="h-6 w-6 shrink-0 text-primary"
@@ -896,36 +895,41 @@ export default function HomePage() {
                   />
                   데일리 인사이트
                 </h2>
-                <DailyQuipBanner
-                  displayName={displayName}
-                  totalCal={totalCalories}
-                  target={target}
-                  mealCount={meals.length}
-                  macros={macroTotals}
-                  waterCups={waterLog?.cups ?? 0}
-                  cupMl={cupMl}
-                  waterRecommendedMl={waterRecommendedMl}
-                  zone={calorieZone}
-                  compact
-                  className="mx-0"
-                  aiLine={
-                    geminiInsightYmd === selectedDate
-                      ? geminiInsightLine
-                      : null
-                  }
-                  aiPending={geminiInsightPending}
-                />
               </div>
-            ) : null}
+              <DailyQuipBanner
+                displayName={displayName}
+                totalCal={totalCalories}
+                target={target}
+                mealCount={meals.length}
+                macros={macroTotals}
+                waterCups={waterLog?.cups ?? 0}
+                cupMl={cupMl}
+                waterRecommendedMl={waterRecommendedMl}
+                zone={calorieZone}
+                compact
+                className="mx-0"
+                aiLine={
+                  geminiInsightYmd === selectedDate
+                    ? geminiInsightLine
+                    : null
+                }
+                aiPending={geminiInsightPending}
+              />
+            </section>
+          ) : null}
+
+          <section className="px-4 pb-[1.4rem] pt-[1.05rem]">
             {userId ? (
-              <h2 className="flex min-w-0 items-center gap-2 text-lg font-bold tracking-tight text-foreground">
-                <Gauge
-                  className="h-6 w-6 shrink-0 text-primary"
-                  strokeWidth={2}
-                  aria-hidden
-                />
-                오늘의 영양 지표
-              </h2>
+              <div className="mb-[1.05rem]">
+                <h2 className="flex min-w-0 items-center gap-2 text-lg font-bold tracking-tight text-foreground">
+                  <Gauge
+                    className="h-6 w-6 shrink-0 text-primary"
+                    strokeWidth={2}
+                    aria-hidden
+                  />
+                  오늘의 영양 지표
+                </h2>
+              </div>
             ) : null}
             <CalorieGauge
               current={totalCalories}
