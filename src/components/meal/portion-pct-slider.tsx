@@ -7,6 +7,9 @@ import { cn } from "@/lib/utils";
 /** 0–100 정수 (1단위) */
 export type PortionPct = number;
 
+/** @deprecated `PortionPct`와 동일 — 구 코드·import 호환용 */
+export type PortionStep = PortionPct;
+
 /** w-7 h-7 — 트랙 좌우 inset으로 0·100에서도 중앙 정렬 */
 const THUMB_PX = 28;
 
