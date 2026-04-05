@@ -204,17 +204,6 @@ function IncomingBubble({
   );
 }
 
-function SystemMetaRow({ seg }: { seg: CoachStreamSegment }) {
-  const label = seg.tag === "QUICK_CHIPS" ? "빠른 요청" : "분석 카드";
-  return (
-    <div className="flex justify-center py-1">
-      <p className="rounded-full border border-border bg-muted px-3 py-1 text-[10px] text-muted-foreground">
-        {label} · 불러오는 중…
-      </p>
-    </div>
-  );
-}
-
 /** 스트리밍 단톡 세그먼트 — 카카오톡 수신 말풍선 레이아웃 */
 export function KakaoDelimitedCoachStream({
   segments,
@@ -263,7 +252,7 @@ export function KakaoDelimitedCoachStream({
         const head = group[0];
         if (!head) return null;
         if (head.tag === "QUICK_CHIPS" || head.tag === "DATA_CARD") {
-          return <SystemMetaRow key={`meta-${gi}`} seg={head} />;
+          return null;
         }
         if (head.tag === "INVITE") {
           const code = head.text.trim().toUpperCase();
