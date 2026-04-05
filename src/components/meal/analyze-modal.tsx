@@ -36,6 +36,8 @@ export interface AnalyzeModalShape {
   description: string;
 }
 
+export type AnalyzeModalVariant = "full" | "quick_log_template";
+
 interface AnalyzeModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -53,8 +55,12 @@ interface AnalyzeModalProps {
     portionPct: PortionPct;
     priceWon: number | null;
     mealSlot: MealSlot;
+    /** 사진만으로 자주 먹는 메뉴만 등록(오늘 식단 미추가) */
+    frequentTemplateOnly?: boolean;
   }) => void | Promise<void>;
   isSaving: boolean;
+  /** 퀵 로그 전용: 끼니·분량·자주저장 체크 UI 생략, 사진 추정 100% 기준으로만 등록 */
+  variant?: AnalyzeModalVariant;
 }
 
 export function AnalyzeModal({
@@ -69,7 +75,9 @@ export function AnalyzeModal({
   onMealSlotChange,
   onConfirm,
   isSaving,
+  variant = "full",
 }: AnalyzeModalProps) {
+  const quickLog = variant === "quick_log_template";
   const [saveAsFrequent, setSaveAsFrequent] = useState(false);
   const [portionPct, setPortionPct] = useState<PortionPct>(100);
   const [priceWonInput, setPriceWonInput] = useState("");
@@ -89,11 +97,11 @@ export function AnalyzeModal({
 
   useEffect(() => {
     if (isOpen) {
-      setSaveAsFrequent(false);
+      setSaveAsFrequent(quickLog);
       setPortionPct(100);
       setPriceWonInput("");
     }
-  }, [isOpen, result?.food_name]);
+  }, [isOpen, result?.food_name, quickLog]);
 
   const multiItem = (result?.items.length ?? 0) > 1;
 
@@ -140,7 +148,13 @@ export function AnalyzeModal({
           >
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold">
-                {isAnalyzing ? "분석 중..." : result ? "분석 완료!" : "오류"}
+                {isAnalyzing
+                  ? "분석 중..."
+                  : result
+                    ? quickLog
+                      ? "퀵 메뉴 등록"
+                      : "분석 완료!"
+                    : "오류"}
               </h2>
               <button type="button" onClick={onClose} disabled={isSaving}>
                 <X className="h-5 w-5" />
@@ -179,38 +193,40 @@ export function AnalyzeModal({
                   </p>
                 </div>
 
-                {exifHint ? (
+                {!quickLog && exifHint ? (
                   <p className="rounded-xl border border-primary/25 bg-primary/8 px-3 py-2 text-center text-[11px] leading-snug text-foreground">
                     {exifHint}
                   </p>
                 ) : null}
 
-                <div className="space-y-1.5">
-                  <p className="text-xs font-semibold text-muted-foreground">
-                    언제 먹은 끼니인가요?
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {MEAL_SLOT_IDS.map((id) => {
-                      const meta = MEAL_SLOT_SECTION[id];
-                      const on = mealSlot === id;
-                      return (
-                        <button
-                          key={id}
-                          type="button"
-                          onClick={() => onMealSlotChange(id)}
-                          className={cn(
-                            "rounded-full border px-2.5 py-1 text-[10px] font-bold transition-colors",
-                            on
-                              ? "border-primary bg-primary/15 text-primary"
-                              : "border-border bg-muted/40 text-muted-foreground"
-                          )}
-                        >
-                          {meta.emoji} {meta.title}
-                        </button>
-                      );
-                    })}
+                {!quickLog ? (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold text-muted-foreground">
+                      언제 먹은 끼니인가요?
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {MEAL_SLOT_IDS.map((id) => {
+                        const meta = MEAL_SLOT_SECTION[id];
+                        const on = mealSlot === id;
+                        return (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => onMealSlotChange(id)}
+                            className={cn(
+                              "rounded-full border px-2.5 py-1 text-[10px] font-bold transition-colors",
+                              on
+                                ? "border-primary bg-primary/15 text-primary"
+                                : "border-border bg-muted/40 text-muted-foreground"
+                            )}
+                          >
+                            {meta.emoji} {meta.title}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                ) : null}
 
                 {result.items.length > 1 ? (
                   <ul className="space-y-1 rounded-xl border border-border bg-card/40 px-3 py-2 text-left text-[11px]">
@@ -228,26 +244,35 @@ export function AnalyzeModal({
                   </ul>
                 ) : null}
 
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium">얼마나 드셨나요?</span>
-                    <span className="font-data text-sm font-semibold text-scanner">
-                      {portionPct}%
-                    </span>
+                {!quickLog ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium">
+                        얼마나 드셨나요?
+                      </span>
+                      <span className="font-data text-sm font-semibold text-scanner">
+                        {portionPct}%
+                      </span>
+                    </div>
+                    <p className="text-[10px] leading-snug text-muted-foreground dark:text-foreground/65">
+                      0~100% · 사진 추정 분량을 100%로 둔 뒤 조절.{" "}
+                      <strong className="text-foreground">자주 먹는 저장</strong>
+                      은 항목이 1개일 때만 가능해요.
+                    </p>
+                    <PortionPctSlider
+                      value={portionPct}
+                      onChange={setPortionPct}
+                    />
                   </div>
-                  <p className="text-[10px] leading-snug text-muted-foreground dark:text-foreground/65">
-                    0~100% · 사진 추정 분량을 100%로 둔 뒤 조절.{" "}
-                    <strong className="text-foreground">자주 먹는 저장</strong>은
-                    항목이 1개일 때만 가능해요.
+                ) : (
+                  <p className="text-[11px] leading-snug text-muted-foreground">
+                    사진에서 추정한 <strong className="text-foreground">1회 분량(100%)</strong>이
+                    퀵 로그에 저장돼요. 나중에 원탭 기록 시 그대로 쓰입니다.
                   </p>
-                  <PortionPctSlider
-                    value={portionPct}
-                    onChange={setPortionPct}
-                  />
-                </div>
+                )}
 
                 <p className="text-[10px] text-muted-foreground dark:text-foreground/65">
-                  추정 합계(100%):{" "}
+                  {quickLog ? "저장 기준 · " : "추정 합계(100%): "}
                   <span className="font-data">
                     {baseTotals.cal}kcal · 탄 {baseTotals.carbs}g · 단{" "}
                     {baseTotals.protein}g · 지 {baseTotals.fat}g
@@ -300,30 +325,32 @@ export function AnalyzeModal({
                   ))}
                 </div>
 
-                <label
-                  className={cn(
-                    "flex cursor-pointer items-start gap-3 rounded-2xl border border-border bg-muted/25 px-4 py-3.5 text-left transition-colors hover:bg-muted/40 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring",
-                    multiItem && "pointer-events-none opacity-50"
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    checked={saveAsFrequent && !multiItem}
-                    onChange={(e) => setSaveAsFrequent(e.target.checked)}
-                    disabled={multiItem}
-                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-input text-primary focus:ring-primary"
-                  />
-                  <span className="text-sm leading-snug">
-                    <span className="font-medium text-foreground">
-                      자주 먹는 메뉴로 저장
+                {!quickLog ? (
+                  <label
+                    className={cn(
+                      "flex cursor-pointer items-start gap-3 rounded-2xl border border-border bg-muted/25 px-4 py-3.5 text-left transition-colors hover:bg-muted/40 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring",
+                      multiItem && "pointer-events-none opacity-50"
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={saveAsFrequent && !multiItem}
+                      onChange={(e) => setSaveAsFrequent(e.target.checked)}
+                      disabled={multiItem}
+                      className="mt-0.5 h-4 w-4 shrink-0 rounded border-input text-primary focus:ring-primary"
+                    />
+                    <span className="text-sm leading-snug">
+                      <span className="font-medium text-foreground">
+                        자주 먹는 메뉴로 저장
+                      </span>
+                      <span className="mt-1 block text-xs text-muted-foreground">
+                        {multiItem
+                          ? "여러 품목 사진은 자주 먹는 메뉴에 한 번에 넣지 않아요."
+                          : "Quick Log에는 사진 분석 100% 기준이 저장돼요."}
+                      </span>
                     </span>
-                    <span className="mt-1 block text-xs text-muted-foreground">
-                      {multiItem
-                        ? "여러 품목 사진은 자주 먹는 메뉴에 한 번에 넣지 않아요."
-                        : "Quick Log에는 사진 분석 100% 기준이 저장돼요."}
-                    </span>
-                  </span>
-                </label>
+                  </label>
+                ) : null}
 
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">식비(원, 선택)</label>
@@ -338,6 +365,13 @@ export function AnalyzeModal({
                   />
                 </div>
 
+                {quickLog && multiItem ? (
+                  <p className="rounded-xl border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-center text-[11px] leading-snug text-amber-900 dark:text-amber-100">
+                    퀵 등록은 한 번에 한 메뉴만 가능해요. 다시 촬영하거나 직접 입력을
+                    이용해 주세요.
+                  </p>
+                ) : null}
+
                 <button
                   type="button"
                   onClick={() => {
@@ -347,13 +381,23 @@ export function AnalyzeModal({
                     const priceWon =
                       Number.isFinite(n) && n > 0 ? n : null;
                     void onConfirm({
-                      saveAsFrequent: multiItem ? false : saveAsFrequent,
-                      portionPct,
+                      saveAsFrequent: quickLog
+                        ? true
+                        : multiItem
+                          ? false
+                          : saveAsFrequent,
+                      portionPct: quickLog ? 100 : portionPct,
                       priceWon,
                       mealSlot,
+                      frequentTemplateOnly: quickLog,
                     });
                   }}
-                  disabled={isSaving || portionPct <= 0 || scaled.cal <= 0}
+                  disabled={
+                    isSaving ||
+                    (!quickLog && portionPct <= 0) ||
+                    scaled.cal <= 0 ||
+                    (quickLog && multiItem)
+                  }
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
                 >
                   {isSaving ? (
@@ -361,7 +405,11 @@ export function AnalyzeModal({
                   ) : (
                     <Check className="h-4 w-4" />
                   )}
-                  {isSaving ? "저장 중..." : "식단에 추가하기"}
+                  {isSaving
+                    ? "저장 중..."
+                    : quickLog
+                      ? "퀵 로그에 등록"
+                      : "식단에 추가하기"}
                 </button>
               </div>
             ) : null}

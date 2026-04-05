@@ -14,6 +14,8 @@ import {
   useDroppable,
   type DragEndEvent,
   type DragStartEvent,
+  type DraggableAttributes,
+  type DraggableSyntheticListeners,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { UtensilsCrossed, X } from "lucide-react";
@@ -50,7 +52,10 @@ function DraggableTray({
 }: {
   id: string;
   disabled?: boolean;
-  children: React.ReactNode;
+  children: (handle: {
+    listeners: DraggableSyntheticListeners;
+    attributes: DraggableAttributes;
+  }) => React.ReactNode;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id, disabled: Boolean(disabled) });
@@ -60,16 +65,7 @@ function DraggableTray({
 
   return (
     <div ref={setNodeRef} style={style} className={cn(isDragging && "z-10")}>
-      <div
-        {...listeners}
-        {...attributes}
-        className={cn(
-          "touch-none",
-          !disabled && "cursor-grab active:cursor-grabbing"
-        )}
-      >
-        {children}
-      </div>
+      {children({ listeners, attributes })}
     </div>
   );
 }
@@ -216,9 +212,10 @@ function MealTrayStrip({
     <div className="space-y-2">
       <ul
         ref={scrollerRef}
+        style={{ WebkitOverflowScrolling: "touch" }}
         className={cn(
           "flex list-none gap-3 overflow-x-auto overscroll-x-contain pb-1 pl-0.5 pr-2 scrollbar-hide",
-          "snap-x snap-mandatory scroll-pl-1 sm:scroll-pl-0.5",
+          "snap-x snap-mandatory scroll-pl-1 touch-pan-x sm:scroll-pl-0.5",
           multi ? "pt-0.5" : ""
         )}
         role="list"
@@ -279,7 +276,7 @@ function MealTrayStrip({
             ))}
           </div>
           <p className="text-[10px] font-medium tabular-nums text-muted-foreground">
-            {dotIdx + 1}번째 기록 · 총 {trays.length}개 · 옆으로 넘기기
+            {dotIdx + 1}번째 기록 · 총 {trays.length}개 · 스와이프 또는 점으로 이동
           </p>
         </div>
       ) : null}
@@ -427,7 +424,10 @@ export function MealTimeline({
       </div>
     );
 
-    const inner = (
+    const makeInner = (handleBind?: {
+      listeners: DraggableSyntheticListeners;
+      attributes: DraggableAttributes;
+    }) => (
       <div
         className={cn(
           "relative rounded-xl border p-3 pr-10 shadow-sm transition-[box-shadow,border-color]",
@@ -453,25 +453,52 @@ export function MealTimeline({
           </button>
         ) : null}
 
-        <div className="flex items-start gap-3">
-          <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-muted">
-            {img ? (
-              <Image
-                src={img}
-                alt=""
-                fill
-                className="object-cover"
-                sizes="56px"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-2xl leading-none">
-                {tray.length === 1
-                  ? foodEmojiForName(tray[0].food_name)
-                  : "🍱"}
+        <div className="flex items-start gap-2">
+          {dndEnabled ? (
+            <div
+              className={cn(
+                "flex w-3.5 shrink-0 flex-col justify-center self-stretch pt-1",
+                handleBind &&
+                  "cursor-grab touch-none active:cursor-grabbing"
+              )}
+              {...(handleBind?.listeners ?? {})}
+              {...(handleBind?.attributes ?? {})}
+              aria-label={
+                handleBind
+                  ? "길게 눌러 다른 끼니 슬롯으로 이동 (왼쪽 점 잡기)"
+                  : undefined
+              }
+              aria-hidden={handleBind ? undefined : true}
+            >
+              <div className="mx-auto grid grid-cols-2 gap-[2px] opacity-60">
+                {Array.from({ length: 6 }, (_, i) => (
+                  <span
+                    key={i}
+                    className="h-[2.5px] w-[2.5px] rounded-full bg-muted-foreground/35 dark:bg-muted-foreground/45"
+                  />
+                ))}
               </div>
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
+            </div>
+          ) : null}
+          <div className="flex min-w-0 flex-1 items-start gap-3">
+            <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-muted">
+              {img ? (
+                <Image
+                  src={img}
+                  alt=""
+                  fill
+                  className="object-cover"
+                  sizes="56px"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-2xl leading-none">
+                  {tray.length === 1
+                    ? foodEmojiForName(tray[0].food_name)
+                    : "🍱"}
+                </div>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span
                 className={cn(
@@ -512,13 +539,9 @@ export function MealTimeline({
             ) : (
               macroPills
             )}
+            </div>
           </div>
         </div>
-        {dndEnabled ? (
-          <p className="mt-2 text-[9px] text-muted-foreground">
-            길게 눌러 다른 끼니 슬롯으로 이동
-          </p>
-        ) : null}
       </div>
     );
 
@@ -528,11 +551,13 @@ export function MealTimeline({
           id={`tray:${groupId}`}
           disabled={isMovingTray || busy}
         >
-          {inner}
+          {({ listeners, attributes }) =>
+            makeInner({ listeners, attributes })
+          }
         </DraggableTray>
       );
     }
-    return inner;
+    return makeInner();
   };
 
   const isDragActive = dndEnabled && activeId !== null;

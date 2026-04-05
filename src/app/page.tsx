@@ -34,7 +34,9 @@ import { HomeLanding } from "@/components/home/home-landing";
 import {
   AnalyzeModal,
   type AnalyzeModalShape,
+  type AnalyzeModalVariant,
 } from "@/components/meal/analyze-modal";
+import { QuickLogAddSheet } from "@/components/dashboard/quick-log-add-sheet";
 import { CameraCaptureModal } from "@/components/meal/camera-capture-modal";
 import {
   ManualInputModal,
@@ -301,6 +303,11 @@ export default function HomePage() {
   // Camera / gallery → same analyze + storage flow (handleFileChange)
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  /** FAB/갤러리는 meal, 퀵 로그 시트의 카메라는 quick_log */
+  const analyzeFlowModeRef = useRef<"meal" | "quick_log">("meal");
+  const [analyzeModalVariant, setAnalyzeModalVariant] =
+    useState<AnalyzeModalVariant>("full");
+  const [quickLogAddOpen, setQuickLogAddOpen] = useState(false);
   const [analyzeOpen, setAnalyzeOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -386,6 +393,34 @@ export default function HomePage() {
   };
 
   const openCameraPicker = () => {
+    analyzeFlowModeRef.current = "meal";
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices?.getUserMedia
+    ) {
+      openNativeCameraInput();
+      return;
+    }
+    navigator.mediaDevices
+      .getUserMedia({
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+        audio: false,
+      })
+      .then((stream) => {
+        setCameraStream(stream);
+        setCameraCaptureOpen(true);
+      })
+      .catch(() => {
+        openNativeCameraInput();
+      });
+  };
+
+  const openCameraPickerForQuickLog = () => {
+    analyzeFlowModeRef.current = "quick_log";
     if (
       typeof navigator === "undefined" ||
       !navigator.mediaDevices?.getUserMedia
@@ -416,6 +451,10 @@ export default function HomePage() {
   };
 
   const processMealImageFile = async (file: File) => {
+    const flowMode = analyzeFlowModeRef.current;
+    setAnalyzeModalVariant(
+      flowMode === "quick_log" ? "quick_log_template" : "full"
+    );
     setSelectedFile(file);
     setPreviewUrl(URL.createObjectURL(file));
     setAnalyzeResult(null);
@@ -426,21 +465,25 @@ export default function HomePage() {
     setAnalyzeOpen(true);
     setIsAnalyzing(true);
 
-    const capRaw = await readCaptureDateFromImageFile(file);
-    if (capRaw) {
-      const merged = mergeExifTimeOntoSelectedYmd(capRaw, selectedDate);
-      setAnalyzeExifCapture(merged);
-      const sl = mealSlotFromLocalDate(merged);
-      setAnalyzeMealSlot(sl);
-      const tt = merged.toLocaleTimeString("ko-KR", {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-      setAnalyzeExifHint(
-        `사진이 ${tt}쯤 찍힌 것으로 보여요. ${MEAL_SLOT_SECTION[sl].title} 슬롯에 넣을까요?`
-      );
-    } else {
+    if (flowMode === "quick_log") {
       setAnalyzeMealSlot(mealSlotFromLocalDate(new Date()));
+    } else {
+      const capRaw = await readCaptureDateFromImageFile(file);
+      if (capRaw) {
+        const merged = mergeExifTimeOntoSelectedYmd(capRaw, selectedDate);
+        setAnalyzeExifCapture(merged);
+        const sl = mealSlotFromLocalDate(merged);
+        setAnalyzeMealSlot(sl);
+        const tt = merged.toLocaleTimeString("ko-KR", {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        setAnalyzeExifHint(
+          `사진이 ${tt}쯤 찍힌 것으로 보여요. ${MEAL_SLOT_SECTION[sl].title} 슬롯에 넣을까요?`
+        );
+      } else {
+        setAnalyzeMealSlot(mealSlotFromLocalDate(new Date()));
+      }
     }
 
     try {
@@ -488,6 +531,7 @@ export default function HomePage() {
     const file = e.target.files?.[0];
     try {
       if (!file) return;
+      analyzeFlowModeRef.current = "meal";
       await processMealImageFile(file);
     } finally {
       e.target.value = "";
@@ -499,13 +543,62 @@ export default function HomePage() {
     portionPct,
     priceWon,
     mealSlot,
+    frequentTemplateOnly,
   }: {
     saveAsFrequent: boolean;
     portionPct: number;
     priceWon: number | null;
     mealSlot: MealSlot;
+    frequentTemplateOnly?: boolean;
   }) => {
     if (!analyzeResult || !userId) return;
+
+    if (frequentTemplateOnly) {
+      const items = analyzeResult.items;
+      if (items.length !== 1) {
+        setAnalyzeError("퀵 등록은 한 메뉴만 인식될 때 가능해요.");
+        return;
+      }
+      const it = items[0];
+      const price =
+        priceWon != null && Number(priceWon) > 0
+          ? Math.round(Number(priceWon))
+          : null;
+      setIsSaving(true);
+      try {
+        const supabase = createClient();
+        const { error } = await supabase.from("frequent_meals").insert({
+          user_id: userId,
+          food_name: it.food_name,
+          cal: it.cal,
+          carbs: it.carbs,
+          protein: it.protein,
+          fat: it.fat,
+          image_url: imageUrl,
+          count: 1,
+          last_eaten_at: new Date().toISOString(),
+          price_won: price,
+        });
+        if (error) throw error;
+        queryClient.invalidateQueries({ queryKey: ["frequentMeals", userId] });
+        setAnalyzeOpen(false);
+        setAnalyzeExifCapture(null);
+        setAnalyzeExifHint(null);
+        setAnalyzeModalVariant("full");
+        analyzeFlowModeRef.current = "meal";
+        setToast("퀵 로그에 등록했어요");
+        trackBapsEvent("meal_saved", {
+          source: "quick_log_photo",
+          save_as_frequent: true,
+          has_price: price != null,
+        });
+      } catch {
+        setAnalyzeError("저장에 실패했어요.");
+      } finally {
+        setIsSaving(false);
+      }
+      return;
+    }
     const p = Math.min(100, Math.max(0, portionPct)) / 100;
     if (p <= 0) return;
 
@@ -562,6 +655,8 @@ export default function HomePage() {
       setAnalyzeOpen(false);
       setAnalyzeExifCapture(null);
       setAnalyzeExifHint(null);
+      setAnalyzeModalVariant("full");
+      analyzeFlowModeRef.current = "meal";
       trackBapsEvent("meal_saved", {
         source: "analyze_image",
         save_as_frequent: saveAsFrequent && items.length === 1,
@@ -1033,12 +1128,7 @@ export default function HomePage() {
               isLoading={frequentMealsPending}
               busyId={quickLogBusyId}
               onPick={handleQuickLogPick}
-              onOpenCamera={openCameraPicker}
-              onOpenManual={() => setManualOpen(true)}
-              onAddFrequent={() => {
-                setFrequentEditorInitial(null);
-                setFrequentEditorOpen(true);
-              }}
+              onOpenAddSheet={() => setQuickLogAddOpen(true)}
               onDeleteFrequent={handleDeleteFrequent}
             />
           ) : null}
@@ -1174,6 +1264,8 @@ export default function HomePage() {
           setAnalyzeOpen(false);
           setAnalyzeExifCapture(null);
           setAnalyzeExifHint(null);
+          setAnalyzeModalVariant("full");
+          analyzeFlowModeRef.current = "meal";
         }}
         imageUrl={imageUrl}
         previewUrl={previewUrl}
@@ -1185,6 +1277,17 @@ export default function HomePage() {
         onMealSlotChange={setAnalyzeMealSlot}
         onConfirm={handleConfirmAnalysis}
         isSaving={isSaving}
+        variant={analyzeModalVariant}
+      />
+
+      <QuickLogAddSheet
+        isOpen={quickLogAddOpen}
+        onClose={() => setQuickLogAddOpen(false)}
+        onCamera={openCameraPickerForQuickLog}
+        onDirectInput={() => {
+          setFrequentEditorInitial(null);
+          setFrequentEditorOpen(true);
+        }}
       />
 
       {/* Manual Input Modal */}

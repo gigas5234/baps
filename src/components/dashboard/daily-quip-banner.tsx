@@ -7,6 +7,24 @@ import type { MacroTotals } from "@/lib/meal-macros";
 import { isFatHeavy, isProteinLow, macroKcalBreakdown } from "@/lib/meal-macros";
 import { InsightRichText } from "@/components/dashboard/insight-rich-text";
 
+const INSIGHT_BULLET_ICONS = ["🔍", "📊", "🔎", "📌"] as const;
+
+/** 줄바꿈·문장 단위로 나눠 리포트 불릿에 사용 */
+function splitInsightIntoSegments(raw: string): string[] {
+  const t = raw.trim();
+  if (!t) return [];
+  const lines = t
+    .split(/\n+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (lines.length > 1) return lines;
+  const sentences = t
+    .split(/(?<=[.!?。！？])\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return sentences.length > 0 ? sentences : [t];
+}
+
 interface DailyQuipBannerProps {
   displayName: string;
   totalCal: number;
@@ -97,10 +115,15 @@ export function DailyQuipBanner({
   const shownLine =
     aiLine != null && aiLine.trim() !== "" ? aiLine.trim() : line;
 
+  const segments = useMemo(
+    () => splitInsightIntoSegments(shownLine),
+    [shownLine]
+  );
+
   return (
     <div
       className={cn(
-        "relative rounded-2xl border",
+        "relative overflow-hidden rounded-xl border",
         "shadow-[0_1px_3px_rgba(15,23,42,0.06),0_0_14px_rgba(99,102,241,0.2)]",
         "dark:shadow-[0_1px_3px_rgba(0,0,0,0.35),0_0_20px_rgba(99,102,241,0.22)]",
         compact
@@ -108,23 +131,50 @@ export function DailyQuipBanner({
           : "mx-0 px-3.5 py-3",
         "border-primary/15 bg-gradient-to-br from-primary/6 via-background/80 to-scanner/8",
         "backdrop-blur-md dark:from-primary/15 dark:to-scanner/12",
+        "before:pointer-events-none before:absolute before:inset-0 before:rounded-[inherit]",
+        "before:bg-[linear-gradient(to_right,rgb(99_102_241/0.07)_1px,transparent_1px),linear-gradient(to_bottom,rgb(99_102_241/0.07)_1px,transparent_1px)]",
+        "before:bg-[length:12px_12px] before:opacity-100",
+        "dark:before:bg-[linear-gradient(to_right,rgb(148_163_184/0.09)_1px,transparent_1px),linear-gradient(to_bottom,rgb(148_163_184/0.09)_1px,transparent_1px)]",
         className
       )}
     >
-      <p
+      <ul
         className={cn(
-          "leading-relaxed text-foreground/90",
-          compact ? "text-xs" : "text-sm"
+          "relative z-[1] m-0 list-none p-0",
+          compact ? "space-y-1.5" : "space-y-2"
         )}
+        role="list"
       >
-        <InsightRichText text={shownLine} />
-        {aiPending ? (
-          <span className="whitespace-nowrap text-[10px] text-muted-foreground">
-            {" "}
-            · 분석 중
-          </span>
-        ) : null}
-      </p>
+        {segments.map((seg, i) => (
+          <li
+            key={`${i}-${seg.slice(0, 24)}`}
+            className="flex gap-2.5"
+          >
+            <span
+              className={cn(
+                "shrink-0 select-none leading-snug",
+                compact ? "text-[11px]" : "text-xs"
+              )}
+              aria-hidden
+            >
+              {INSIGHT_BULLET_ICONS[i % INSIGHT_BULLET_ICONS.length]}
+            </span>
+            <span
+              className={cn(
+                "min-w-0 flex-1 leading-snug text-foreground/90",
+                compact ? "text-xs" : "text-sm"
+              )}
+            >
+              <InsightRichText text={seg} />
+            </span>
+          </li>
+        ))}
+      </ul>
+      {aiPending ? (
+        <p className="relative z-[1] mt-1.5 text-[10px] text-muted-foreground">
+          분석 중…
+        </p>
+      ) : null}
       {!compact ? (
         <span
           className="absolute -bottom-1 left-6 h-2 w-2 rotate-45 border-b border-r border-primary/12 bg-gradient-to-br from-primary/5 to-transparent"

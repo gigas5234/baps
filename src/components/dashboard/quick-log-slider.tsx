@@ -1,23 +1,52 @@
 "use client";
 
-import { Camera, Minus, Pencil, Plus, Zap } from "lucide-react";
+import { Minus, Plus, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { foodEmojiForName } from "@/lib/food-emoji";
 import type { FrequentMeal } from "@/types/database";
 
 const MIN_COUNT_SHOW = 1;
 
+/** 카드 한 장과 동일한 가로·세로 감각 (고스트 칩) */
+const CHIP_MIN_W = "min-w-[9.75rem]";
+const CHIP_MAX_W = "max-w-[11rem]";
+
 interface QuickLogSliderProps {
   items: FrequentMeal[];
   isLoading: boolean;
   busyId: string | null;
   onPick: (item: FrequentMeal) => void;
-  onOpenCamera: () => void;
-  onOpenManual: () => void;
-  /** 헤더 · 빈 화면에서 자주 먹는 식단 직접 등록 */
-  onAddFrequent?: () => void;
+  /** 카메라·직접 입력 — 바텀시트 오픈 */
+  onOpenAddSheet: () => void;
   /** 카드별 자주 먹는 식단 항목 삭제 */
   onDeleteFrequent?: (item: FrequentMeal) => void;
+}
+
+function GhostRegisterChip({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex shrink-0 snap-start items-center justify-center gap-2 rounded-xl border-2 border-dashed px-3",
+        "min-h-[4.25rem] py-2.5",
+        CHIP_MIN_W,
+        CHIP_MAX_W,
+        "border-muted-foreground/25 bg-muted/10 transition-colors",
+        "hover:border-primary/40 hover:bg-primary/6 active:scale-[0.98]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "dark:border-white/18 dark:bg-muted/15"
+      )}
+      aria-label="메뉴 등록"
+    >
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary">
+        <Plus className="h-4 w-4" strokeWidth={2.5} aria-hidden />
+      </span>
+      <span className="text-xs font-semibold text-muted-foreground">
+        메뉴 등록
+      </span>
+    </button>
+  );
 }
 
 export function QuickLogSlider({
@@ -25,34 +54,30 @@ export function QuickLogSlider({
   isLoading,
   busyId,
   onPick,
-  onOpenCamera,
-  onOpenManual,
-  onAddFrequent,
+  onOpenAddSheet,
   onDeleteFrequent,
 }: QuickLogSliderProps) {
   const visible = items.filter((m) => Number(m.count) >= MIN_COUNT_SHOW);
 
-  /** 항목이 1개 이상일 때만 헤더 우측 + (빈 목록일 때는 아래 등록 카드·수동 입력으로만 추가) */
-  const headerAddon =
-    onAddFrequent != null && visible.length > 0 ? (
-      <button
-        type="button"
-        onClick={onAddFrequent}
-        className={cn(
-          "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-dashed border-border/80",
-          "text-muted-foreground transition-colors hover:border-primary/45 hover:bg-primary/8 hover:text-foreground",
-          "dark:border-white/15"
-        )}
-        aria-label="자주 먹는 식단 추가"
-      >
-        <Plus className="h-4 w-4" strokeWidth={2.25} aria-hidden />
-      </button>
-    ) : null;
+  const headerAddon = (
+    <button
+      type="button"
+      onClick={onOpenAddSheet}
+      className={cn(
+        "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-dashed border-border/80",
+        "text-muted-foreground transition-colors hover:border-primary/45 hover:bg-primary/8 hover:text-foreground",
+        "dark:border-white/15"
+      )}
+      aria-label="메뉴 등록"
+    >
+      <Plus className="h-4 w-4" strokeWidth={2.25} aria-hidden />
+    </button>
+  );
 
   if (isLoading) {
     return (
-      <section className="px-4 pb-[1.05rem] pt-[1.05rem]">
-        <div className="mb-[1.05rem] flex items-center justify-between gap-2 pr-1">
+      <section className="px-4 pb-3 pt-3">
+        <div className="mb-3 flex items-center justify-between gap-2 pr-1">
           <div className="h-4 w-36 rounded bg-muted animate-pulse" />
         </div>
         <div className="flex gap-2 overflow-hidden pl-0.5">
@@ -67,79 +92,12 @@ export function QuickLogSlider({
     );
   }
 
-  if (visible.length === 0) {
-    return (
-      <section className="px-4 pb-[1.4rem] pt-[1.05rem]">
-        <div className="mb-[1.05rem] flex items-center justify-between gap-2 pr-1">
-          <h2 className="flex min-w-0 items-center gap-2 text-lg font-bold tracking-tight text-foreground">
-            <Zap
-              className="h-6 w-6 shrink-0 text-primary"
-              strokeWidth={2}
-              aria-hidden
-            />
-            퀵 로그 · 자주 찾는 식단
-          </h2>
-        </div>
-        <button
-          type="button"
-          onClick={onAddFrequent ?? onOpenManual}
-            className={cn(
-              "flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-8",
-            "border-muted-foreground/30 bg-transparent transition-colors",
-            "hover:border-primary/45 hover:bg-primary/5",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-            "dark:border-white/22"
-          )}
-        >
-          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/15 text-primary">
-            <Plus className="h-6 w-6" strokeWidth={2.5} aria-hidden />
-          </span>
-          <span className="text-center text-sm font-bold leading-snug text-foreground">
-            카메라로 찍어서 등록하거나 직접 입력해서 등록하세요
-          </span>
-          <span className="text-center text-[11px] leading-relaxed text-muted-foreground">
-            음식명·영양·식비만 저장하면 퀵 로그에서 원탭으로 기록할 수 있어요
-          </span>
-        </button>
-        <div className="mt-3 flex gap-2.5">
-          <button
-            type="button"
-            onClick={onOpenCamera}
-            className={cn(
-              "flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold shadow-md shadow-primary/25",
-              "bg-primary text-primary-foreground",
-              "ring-1 ring-primary/20 transition-colors hover:bg-primary/90 active:scale-[0.99]"
-            )}
-          >
-            <Camera className="h-4 w-4" aria-hidden />
-            카메라
-          </button>
-          <button
-            type="button"
-            onClick={onAddFrequent ?? onOpenManual}
-            className={cn(
-              "flex flex-1 items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-medium",
-              "bg-muted/40 text-foreground",
-              "transition-colors hover:bg-muted/65 active:scale-[0.99]",
-              "dark:border-white/12 dark:bg-muted/25"
-            )}
-          >
-            <Pencil className="h-4 w-4 text-muted-foreground" aria-hidden />
-            {onAddFrequent != null
-              ? "자주 먹는 메뉴 등록"
-              : "수동 입력"}
-          </button>
-        </div>
-      </section>
-    );
-  }
-
   return (
-    <section className="px-4 pb-[1.05rem] pt-[1.05rem]">
-      <div className="mb-[1.05rem] flex items-center justify-between gap-2 pr-1">
-        <h2 className="flex min-w-0 items-center gap-2 text-lg font-bold tracking-tight text-foreground">
+    <section className="px-4 pb-3 pt-3">
+      <div className="mb-3 flex items-center justify-between gap-2 pr-1">
+        <h2 className="flex min-w-0 items-center gap-2 text-base font-bold tracking-tight text-foreground sm:text-lg">
           <Zap
-            className="h-6 w-6 shrink-0 text-primary"
+            className="h-5 w-5 shrink-0 text-primary sm:h-6 sm:w-6"
             strokeWidth={2}
             aria-hidden
           />
@@ -149,11 +107,14 @@ export function QuickLogSlider({
       </div>
       <div
         className={cn(
-          "scrollbar-hide flex gap-2.5 overflow-x-auto overflow-y-visible pb-1.5 pl-0.5 pr-3",
+          "scrollbar-hide flex gap-2.5 overflow-x-auto overflow-y-visible pb-1 pl-0.5 pr-3",
           "snap-x snap-mandatory scroll-pl-0.5 [-ms-overflow-style:none] [scrollbar-width:none]",
-          "[&::-webkit-scrollbar]:hidden"
+          "[&::-webkit-scrollbar]:hidden",
+          "touch-pan-x"
         )}
+        style={{ WebkitOverflowScrolling: "touch" }}
       >
+        <GhostRegisterChip onClick={onOpenAddSheet} />
         {visible.map((m) => {
           const busy = busyId === m.id;
           const src = m.image_url?.trim();
@@ -164,7 +125,9 @@ export function QuickLogSlider({
               disabled={busy}
               onClick={() => onPick(m)}
               className={cn(
-                "group relative flex min-w-[9.75rem] max-w-[11rem] shrink-0 snap-start items-center gap-2.5 rounded-xl border border-border bg-card px-3 py-2.5 text-left shadow-sm",
+                "group relative flex shrink-0 snap-start items-center gap-2.5 rounded-xl border border-border bg-card px-3 py-2.5 text-left shadow-sm",
+                CHIP_MIN_W,
+                CHIP_MAX_W,
                 "transition-[transform,box-shadow,border-color] active:scale-[0.98]",
                 "hover:border-primary/35 hover:shadow-md hover:shadow-primary/8",
                 "disabled:pointer-events-none disabled:opacity-55",
