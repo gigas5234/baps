@@ -70,8 +70,11 @@ export function QuickLogSlider({
     return (
       <section className="px-4 pb-4 pt-3">
         <div className="mb-3 flex items-center justify-between gap-2 pr-1">
-          <h2 className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-foreground">
-            <Sparkles className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+          <h2 className="flex min-w-0 items-center gap-1.5 text-base font-semibold text-foreground">
+            <Sparkles
+              className="h-5 w-5 shrink-0 text-primary"
+              aria-hidden
+            />
             퀵 로그 · 자주 찾는 식단
           </h2>
           {headerAddon}
@@ -131,8 +134,8 @@ export function QuickLogSlider({
   return (
     <section className="px-4 pb-3 pt-3">
       <div className="mb-3 flex items-center justify-between gap-2 pr-1">
-        <h2 className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-foreground">
-          <Sparkles className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+        <h2 className="flex min-w-0 items-center gap-1.5 text-base font-semibold text-foreground">
+          <Sparkles className="h-5 w-5 shrink-0 text-primary" aria-hidden />
           퀵 로그 · 자주 찾는 식단
         </h2>
         {headerAddon}

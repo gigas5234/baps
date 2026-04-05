@@ -8,7 +8,6 @@ import type {
 } from "@/types/database";
 import type { WeightEntry } from "@/lib/weight-local-storage";
 import { localYmdToUtcRangeIso } from "@/lib/local-date";
-import { fetchMainDashboardInsight } from "@/lib/main-summary-client";
 
 function getSupabase() {
   return createClient();
@@ -205,20 +204,3 @@ export function useDailyCalories(meals: Meal[]) {
   return meals.reduce((sum, m) => sum + m.cal, 0);
 }
 
-/** 데이터가 바뀌면 같은 날짜라도 AI 인사이트를 다시 요청 */
-export function useMainDashboardInsight(
-  userId: string | undefined,
-  selectedDate: string,
-  dataFingerprint: string
-) {
-  return useQuery({
-    queryKey: ["mainInsight", userId, selectedDate, dataFingerprint],
-    queryFn: async () => {
-      const r = await fetchMainDashboardInsight({ date: selectedDate });
-      if (r.line == null) return null;
-      return r.line;
-    },
-    enabled: Boolean(userId && selectedDate),
-    staleTime: 60_000,
-  });
-}

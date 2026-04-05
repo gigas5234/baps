@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo } from "react";
-import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CalorieZone } from "@/lib/calorie-zone";
 import type { MacroTotals } from "@/lib/meal-macros";
 import { isFatHeavy, isProteinLow, macroKcalBreakdown } from "@/lib/meal-macros";
+import { InsightRichText } from "@/components/dashboard/insight-rich-text";
 
 interface DailyQuipBannerProps {
   displayName: string;
@@ -19,11 +19,11 @@ interface DailyQuipBannerProps {
   waterRecommendedMl: number;
   zone: CalorieZone;
   className?: string;
-  /** 게이지와 붙일 때: 작은 말풍선 */
+  /** 게이지와 붙일 때: 조밀한 카드 */
   compact?: boolean;
   /** Gemini 메인 인사이트(없으면 규칙 기반 fallback) */
   aiLine?: string | null;
-  /** AI 요청 중(본문은 fallback 유지 가능) */
+  /** AI 요청 중 */
   aiPending?: boolean;
 }
 
@@ -98,81 +98,39 @@ export function DailyQuipBanner({
     aiLine != null && aiLine.trim() !== "" ? aiLine.trim() : line;
 
   return (
-    <div className={cn("space-y-2", className)}>
-      <div className="px-0.5">
-        <h2
-          className={cn(
-            "font-bold tracking-tight text-foreground",
-            compact ? "text-sm" : "text-base"
-          )}
-        >
-          데일리 인사이트
-        </h2>
-        <p
-          className={cn(
-            "text-muted-foreground",
-            compact ? "text-[10px]" : "text-xs"
-          )}
-        >
-          Daily Insight
-        </p>
-      </div>
-      <div
+    <div
+      className={cn(
+        "relative rounded-2xl border",
+        "shadow-[0_1px_3px_rgba(15,23,42,0.06),0_0_14px_rgba(99,102,241,0.2)]",
+        "dark:shadow-[0_1px_3px_rgba(0,0,0,0.35),0_0_20px_rgba(99,102,241,0.22)]",
+        compact
+          ? "border-primary/12 px-3 py-2.5"
+          : "mx-0 px-3.5 py-3",
+        "border-primary/15 bg-gradient-to-br from-primary/6 via-background/80 to-scanner/8",
+        "backdrop-blur-md dark:from-primary/15 dark:to-scanner/12",
+        className
+      )}
+    >
+      <p
         className={cn(
-          "relative rounded-2xl border",
-          "shadow-[0_1px_3px_rgba(15,23,42,0.06),0_0_14px_rgba(99,102,241,0.2)]",
-          "dark:shadow-[0_1px_3px_rgba(0,0,0,0.35),0_0_20px_rgba(99,102,241,0.22)]",
-          compact
-            ? "border-primary/12 px-3 py-2.5"
-            : "mx-0 px-3.5 py-3",
-          "border-primary/15 bg-gradient-to-br from-primary/6 via-background/80 to-scanner/8",
-          "backdrop-blur-md dark:from-primary/15 dark:to-scanner/12"
+          "leading-relaxed text-foreground/90",
+          compact ? "text-xs" : "text-sm"
         )}
       >
-        <p
-          className={cn(
-            "mb-1.5 font-semibold text-primary/90",
-            compact ? "text-[10px]" : "text-xs"
-          )}
-        >
-          AI의 한마디
-          {aiPending ? (
-            <span className="ml-1.5 font-normal text-muted-foreground">
-              · 분석 중
-            </span>
-          ) : null}
-        </p>
-        <div className={cn("flex", compact ? "gap-2" : "gap-2.5")}>
-          <div
-            className={cn(
-              "mt-0.5 shrink-0 rounded-lg bg-primary/10 dark:bg-primary/20",
-              compact ? "p-1" : "p-1.5"
-            )}
-          >
-            <Sparkles
-              className={cn(
-                "text-primary",
-                compact ? "h-3.5 w-3.5" : "h-4 w-4"
-              )}
-              aria-hidden
-            />
-          </div>
-          <p
-            className={cn(
-              "leading-snug text-foreground/90",
-              compact ? "text-xs" : "text-sm"
-            )}
-          >
-            {shownLine}
-          </p>
-        </div>
-        {!compact ? (
-          <span
-            className="absolute -bottom-1 left-6 h-2 w-2 rotate-45 border-b border-r border-primary/12 bg-gradient-to-br from-primary/5 to-transparent"
-            aria-hidden
-          />
+        <InsightRichText text={shownLine} />
+        {aiPending ? (
+          <span className="whitespace-nowrap text-[10px] text-muted-foreground">
+            {" "}
+            · 분석 중
+          </span>
         ) : null}
-      </div>
+      </p>
+      {!compact ? (
+        <span
+          className="absolute -bottom-1 left-6 h-2 w-2 rotate-45 border-b border-r border-primary/12 bg-gradient-to-br from-primary/5 to-transparent"
+          aria-hidden
+        />
+      ) : null}
     </div>
   );
 }

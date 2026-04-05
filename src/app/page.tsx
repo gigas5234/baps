@@ -1,9 +1,23 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
-import { Activity, Menu, UtensilsCrossed } from "lucide-react";
+import {
+  Activity,
+  CalendarDays,
+  Gauge,
+  Menu,
+  Sparkles,
+  UtensilsCrossed,
+} from "lucide-react";
 import { GoogleSignInButtonBlock } from "@/components/common/google-sign-in-button-block";
 import { QuickActionButton } from "@/components/common/quick-action-button";
 import { ChatFab } from "@/components/common/chat-fab";
@@ -18,6 +32,7 @@ import { HomeDashboardSkeleton } from "@/components/dashboard/home-dashboard-ske
 import { WaterCounter } from "@/components/dashboard/water-counter";
 import { HomeLanding } from "@/components/home/home-landing";
 import { AnalyzeModal } from "@/components/meal/analyze-modal";
+import { CameraCaptureModal } from "@/components/meal/camera-capture-modal";
 import {
   ManualInputModal,
   type ManualMealSubmitPayload,
@@ -37,15 +52,15 @@ import {
   useDailyCalories,
   useProfile,
   useDeleteMeal,
-  useMainDashboardInsight,
 } from "@/lib/queries";
+import { fetchMainDashboardInsight } from "@/lib/main-summary-client";
 import { rankFrequentMealsForNow } from "@/lib/frequent-meals-rank";
 import { bumpFrequentMealLog } from "@/lib/frequent-meals";
 import { trackBapsEvent } from "@/lib/analytics";
 import type { FrequentMeal, Meal } from "@/types/database";
 import { compressImageForAnalysis } from "@/lib/image-compress";
 import { uploadMealImage } from "@/lib/storage";
-import { getCalorieZone } from "@/lib/calorie-zone";
+import { getCalorieZone, type CalorieZone } from "@/lib/calorie-zone";
 import { sumMealMacros } from "@/lib/meal-macros";
 import { syncSelectedDateToLocalTodayOnce } from "@/lib/local-date";
 import {
@@ -102,21 +117,52 @@ export default function HomePage() {
   const macroTotals = sumMealMacros(meals);
   const calorieZone = getCalorieZone(totalCalories, target);
 
-  const mainInsightFingerprint = useMemo(() => {
-    const mealKey = meals.map((m) => m.id).join(",");
-    return [
-      totalCalories,
-      meals.length,
-      Math.round(macroTotals.carbsG),
-      Math.round(macroTotals.proteinG),
-      Math.round(macroTotals.fatG),
-      waterLog?.cups ?? 0,
-      mealKey,
-    ].join("|");
-  }, [totalCalories, meals, macroTotals, waterLog?.cups]);
+  /** Gemini 인사이트 — API는 아래 이펙트에서만 트리거 */
+  const selectedDateRef = useRef(selectedDate);
+  selectedDateRef.current = selectedDate;
+  const lastInsightFetchAtRef = useRef(0);
+  const lastMealInsightAtRef = useRef(0);
+  const entryInsightDoneRef = useRef(false);
+  const prevCalTotalForMilestoneRef = useRef<number | null>(null);
+  const prevCalZoneForMilestoneRef = useRef<CalorieZone | null>(null);
 
-  const { data: mainInsightLine, isPending: mainInsightPending } =
-    useMainDashboardInsight(userId, selectedDate, mainInsightFingerprint);
+  const [geminiInsightLine, setGeminiInsightLine] = useState<string | null>(
+    null
+  );
+  const [geminiInsightYmd, setGeminiInsightYmd] = useState<string | null>(null);
+  const [geminiInsightPending, setGeminiInsightPending] = useState(false);
+
+  const requestMainInsight = useCallback(
+    async (reason: "entry" | "meal" | "water_goal" | "calorie_goal" | "calorie_over") => {
+      const uid = userId;
+      const ymd = selectedDateRef.current;
+      if (!uid || !ymd) return;
+
+      const now = Date.now();
+      if (reason === "meal") {
+        if (now - lastMealInsightAtRef.current < 30_000) return;
+      }
+      const bypassThrottle = reason === "entry" || reason === "water_goal";
+      if (!bypassThrottle && now - lastInsightFetchAtRef.current < 45_000) {
+        return;
+      }
+
+      setGeminiInsightPending(true);
+      try {
+        const r = await fetchMainDashboardInsight({ date: ymd });
+        if (r.line != null && r.line.trim()) {
+          setGeminiInsightLine(r.line.trim());
+          setGeminiInsightYmd(ymd);
+          const t = Date.now();
+          lastInsightFetchAtRef.current = t;
+          if (reason === "meal") lastMealInsightAtRef.current = t;
+        }
+      } finally {
+        setGeminiInsightPending(false);
+      }
+    },
+    [userId]
+  );
 
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -174,6 +220,63 @@ export default function HomePage() {
     (!!userId && mealsPending);
 
   useEffect(() => {
+    if (!userId) {
+      entryInsightDoneRef.current = false;
+      setGeminiInsightLine(null);
+      setGeminiInsightYmd(null);
+      prevCalTotalForMilestoneRef.current = null;
+      prevCalZoneForMilestoneRef.current = null;
+      return;
+    }
+    if (showDashboardSkeleton) return;
+    if (entryInsightDoneRef.current) return;
+    entryInsightDoneRef.current = true;
+    void requestMainInsight("entry");
+  }, [userId, showDashboardSkeleton, requestMainInsight]);
+
+  useEffect(() => {
+    if (!userId || showDashboardSkeleton) return;
+    const prev = prevCalTotalForMilestoneRef.current;
+    if (prev !== null && prev < target && totalCalories >= target) {
+      void requestMainInsight("calorie_goal");
+    }
+    prevCalTotalForMilestoneRef.current = totalCalories;
+  }, [
+    userId,
+    showDashboardSkeleton,
+    totalCalories,
+    target,
+    requestMainInsight,
+  ]);
+
+  useEffect(() => {
+    if (!userId || showDashboardSkeleton) return;
+    const p = prevCalZoneForMilestoneRef.current;
+    if (p != null && p !== "danger" && calorieZone === "danger") {
+      void requestMainInsight("calorie_over");
+    }
+    prevCalZoneForMilestoneRef.current = calorieZone;
+  }, [userId, showDashboardSkeleton, calorieZone, requestMainInsight]);
+
+  const handleWaterDelta = useCallback(
+    (delta: number) => {
+      const cur = waterLog?.cups ?? 0;
+      const tc = waterTargetCups;
+      adjustWater.mutate(
+        { currentCups: cur, delta },
+        {
+          onSuccess: (newCups) => {
+            if (delta > 0 && tc > 0 && newCups >= tc && cur < tc) {
+              void requestMainInsight("water_goal");
+            }
+          },
+        }
+      );
+    },
+    [adjustWater, waterLog?.cups, waterTargetCups, requestMainInsight]
+  );
+
+  useEffect(() => {
     if (settingsOpen && userId) void refetchProfile();
   }, [settingsOpen, userId, refetchProfile]);
 
@@ -188,6 +291,17 @@ export default function HomePage() {
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  /** 브라우저 내 카메라 — input capture 대신 사용해 탭 리로드 방지 */
+  const [cameraCaptureOpen, setCameraCaptureOpen] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+
+  const closeCameraCapture = () => {
+    setCameraStream((prev) => {
+      prev?.getTracks().forEach((t) => t.stop());
+      return null;
+    });
+    setCameraCaptureOpen(false);
+  };
 
   // Manual input state
   const [manualOpen, setManualOpen] = useState(false);
@@ -210,6 +324,21 @@ export default function HomePage() {
 
   /** 탑바: 스크롤 시 글래스 + 잔여 칼로리 중앙 */
   const [topBarCompact, setTopBarCompact] = useState(false);
+  const headerDockRef = useRef<HTMLElement | null>(null);
+  const [headerDockPx, setHeaderDockPx] = useState(0);
+
+  useLayoutEffect(() => {
+    const el = headerDockRef.current;
+    if (!el) return;
+    const sync = () => {
+      setHeaderDockPx(Math.ceil(el.getBoundingClientRect().height));
+    };
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [topBarCompact, userId]);
+
   useEffect(() => {
     const THRESHOLD = 32;
     const onScroll = () => {
@@ -223,18 +352,41 @@ export default function HomePage() {
 
   const remainingKcal = Math.round(target - totalCalories);
 
-  const openCameraPicker = () => {
+  const openNativeCameraInput = () => {
     cameraInputRef.current?.click();
+  };
+
+  const openCameraPicker = () => {
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices?.getUserMedia
+    ) {
+      openNativeCameraInput();
+      return;
+    }
+    navigator.mediaDevices
+      .getUserMedia({
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+        audio: false,
+      })
+      .then((stream) => {
+        setCameraStream(stream);
+        setCameraCaptureOpen(true);
+      })
+      .catch(() => {
+        openNativeCameraInput();
+      });
   };
 
   const openGalleryPicker = () => {
     galleryInputRef.current?.click();
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const processMealImageFile = async (file: File) => {
     setSelectedFile(file);
     setPreviewUrl(URL.createObjectURL(file));
     setAnalyzeResult(null);
@@ -281,7 +433,15 @@ export default function HomePage() {
       );
     } finally {
       setIsAnalyzing(false);
-      // input 초기화 (같은 파일 다시 선택 가능)
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    try {
+      if (!file) return;
+      await processMealImageFile(file);
+    } finally {
       e.target.value = "";
     }
   };
@@ -338,6 +498,7 @@ export default function HomePage() {
       });
       if (saveAsFrequent) setToast("자주 먹는 메뉴에도 저장했어요");
       else setToast("식단에 추가되었습니다");
+      void requestMainInsight("meal");
     } catch {
       setAnalyzeError("저장에 실패했어요.");
     } finally {
@@ -395,6 +556,7 @@ export default function HomePage() {
       } else {
         setToast("식단에 추가되었습니다");
       }
+      void requestMainInsight("meal");
     } finally {
       setIsManualSaving(false);
     }
@@ -486,6 +648,7 @@ export default function HomePage() {
       queryClient.invalidateQueries({ queryKey: ["meals", userId, selectedDate] });
       queryClient.invalidateQueries({ queryKey: ["frequentMeals", userId] });
       setToast("식단에 추가되었습니다");
+      void requestMainInsight("meal");
     } catch {
       setToast("추가에 실패했어요");
     } finally {
@@ -555,11 +718,12 @@ export default function HomePage() {
         onChange={handleFileChange}
       />
 
-      {/* Fixed glass top bar — 사이버 스캔 라인 + 인디고 글래스 */}
+      {/* Fixed glass top bar — position:fixed 만 사용(relative 금지: sticky 여백 깨짐 방지) */}
       <header
+        ref={headerDockRef}
         className={cn(
-          "fixed inset-x-0 top-0 z-40 transition-[box-shadow,border-color,background-color] duration-300 ease-out",
-          "relative border-b border-white/10 backdrop-blur-md",
+          "fixed inset-x-0 top-0 z-40 w-full transition-[box-shadow,border-color,background-color] duration-300 ease-out",
+          "border-b border-white/10 backdrop-blur-md",
           "bg-gradient-to-b from-indigo-500/[0.08] via-white/40 to-white/72",
           "dark:from-indigo-600/[0.14] dark:via-indigo-950/45 dark:to-slate-950/60",
           topBarCompact
@@ -567,14 +731,15 @@ export default function HomePage() {
             : "shadow-[0_2px_20px_-8px_rgba(99,102,241,0.08)]"
         )}
       >
-        <div
-          className={cn(
-            "relative z-10 mx-auto flex w-full max-w-md items-center px-4 transition-[padding] duration-300 ease-out",
-            topBarCompact
-              ? "min-h-11 justify-between gap-2 py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))]"
-              : "justify-between gap-3 pb-2 pt-[max(1.5rem,env(safe-area-inset-top))]"
-          )}
-        >
+        <div className="relative w-full">
+          <div
+            className={cn(
+              "relative z-10 mx-auto flex w-full max-w-md items-center px-4 transition-[padding] duration-300 ease-out",
+              topBarCompact
+                ? "min-h-11 justify-between gap-2 py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))]"
+                : "justify-between gap-3 pb-2 pt-[max(1.5rem,env(safe-area-inset-top))]"
+            )}
+          >
           {!topBarCompact ? (
             <>
               <div className="min-w-0">
@@ -648,27 +813,42 @@ export default function HomePage() {
               <ThemeToggleIcons className="shrink-0" />
             </>
           )}
-        </div>
-        <div
-          className="pointer-events-none absolute bottom-0 left-0 right-0 z-[1] h-px overflow-hidden"
-          aria-hidden
-        >
-          <div className="absolute inset-0 bg-white/15 dark:bg-indigo-400/25" />
-          <div className="baps-topbar-scan-glow" />
+          </div>
+          <div
+            className="pointer-events-none absolute bottom-0 left-0 right-0 z-[1] h-px overflow-hidden"
+            aria-hidden
+          >
+            <div className="absolute inset-0 bg-white/15 dark:bg-indigo-400/25" />
+            <div className="baps-topbar-scan-glow" />
+          </div>
         </div>
       </header>
       <div
         className="shrink-0 transition-[height] duration-300 ease-out"
-        style={{
-          height: topBarCompact
-            ? "calc(2.75rem + env(safe-area-inset-top, 0px))"
-            : "calc(5.5rem + env(safe-area-inset-top, 0px))",
-        }}
         aria-hidden
+        style={{
+          height: headerDockPx > 0 ? `${headerDockPx}px` : undefined,
+          minHeight:
+            headerDockPx > 0
+              ? undefined
+              : topBarCompact
+                ? "calc(2.75rem + env(safe-area-inset-top, 0px))"
+                : "calc(5.5rem + env(safe-area-inset-top, 0px))",
+        }}
       />
 
-      {/* Weekly Calendar — 탑바와 층 분리된 포커스 카드 */}
+      {/* 캘린더 */}
       <section className="mx-4 rounded-2xl bg-slate-200/35 px-4 pb-3 pt-3 dark:bg-slate-900/50">
+        <div className="mb-3 flex items-center gap-1.5">
+          <h2 className="flex min-w-0 items-center gap-1.5 text-base font-semibold text-foreground">
+            <CalendarDays
+              className="h-5 w-5 shrink-0 text-primary"
+              strokeWidth={2}
+              aria-hidden
+            />
+            캘린더
+          </h2>
+        </div>
         <WeeklyCalendar />
       </section>
 
@@ -676,24 +856,47 @@ export default function HomePage() {
         <HomeDashboardSkeleton />
       ) : (
         <>
-          {/* 최상단: AI 팩폭 + 콤팩트 칼로리 게이지 */}
-          <section className="space-y-3 px-4 pb-4 pt-2">
+          {/* 오늘의 영양 지표: 인사이트 카드 + 칼로리 게이지 */}
+          <section className="space-y-3 px-4 pb-4 pt-3">
+            {userId ? (
+              <h2 className="flex min-w-0 items-center gap-2 text-lg font-bold tracking-tight text-foreground">
+                <Gauge
+                  className="h-6 w-6 shrink-0 text-primary"
+                  strokeWidth={2}
+                  aria-hidden
+                />
+                오늘의 영양 지표
+              </h2>
+            ) : null}
             {!authLoading && userId ? (
-              <DailyQuipBanner
-                displayName={displayName}
-                totalCal={totalCalories}
-                target={target}
-                mealCount={meals.length}
-                macros={macroTotals}
-                waterCups={waterLog?.cups ?? 0}
-                cupMl={cupMl}
-                waterRecommendedMl={waterRecommendedMl}
-                zone={calorieZone}
-                compact
-                className="mx-0"
-                aiLine={mainInsightLine ?? null}
-                aiPending={mainInsightPending}
-              />
+              <div className="space-y-2">
+                <h3 className="flex min-w-0 items-center gap-1.5 text-base font-semibold text-foreground">
+                  <Sparkles
+                    className="h-5 w-5 shrink-0 text-primary"
+                    aria-hidden
+                  />
+                  데일리 인사이트
+                </h3>
+                <DailyQuipBanner
+                  displayName={displayName}
+                  totalCal={totalCalories}
+                  target={target}
+                  mealCount={meals.length}
+                  macros={macroTotals}
+                  waterCups={waterLog?.cups ?? 0}
+                  cupMl={cupMl}
+                  waterRecommendedMl={waterRecommendedMl}
+                  zone={calorieZone}
+                  compact
+                  className="mx-0"
+                  aiLine={
+                    geminiInsightYmd === selectedDate
+                      ? geminiInsightLine
+                      : null
+                  }
+                  aiPending={geminiInsightPending}
+                />
+              </div>
             ) : null}
             <CalorieGauge
               current={totalCalories}
@@ -723,9 +926,9 @@ export default function HomePage() {
 
           <section className="px-4 pb-4 pt-3">
             <div className="mb-3">
-              <h2 className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-foreground">
+              <h2 className="flex min-w-0 items-center gap-1.5 text-base font-semibold text-foreground">
                 <UtensilsCrossed
-                  className="h-4 w-4 shrink-0 text-primary"
+                  className="h-5 w-5 shrink-0 text-primary"
                   strokeWidth={2}
                   aria-hidden
                 />
@@ -746,9 +949,9 @@ export default function HomePage() {
           {userId ? (
             <section className="px-4 pb-5 pt-3">
               <div className="mb-3">
-                <h2 className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-foreground">
+                <h2 className="flex min-w-0 items-center gap-1.5 text-base font-semibold text-foreground">
                   <Activity
-                    className="h-4 w-4 shrink-0 text-primary"
+                    className="h-5 w-5 shrink-0 text-primary"
                     strokeWidth={2}
                     aria-hidden
                   />
@@ -767,18 +970,8 @@ export default function HomePage() {
                   recommendedMl={waterRecommendedMl}
                   celebrationDateKey={selectedDate}
                   readOnly={false}
-                  onIncrement={() =>
-                    adjustWater.mutate({
-                      currentCups: waterLog?.cups ?? 0,
-                      delta: 1,
-                    })
-                  }
-                  onDecrement={() =>
-                    adjustWater.mutate({
-                      currentCups: waterLog?.cups ?? 0,
-                      delta: -1,
-                    })
-                  }
+                  onIncrement={() => handleWaterDelta(1)}
+                  onDecrement={() => handleWaterDelta(-1)}
                   isUpdating={adjustWater.isPending}
                 />
                 <WeightSparkStrip
@@ -826,6 +1019,17 @@ export default function HomePage() {
           />
         </>
       ) : null}
+
+      <CameraCaptureModal
+        isOpen={cameraCaptureOpen}
+        stream={cameraStream}
+        onClose={closeCameraCapture}
+        onCapture={(file) => void processMealImageFile(file)}
+        onUseNativeCamera={() => {
+          closeCameraCapture();
+          openNativeCameraInput();
+        }}
+      />
 
       {/* Analyze Modal */}
       <AnalyzeModal

@@ -35,10 +35,8 @@ export function WeeklyCalendar() {
   const todayStr = mounted ? getLocalYmd() : "";
   const centerDate = mounted ? new Date() : new Date(0);
 
-  // 오늘을 기준으로 앞뒤 14일 (클라이언트에서만 의미 있게 렌더)
   const dates = getDateRange(centerDate, 14);
 
-  // 초기 마운트 시 선택된 날짜(오늘)로 스크롤
   useEffect(() => {
     if (!mounted) return;
     if (todayRef.current && scrollRef.current) {
@@ -50,7 +48,6 @@ export function WeeklyCalendar() {
     }
   }, [mounted, selectedDate]);
 
-  // 현재 월 표시
   const selectedDateObj = new Date(selectedDate + "T12:00:00");
   const monthLabel = selectedDateObj.toLocaleDateString("ko-KR", {
     year: "numeric",
@@ -60,7 +57,7 @@ export function WeeklyCalendar() {
   if (!mounted) {
     return (
       <div className="space-y-3">
-        <div className="h-4 w-24 rounded bg-muted animate-pulse" />
+        <div className="h-5 max-w-[12rem] rounded-md bg-muted animate-pulse" />
         <div className="flex gap-1 -mx-4 px-4">
           {Array.from({ length: 7 }).map((_, i) => (
             <div
@@ -75,18 +72,11 @@ export function WeeklyCalendar() {
 
   return (
     <div className="space-y-3">
-      {/* Month header */}
       <div className="flex items-center justify-between gap-2">
-        <div>
-          <h2 className="text-sm font-semibold">{monthLabel}</h2>
-          <p className="mt-0.5 text-[9px] leading-tight text-muted-foreground">
-            날짜는 기기 설정 시간대 기준 자정(00:00)에 바뀌어요. 새벽에 기록이
-            &quot;어제&quot;로 보이면 위 <strong className="text-foreground/90">오늘</strong>을
-            눌러 주세요.
-          </p>
-        </div>
-        {todayStr && selectedDate !== todayStr && (
+        <p className="text-base font-semibold text-foreground">{monthLabel}</p>
+        {todayStr && selectedDate !== todayStr ? (
           <button
+            type="button"
             onClick={() => {
               setSelectedDate(todayStr);
               todayRef.current?.scrollIntoView({
@@ -95,14 +85,18 @@ export function WeeklyCalendar() {
                 block: "nearest",
               });
             }}
-            className="text-xs text-primary font-medium"
+            className={cn(
+              "shrink-0 rounded-xl border-2 border-primary/50 bg-primary/12",
+              "px-3 py-1.5 text-xs font-bold text-primary shadow-sm shadow-primary/15",
+              "transition-colors active:scale-[0.98]",
+              "hover:bg-primary/20 hover:border-primary"
+            )}
           >
             오늘
           </button>
-        )}
+        ) : null}
       </div>
 
-      {/* Scrollable dates */}
       <div
         ref={scrollRef}
         className="flex gap-1 overflow-x-auto scrollbar-hide -mx-4 px-4 snap-x snap-mandatory"
@@ -117,6 +111,7 @@ export function WeeklyCalendar() {
           return (
             <button
               key={dateStr}
+              type="button"
               ref={isToday ? todayRef : undefined}
               onClick={() => setSelectedDate(dateStr)}
               className={cn(
@@ -135,15 +130,14 @@ export function WeeklyCalendar() {
                 {DAY_LABELS[dayOfWeek]}
               </span>
               <span className="text-sm font-bold">{date.getDate()}</span>
-              {/* Today indicator dot */}
-              {isToday && (
+              {isToday ? (
                 <div
                   className={cn(
                     "w-1 h-1 rounded-full",
                     isSelected ? "bg-primary-foreground" : "bg-primary"
                   )}
                 />
-              )}
+              ) : null}
             </button>
           );
         })}
