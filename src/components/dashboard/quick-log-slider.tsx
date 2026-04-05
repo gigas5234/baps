@@ -32,8 +32,9 @@ export function QuickLogSlider({
 }: QuickLogSliderProps) {
   const visible = items.filter((m) => Number(m.count) >= MIN_COUNT_SHOW);
 
+  /** 항목이 1개 이상일 때만 헤더 우측 + (빈 목록일 때는 아래 등록 카드·수동 입력으로만 추가) */
   const headerAddon =
-    onAddFrequent != null ? (
+    onAddFrequent != null && visible.length > 0 ? (
       <button
         type="button"
         onClick={onAddFrequent}
@@ -53,7 +54,6 @@ export function QuickLogSlider({
       <section className="px-4 pb-[1.05rem] pt-[1.05rem]">
         <div className="mb-[1.05rem] flex items-center justify-between gap-2 pr-1">
           <div className="h-4 w-36 rounded bg-muted animate-pulse" />
-          <div className="h-8 w-8 shrink-0 rounded-xl bg-muted animate-pulse" />
         </div>
         <div className="flex gap-2 overflow-hidden pl-0.5">
           {[1, 2, 3].map((k) => (
@@ -79,7 +79,6 @@ export function QuickLogSlider({
             />
             퀵 로그 · 자주 찾는 식단
           </h2>
-          {headerAddon}
         </div>
         <button
           type="button"
@@ -117,7 +116,7 @@ export function QuickLogSlider({
           </button>
           <button
             type="button"
-            onClick={onOpenManual}
+            onClick={onAddFrequent ?? onOpenManual}
             className={cn(
               "flex flex-1 items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-medium",
               "bg-muted/40 text-foreground",
