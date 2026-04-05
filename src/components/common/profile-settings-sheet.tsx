@@ -16,7 +16,7 @@ import { calculateBMR } from "@/lib/bmr";
 import { normalizeWaterCupMl, WATER_CUP_ML_OPTIONS } from "@/lib/water-cup";
 import { cn } from "@/lib/utils";
 import { useProfileStore } from "@/store/use-profile-store";
-import { useAppTheme } from "@/components/theme-provider";
+import { ThemeToggleIcons } from "@/components/theme-toggle-icons";
 import type { Gender, Profile } from "@/types/database";
 
 interface ProfileSettingsSheetProps {
@@ -42,7 +42,6 @@ export function ProfileSettingsSheet({
 }: ProfileSettingsSheetProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { theme, setTheme } = useAppTheme();
   const setProfileStore = useProfileStore((s) => s.setProfile);
   const resetProfileStore = useProfileStore((s) => s.reset);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -428,42 +427,10 @@ export function ProfileSettingsSheet({
                 </div>
 
                 <div className="flex flex-1 flex-col overflow-y-auto px-4 py-4">
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium text-muted-foreground">
-                      화면 테마
-                    </p>
-                    <div className="flex rounded-xl border border-border bg-muted/35 p-1">
-                      <button
-                        type="button"
-                        onClick={() => setTheme("light")}
-                        className={cn(
-                          "flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors",
-                          theme === "light"
-                            ? "bg-background text-foreground shadow-sm"
-                            : "text-muted-foreground hover:text-foreground"
-                        )}
-                      >
-                        일반
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setTheme("dark")}
-                        className={cn(
-                          "flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors",
-                          theme === "dark"
-                            ? "bg-background text-foreground shadow-sm"
-                            : "text-muted-foreground hover:text-foreground"
-                        )}
-                      >
-                        다크
-                      </button>
-                    </div>
-                  </div>
-
                   <button
                     type="button"
                     onClick={() => setPanel("profile")}
-                    className="mt-6 flex w-full items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3.5 text-left transition-colors hover:bg-muted/60"
+                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3.5 text-left transition-colors hover:bg-muted/60"
                   >
                     <span className="text-sm font-semibold">
                       개인정보 수정
@@ -472,9 +439,18 @@ export function ProfileSettingsSheet({
                   </button>
                 </div>
 
+                <>
+                  <div className="shrink-0 border-t border-border" />
+                  <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-3">
+                    <span className="text-xs text-muted-foreground">
+                      화면 테마
+                    </span>
+                    <ThemeToggleIcons />
+                  </div>
+                </>
                 {userId ? (
                   <>
-                    <div className="shrink-0 border-t border-border" />
+                    <div className="shrink-0 border-t border-border border-dashed" />
                     <div className="shrink-0 px-4 py-4">
                       <button
                         type="button"

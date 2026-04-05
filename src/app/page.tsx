@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
 import { Menu } from "lucide-react";
+import { GoogleSignInButtonBlock } from "@/components/common/google-sign-in-button-block";
 import { QuickActionButton } from "@/components/common/quick-action-button";
 import { ChatFab } from "@/components/common/chat-fab";
 import { ProfileSettingsSheet } from "@/components/common/profile-settings-sheet";
@@ -46,6 +47,8 @@ import {
 } from "@/lib/water-goal";
 import { normalizeWaterCupMl } from "@/lib/water-cup";
 import { createClient } from "@/lib/supabase-browser";
+import { ThemeToggleIcons } from "@/components/theme-toggle-icons";
+import { cn } from "@/lib/utils";
 
 interface AnalyzeResult {
   food_name: string;
@@ -357,12 +360,13 @@ export default function HomePage() {
     return <HomeLanding phase="loading" />;
   }
 
-  if (!userId) {
-    return <HomeLanding phase="guest" />;
-  }
-
   return (
-    <main className="flex-1 pb-28 max-w-md mx-auto w-full">
+    <main
+      className={cn(
+        "flex-1 max-w-md mx-auto w-full",
+        userId ? "pb-28" : "pb-36"
+      )}
+    >
       {/* 카메라: 촬영 우선 (모바일에서 후면 카메라) */}
       <input
         ref={cameraInputRef}
@@ -402,10 +406,12 @@ export default function HomePage() {
                   BAPS
                 </Link>
               </h1>
-              <p className="text-sm text-muted-foreground truncate">
-                {displayName
-                  ? `${displayName}님, 오늘도 건강하게!`
-                  : "오늘도 건강하게!"}
+              <p className="text-sm text-muted-foreground dark:text-foreground/75 truncate">
+                {userId
+                  ? displayName
+                    ? `${displayName}님, 오늘도 건강하게!`
+                    : "오늘도 건강하게!"
+                  : "로그인하면 기록이 저장돼요"}
               </p>
             </div>
             {userId ? (
@@ -417,7 +423,9 @@ export default function HomePage() {
               >
                 <Menu className="w-5 h-5" />
               </button>
-            ) : null}
+            ) : (
+              <ThemeToggleIcons className="shrink-0" />
+            )}
           </>
         )}
       </header>
@@ -461,6 +469,7 @@ export default function HomePage() {
               cupMl={cupMl}
               targetCups={waterTargetCups}
               recommendedMl={waterRecommendedMl}
+              readOnly={!userId}
               onIncrement={() =>
                 adjustWater.mutate({
                   currentCups: waterLog?.cups ?? 0,
@@ -493,14 +502,16 @@ export default function HomePage() {
             </div>
           ) : null}
 
-          <QuickLogSlider
-            items={quickLogItems}
-            isLoading={frequentMealsPending}
-            busyId={quickLogBusyId}
-            onPick={handleQuickLogPick}
-            onOpenCamera={openCameraPicker}
-            onOpenManual={() => setManualOpen(true)}
-          />
+          {userId ? (
+            <QuickLogSlider
+              items={quickLogItems}
+              isLoading={frequentMealsPending}
+              busyId={quickLogBusyId}
+              onPick={handleQuickLogPick}
+              onOpenCamera={openCameraPicker}
+              onOpenManual={() => setManualOpen(true)}
+            />
+          ) : null}
 
           <section className="px-4 py-3">
             <h2 className="text-sm font-semibold text-muted-foreground mb-3">
@@ -526,6 +537,9 @@ export default function HomePage() {
             waterCupMl={cupMl}
             waterTargetCups={waterTargetCups}
             waterRecommendedMl={waterRecommendedMl}
+            displayName={displayName}
+            bmr={profile?.bmr ?? null}
+            macros={macroTotals}
           />
         </>
       ) : null}
@@ -563,10 +577,31 @@ export default function HomePage() {
 
       {toast ? (
         <div
-          className="pointer-events-none fixed bottom-24 left-1/2 z-[70] max-w-[min(90vw,20rem)] -translate-x-1/2 rounded-2xl border border-border bg-card/95 px-4 py-3 text-center text-sm font-medium text-foreground shadow-lg backdrop-blur-md"
+          className={cn(
+            "pointer-events-none fixed left-1/2 z-[70] max-w-[min(90vw,20rem)] -translate-x-1/2 rounded-2xl border border-border bg-card/95 px-4 py-3 text-center text-sm font-medium text-foreground shadow-lg backdrop-blur-md",
+            userId ? "bottom-24" : "bottom-32"
+          )}
           role="status"
         >
           {toast}
+        </div>
+      ) : null}
+
+      {!userId ? (
+        <div
+          className={cn(
+            "fixed bottom-0 left-0 right-0 z-20 border-t border-border",
+            "bg-background/90 backdrop-blur-xl supports-[backdrop-filter]:bg-background/80"
+          )}
+        >
+          <div
+            className="mx-auto w-full max-w-md px-4 py-4"
+            style={{
+              paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
+            }}
+          >
+            <GoogleSignInButtonBlock />
+          </div>
         </div>
       ) : null}
     </main>

@@ -9,8 +9,9 @@ export function getGeminiApiKey(): string | undefined {
   );
 }
 
+/** 기본: Gemini 3.1 Flash-Lite (Preview). 운영에서 바꾸려면 GEMINI_MODEL 환경 변수 사용. */
 export function getGeminiModelName(): string {
-  return process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+  return process.env.GEMINI_MODEL ?? "gemini-3.1-flash-lite-preview";
 }
 
 export function createGenAI(): GoogleGenerativeAI | null {

@@ -15,6 +15,8 @@ interface WaterCounterProps {
   onIncrement: () => void;
   onDecrement: () => void;
   isUpdating?: boolean;
+  /** 비로그인 등: 버튼 비활성 + 안내 */
+  readOnly?: boolean;
 }
 
 export function WaterCounter({
@@ -25,12 +27,14 @@ export function WaterCounter({
   onIncrement,
   onDecrement,
   isUpdating,
+  readOnly = false,
 }: WaterCounterProps) {
   const safeTarget = Math.max(1, targetCups);
   const percentage = Math.min((cups / safeTarget) * 100, 100);
   const totalMl = cups * cupMl;
   const goalMl = safeTarget * cupMl;
-  const canDecrement = cups > 0 && !isUpdating;
+  const canDecrement = !readOnly && cups > 0 && !isUpdating;
+  const canIncrement = !readOnly && !isUpdating;
 
   return (
     <div
@@ -45,14 +49,20 @@ export function WaterCounter({
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold">물 섭취</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className="text-xs text-muted-foreground dark:text-foreground/70 mt-0.5">
             목표 {safeTarget}잔 · {goalMl.toLocaleString()}ml
           </p>
-          <p className="text-[10px] text-muted-foreground/90 mt-0.5 leading-snug">
+          <p className="text-[10px] text-muted-foreground dark:text-foreground/65 mt-0.5 leading-snug">
             권장 약 {recommendedMl.toLocaleString()}ml (체중·성별·나이·BMR·목표 칼로리)
           </p>
         </div>
       </div>
+
+      {readOnly ? (
+        <p className="mt-2 text-[11px] leading-snug text-muted-foreground dark:text-foreground/70">
+          로그인 후 물 섭취를 기록할 수 있어요.
+        </p>
+      ) : null}
 
       {/* Progress bar */}
       <div className="mt-3 h-2 bg-muted rounded-full overflow-hidden">
@@ -84,7 +94,7 @@ export function WaterCounter({
           <span className="font-data text-2xl font-bold tabular-nums tracking-tight">
             {cups}
           </span>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground dark:text-foreground/70">
             1잔 {cupMl}ml · 누적 {totalMl}ml
           </span>
         </div>
@@ -92,7 +102,7 @@ export function WaterCounter({
         <button
           type="button"
           onClick={onIncrement}
-          disabled={isUpdating}
+          disabled={!canIncrement}
           aria-label="1잔 더하기"
           className={cn(
             "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-scanner text-scanner-foreground shadow-md shadow-scanner/25 transition-transform active:scale-95",

@@ -87,9 +87,9 @@ export function useWaterLog(userId: string | undefined, date: string) {
         .select("*")
         .eq("user_id", userId)
         .eq("date", date)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== "PGRST116") throw error; // PGRST116 = no rows
+      if (error) throw error;
       return (data as WaterLog) ?? null;
     },
     enabled: !!userId,

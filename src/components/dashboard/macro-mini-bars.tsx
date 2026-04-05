@@ -22,7 +22,7 @@ export function MacroMiniBars({ macros, totalMealCalories }: MacroMiniBarsProps)
 
   if (sum <= 0 && totalMealCalories <= 0) {
     return (
-      <p className="mt-4 text-center text-[11px] text-muted-foreground">
+      <p className="mt-4 text-center text-[11px] text-muted-foreground dark:text-foreground/70">
         식사를 기록하면 탄·단·지 비율이 표시돼요
       </p>
     );

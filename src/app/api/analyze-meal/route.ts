@@ -1,19 +1,51 @@
 import { NextResponse } from "next/server";
+import { SchemaType, type Schema } from "@google/generative-ai";
 import { createGenAI, getGeminiModelName } from "@/lib/gemini";
 
-const PROMPT = `너는 전문 영양사야. 이 사진 속 음식을 분석해서 반드시 아래 JSON 형식으로만 답변해줘.
-한국 음식 특성을 잘 반영하고, 1인분 기준으로 영양 정보를 추정해.
-여러 음식이 보이면 전체를 하나의 식사로 합산해서 답변해.
+/**
+ * Gemini 3.1 Flash-Lite: 저지연·이미지→구조화 추출에 맞춘 스키마 전용 호출.
+ * @see https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-lite-preview
+ */
+const mealAnalysisSchema: Schema = {
+  type: SchemaType.OBJECT,
+  properties: {
+    food_name: {
+      type: SchemaType.STRING,
+      description: "대표 음식명, 한국어, 짧게. 반상이면 한 줄로 합쳐 표기.",
+    },
+    calories: {
+      type: SchemaType.NUMBER,
+      description: "추정 총 칼로리 kcal, 1인분·한 끼 기준.",
+    },
+    carbs: { type: SchemaType.NUMBER, description: "탄수화물 g" },
+    protein: { type: SchemaType.NUMBER, description: "단백질 g" },
+    fat: { type: SchemaType.NUMBER, description: "지방 g" },
+    description: {
+      type: SchemaType.STRING,
+      description: "한 줄 요약, 약 40자 이내, 팩트만.",
+    },
+  },
+  required: [
+    "food_name",
+    "calories",
+    "carbs",
+    "protein",
+    "fat",
+    "description",
+  ],
+};
 
-반드시 아래 JSON 형식만 반환해. 다른 텍스트는 절대 포함하지 마.
-{
-  "food_name": "음식 이름 (한국어)",
-  "calories": 숫자,
-  "carbs": 숫자,
-  "protein": 숫자,
-  "fat": 숫자,
-  "description": "한 줄 설명"
-}`;
+const VISION_PROMPT = `[작업]
+사진 1장을 보고 **한 끼 식사**로 추정한 영양 값만 구조화한다. 모델 특성(Flash-Lite): 빠른 시각→필드 추출, 짧은 근거.
+
+[규칙]
+- **보이는 것만** 근거로 삼는다. 애매하면 한국 일반 분량 기준으로 **보수적** 추정(칼로리 과대 금지).
+- 반찬·밥·국이 같이 있으면 **한 끼 합산**으로 food_name에 대표명을 적는다.
+- 반드시 스키마 숫자 필드만 채운다. 부가 설명·마크다운 없음.
+
+[단위]
+- calories: 총 kcal
+- carbs, protein, fat: 그램`;
 
 export async function POST(request: Request) {
   try {
@@ -38,10 +70,17 @@ export async function POST(request: Request) {
       );
     }
 
-    const model = genAI.getGenerativeModel({ model: getGeminiModelName() });
+    const model = genAI.getGenerativeModel({
+      model: getGeminiModelName(),
+      generationConfig: {
+        temperature: 0.32,
+        responseMimeType: "application/json",
+        responseSchema: mealAnalysisSchema,
+      },
+    });
 
     const result = await model.generateContent([
-      PROMPT,
+      VISION_PROMPT,
       {
         inlineData: {
           mimeType: mimeType || "image/jpeg",
@@ -51,18 +90,31 @@ export async function POST(request: Request) {
     ]);
 
     const text = result.response.text();
-
-    // JSON 파싱 (마크다운 코드블록 제거)
-    const jsonStr = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-    const parsed = JSON.parse(jsonStr);
+    let parsed: {
+      food_name?: string;
+      calories?: number;
+      carbs?: number;
+      protein?: number;
+      fat?: number;
+      description?: string;
+    };
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      const jsonStr = text
+        .replace(/```json\n?/g, "")
+        .replace(/```\n?/g, "")
+        .trim();
+      parsed = JSON.parse(jsonStr);
+    }
 
     return NextResponse.json({
-      food_name: parsed.food_name,
-      cal: Math.round(parsed.calories),
-      carbs: Math.round(parsed.carbs * 10) / 10,
-      protein: Math.round(parsed.protein * 10) / 10,
-      fat: Math.round(parsed.fat * 10) / 10,
-      description: parsed.description,
+      food_name: String(parsed.food_name ?? "식사"),
+      cal: Math.round(Number(parsed.calories) || 0),
+      carbs: Math.round(Number(parsed.carbs) * 10) / 10,
+      protein: Math.round(Number(parsed.protein) * 10) / 10,
+      fat: Math.round(Number(parsed.fat) * 10) / 10,
+      description: String(parsed.description ?? ""),
     });
   } catch (error) {
     console.error("Gemini analyze error:", error);

@@ -28,12 +28,13 @@ function zoneStyle(zone: ReturnType<typeof getCalorieZone>): {
       return {
         message: "오늘의 식단을 기록해보세요!",
         textClass: "text-muted-foreground",
-        accent: "rgb(163 163 163)",
-        trackStroke: "rgb(212 212 212 / 0.55)",
-        cardBg: "rgba(245, 245, 245, 0.55)",
-        cardRing: "rgba(0,0,0,0.06)",
+        accent: "color-mix(in srgb, var(--muted-foreground) 90%, transparent)",
+        trackStroke: "color-mix(in srgb, var(--border) 60%, transparent)",
+        cardBg:
+          "color-mix(in srgb, var(--card) 90%, var(--muted) 10%)",
+        cardRing: "color-mix(in srgb, var(--border) 38%, transparent)",
         glassGradient:
-          "linear-gradient(145deg, rgba(255,255,255,0.65) 0%, rgba(250,250,250,0.4) 45%, rgba(245,245,245,0.35) 100%)",
+          "linear-gradient(145deg, color-mix(in srgb, var(--card) 96%, transparent) 0%, color-mix(in srgb, var(--muted) 14%, var(--card)) 100%)",
       };
     case "safe":
       return {
@@ -90,6 +91,7 @@ export function CalorieGauge({
   const zone = getCalorieZone(current, target);
   const style = zoneStyle(zone);
   const isDanger = zone === "danger";
+  const isEmpty = zone === "empty";
 
   const size = 220;
   const strokeWidth = 14;
@@ -120,7 +122,9 @@ export function CalorieGauge({
         background: `${style.glassGradient}, ${style.cardBg}`,
         backgroundBlendMode: "normal",
         borderColor: style.cardRing,
-        boxShadow: `0 4px 24px -4px ${style.cardRing}, 0 1px 0 0 rgba(255,255,255,0.5) inset`,
+        boxShadow: isEmpty
+          ? `0 4px 24px -4px ${style.cardRing}`
+          : `0 4px 24px -4px ${style.cardRing}, 0 1px 0 0 rgba(255,255,255,0.5) inset`,
       }}
     >
       <div className="flex flex-col items-center">
@@ -170,15 +174,18 @@ export function CalorieGauge({
             <Flame
               className={cn(
                 "mb-1 h-5 w-5",
-                zone === "empty" && "text-muted-foreground"
+                isEmpty &&
+                  "text-foreground/70 dark:text-foreground/85"
               )}
-              style={zone === "empty" ? undefined : { color: style.accent }}
+              style={!isEmpty ? { color: style.accent } : undefined}
               strokeWidth={2}
             />
             <motion.p
               className={cn(
                 "font-data text-3xl font-bold tabular-nums",
-                zone === "empty" ? "text-muted-foreground" : style.textClass
+                isEmpty
+                  ? "text-foreground/80 dark:text-foreground/90"
+                  : style.textClass
               )}
               key={current}
               initial={{ scale: 1.08, opacity: 0.85 }}
@@ -187,14 +194,26 @@ export function CalorieGauge({
             >
               {current.toLocaleString()}
             </motion.p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
+            <p
+              className={cn(
+                "mt-0.5 text-xs",
+                isEmpty
+                  ? "text-foreground/65 dark:text-foreground/75"
+                  : "text-muted-foreground"
+              )}
+            >
               / {target.toLocaleString()} kcal
             </p>
           </div>
         </div>
 
         <motion.p
-          className={cn("mt-3 text-sm font-medium", style.textClass)}
+          className={cn(
+            "mt-3 text-sm font-medium",
+            isEmpty
+              ? "text-foreground/85 dark:text-foreground/90"
+              : style.textClass
+          )}
           key={style.message}
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
