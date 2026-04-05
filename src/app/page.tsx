@@ -465,73 +465,36 @@ export default function HomePage() {
         <WeeklyCalendar />
       </section>
 
-      {!authLoading && !showDashboardSkeleton && userId ? (
-        <div className="pb-1 pt-1">
-          <DailyQuipBanner
-            displayName={displayName}
-            totalCal={totalCalories}
-            target={target}
-            mealCount={meals.length}
-            macros={macroTotals}
-            waterCups={waterLog?.cups ?? 0}
-            cupMl={cupMl}
-            waterRecommendedMl={waterRecommendedMl}
-            zone={calorieZone}
-          />
-        </div>
-      ) : null}
-
       {showDashboardSkeleton ? (
         <HomeDashboardSkeleton />
       ) : (
         <>
-          <section className="px-4 py-3">
+          {/* 최상단: AI 팩폭 + 콤팩트 칼로리 게이지 */}
+          <section className="px-4 pb-2 pt-1 space-y-2">
+            {!authLoading && userId ? (
+              <DailyQuipBanner
+                displayName={displayName}
+                totalCal={totalCalories}
+                target={target}
+                mealCount={meals.length}
+                macros={macroTotals}
+                waterCups={waterLog?.cups ?? 0}
+                cupMl={cupMl}
+                waterRecommendedMl={waterRecommendedMl}
+                zone={calorieZone}
+                compact
+                className="mx-0"
+              />
+            ) : null}
             <CalorieGauge
               current={totalCalories}
               target={target}
               macros={macroTotals}
+              compact={Boolean(userId)}
             />
           </section>
 
-          <section className="px-4 py-2">
-            <WaterCounter
-              cups={waterLog?.cups ?? 0}
-              cupMl={cupMl}
-              targetCups={waterTargetCups}
-              recommendedMl={waterRecommendedMl}
-              readOnly={!userId}
-              onIncrement={() =>
-                adjustWater.mutate({
-                  currentCups: waterLog?.cups ?? 0,
-                  delta: 1,
-                })
-              }
-              onDecrement={() =>
-                adjustWater.mutate({
-                  currentCups: waterLog?.cups ?? 0,
-                  delta: -1,
-                })
-              }
-              isUpdating={adjustWater.isPending}
-            />
-          </section>
-
-          {userId ? (
-            <div className="pb-3">
-              <WeightSparkStrip
-                userId={userId}
-                selectedDate={selectedDate}
-                profileKg={profile?.weight ?? null}
-                targetWeightKg={profile?.target_weight ?? null}
-                onSavedProfile={() =>
-                  void queryClient.invalidateQueries({
-                    queryKey: ["profile", userId],
-                  })
-                }
-              />
-            </div>
-          ) : null}
-
+          {/* 자주 찾는 식단 (가로 스토리 스크롤) */}
           {userId ? (
             <QuickLogSlider
               items={quickLogItems}
@@ -543,12 +506,65 @@ export default function HomePage() {
             />
           ) : null}
 
-          <section className="px-4 py-3">
-            <h2 className="text-sm font-semibold text-muted-foreground mb-3">
+          <section className="px-4 py-2">
+            <h2 className="mb-2 text-sm font-semibold text-muted-foreground">
               오늘 먹은 것
             </h2>
             <MealTimeline meals={meals} />
           </section>
+
+          {/* 물 + 체중: 2컬럼 카드 페어링 */}
+          {userId ? (
+            <section className="px-4 pb-3 pt-1">
+              <div className="grid grid-cols-2 gap-2.5 items-stretch">
+                <WaterCounter
+                  variant="paired"
+                  cups={waterLog?.cups ?? 0}
+                  cupMl={cupMl}
+                  targetCups={waterTargetCups}
+                  recommendedMl={waterRecommendedMl}
+                  readOnly={false}
+                  onIncrement={() =>
+                    adjustWater.mutate({
+                      currentCups: waterLog?.cups ?? 0,
+                      delta: 1,
+                    })
+                  }
+                  onDecrement={() =>
+                    adjustWater.mutate({
+                      currentCups: waterLog?.cups ?? 0,
+                      delta: -1,
+                    })
+                  }
+                  isUpdating={adjustWater.isPending}
+                />
+                <WeightSparkStrip
+                  userId={userId}
+                  selectedDate={selectedDate}
+                  profileKg={profile?.weight ?? null}
+                  targetWeightKg={profile?.target_weight ?? null}
+                  compact
+                  onSavedProfile={() =>
+                    void queryClient.invalidateQueries({
+                      queryKey: ["profile", userId],
+                    })
+                  }
+                />
+              </div>
+            </section>
+          ) : (
+            <section className="px-4 py-2 pb-4">
+              <WaterCounter
+                cups={waterLog?.cups ?? 0}
+                cupMl={cupMl}
+                targetCups={waterTargetCups}
+                recommendedMl={waterRecommendedMl}
+                readOnly
+                onIncrement={() => {}}
+                onDecrement={() => {}}
+              />
+            </section>
+          )}
         </>
       )}
 

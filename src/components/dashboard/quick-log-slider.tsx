@@ -29,11 +29,11 @@ export function QuickLogSlider({
     return (
       <section className="px-4 pb-2 pt-1">
         <div className="mb-2 h-4 w-36 rounded bg-muted animate-pulse" />
-        <div className="flex gap-2 overflow-hidden">
-          {[1, 2, 3].map((k) => (
+        <div className="flex gap-3 overflow-hidden pl-0.5">
+          {[1, 2, 3, 4].map((k) => (
             <div
               key={k}
-              className="aspect-square w-[4.5rem] shrink-0 rounded-2xl bg-muted animate-pulse"
+              className="h-16 w-16 shrink-0 rounded-full bg-muted animate-pulse"
             />
           ))}
         </div>
@@ -44,43 +44,45 @@ export function QuickLogSlider({
   if (visible.length === 0) {
     return (
       <section className="px-4 pb-3 pt-1">
-        <h2 className="mb-1 flex items-center gap-1.5 text-sm font-semibold text-foreground">
-          <Sparkles className="h-4 w-4 text-primary" aria-hidden />
+        <h2 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-foreground">
+          <Sparkles className="h-4 w-4 shrink-0 text-primary" aria-hidden />
           자주 찾는 식단
         </h2>
-        <button
-          type="button"
-          onClick={onOpenCamera}
-          className="w-full rounded-2xl border border-dashed border-grid-line bg-muted/20 px-4 py-4 text-left transition-colors hover:bg-muted/35"
+        {/* 슬롯: 채워질 자리 — 클릭 대상 아님 */}
+        <div
+          className={cn(
+            "rounded-2xl border-2 border-dashed border-muted-foreground/25 px-4 py-4",
+            "bg-transparent dark:border-white/18"
+          )}
         >
-          <p className="text-sm font-medium text-foreground leading-snug">
-            아직 자주 먹는 식단이 없어요. 첫 식단을 기록하고 &apos;자주 먹는
-            메뉴&apos;로 등록해 보세요!
+          <p className="text-center text-xs font-medium leading-relaxed text-muted-foreground">
+            자주 먹는 식단을 등록하면 클릭 한 번으로 기록할 수 있어요.
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-xl bg-primary/10 px-3 py-2 text-xs font-medium text-primary">
-              <Camera className="h-3.5 w-3.5" />
-              사진으로 기록
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-xl bg-scanner/15 px-3 py-2 text-xs font-medium text-scanner">
-              <Pencil className="h-3.5 w-3.5" />
-              직접 입력
-            </span>
-          </div>
-        </button>
-        <div className="mt-2 flex gap-2">
+        </div>
+        <div className="mt-3 flex gap-2.5">
           <button
             type="button"
             onClick={onOpenCamera}
-            className="flex-1 rounded-xl border border-border py-2.5 text-xs font-medium hover:bg-muted/60"
+            className={cn(
+              "flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold shadow-md shadow-primary/25",
+              "bg-primary text-primary-foreground",
+              "ring-1 ring-primary/20 transition-colors hover:bg-primary/90 active:scale-[0.99]"
+            )}
           >
+            <Camera className="h-4 w-4" aria-hidden />
             카메라
           </button>
           <button
             type="button"
             onClick={onOpenManual}
-            className="flex-1 rounded-xl border border-border py-2.5 text-xs font-medium hover:bg-muted/60"
+            className={cn(
+              "flex flex-1 items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-medium",
+              "bg-muted/40 text-foreground",
+              "transition-colors hover:bg-muted/65 active:scale-[0.99]",
+              "dark:border-white/12 dark:bg-muted/25"
+            )}
           >
+            <Pencil className="h-4 w-4 text-muted-foreground" aria-hidden />
             수동 입력
           </button>
         </div>
@@ -94,7 +96,13 @@ export function QuickLogSlider({
         <Sparkles className="h-4 w-4 text-primary" aria-hidden />
         자주 찾는 식단
       </h2>
-      <div className="scrollbar-hide flex gap-2.5 overflow-x-auto pb-1 -mx-0.5 px-0.5">
+      <div
+        className={cn(
+          "scrollbar-hide flex gap-3 overflow-x-auto overflow-y-visible pb-1.5 pl-0.5 pr-3",
+          "snap-x snap-mandatory scroll-pl-0.5 [-ms-overflow-style:none] [scrollbar-width:none]",
+          "[&::-webkit-scrollbar]:hidden"
+        )}
+      >
         {visible.map((m) => {
           const busy = busyId === m.id;
           const src = m.image_url?.trim();
@@ -105,13 +113,19 @@ export function QuickLogSlider({
               disabled={busy}
               onClick={() => onPick(m)}
               className={cn(
-                "group flex w-[4.75rem] shrink-0 flex-col overflow-hidden rounded-2xl border border-border bg-card text-left shadow-sm transition-[transform,box-shadow] active:scale-[0.98]",
-                "hover:border-primary/35 hover:shadow-md",
+                "group flex w-[4.5rem] shrink-0 snap-start flex-col items-center gap-1.5 text-center",
+                "transition-transform active:scale-[0.97]",
                 "disabled:pointer-events-none disabled:opacity-50",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-full"
               )}
             >
-              <div className="relative aspect-square w-full bg-muted">
+              <div
+                className={cn(
+                  "relative h-16 w-16 shrink-0 overflow-hidden rounded-full bg-muted ring-2 ring-offset-2 ring-offset-background transition-[box-shadow,ring-color]",
+                  "ring-border group-hover:ring-primary/45",
+                  busy && "ring-primary/50"
+                )}
+              >
                 {src ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -120,18 +134,18 @@ export function QuickLogSlider({
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/12 to-scanner/15 px-1 text-center font-data text-[10px] font-semibold text-primary leading-tight">
-                    {m.food_name.slice(0, 8)}
-                    {m.food_name.length > 8 ? "…" : ""}
+                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/15 to-scanner/18 px-1 text-center font-data text-[9px] font-semibold text-primary leading-tight">
+                    {m.food_name.slice(0, 5)}
+                    {m.food_name.length > 5 ? "…" : ""}
                   </div>
                 )}
                 {busy ? (
-                  <div className="absolute inset-0 flex items-center justify-center bg-background/55 text-[10px] font-medium">
+                  <div className="absolute inset-0 flex items-center justify-center rounded-full bg-background/55 text-[10px] font-medium">
                     …
                   </div>
                 ) : null}
               </div>
-              <p className="line-clamp-2 px-1.5 py-1.5 text-[10px] font-medium leading-tight text-foreground">
+              <p className="line-clamp-2 w-full text-[10px] font-medium leading-tight text-foreground">
                 {m.food_name}
               </p>
             </button>

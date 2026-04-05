@@ -19,6 +19,8 @@ interface DailyQuipBannerProps {
   waterRecommendedMl: number;
   zone: CalorieZone;
   className?: string;
+  /** 게이지와 붙일 때: 작은 말풍선 */
+  compact?: boolean;
 }
 
 export function DailyQuipBanner({
@@ -32,6 +34,7 @@ export function DailyQuipBanner({
   waterRecommendedMl,
   zone,
   className,
+  compact = false,
 }: DailyQuipBannerProps) {
   const line = useMemo(() => {
     const nick = displayName?.trim() || "님";
@@ -88,22 +91,42 @@ export function DailyQuipBanner({
   return (
     <div
       className={cn(
-        "relative mx-4 rounded-2xl border px-3.5 py-3 shadow-sm",
+        "relative rounded-2xl border shadow-sm",
+        compact
+          ? "border-primary/12 px-3 py-2.5"
+          : "mx-4 px-3.5 py-3",
         "border-primary/15 bg-gradient-to-br from-primary/6 via-background/80 to-scanner/8",
         "backdrop-blur-md dark:from-primary/15 dark:to-scanner/12",
         className
       )}
     >
-      <div className="flex gap-2.5">
-        <div className="mt-0.5 shrink-0 rounded-lg bg-primary/10 p-1.5 dark:bg-primary/20">
-          <Sparkles className="h-4 w-4 text-primary" aria-hidden />
+      <div className={cn("flex", compact ? "gap-2" : "gap-2.5")}>
+        <div
+          className={cn(
+            "mt-0.5 shrink-0 rounded-lg bg-primary/10 dark:bg-primary/20",
+            compact ? "p-1" : "p-1.5"
+          )}
+        >
+          <Sparkles
+            className={cn("text-primary", compact ? "h-3.5 w-3.5" : "h-4 w-4")}
+            aria-hidden
+          />
         </div>
-        <p className="text-sm leading-snug text-foreground/90">{line}</p>
+        <p
+          className={cn(
+            "leading-snug text-foreground/90",
+            compact ? "text-xs" : "text-sm"
+          )}
+        >
+          {line}
+        </p>
       </div>
-      <span
-        className="absolute -bottom-1 left-6 h-2 w-2 rotate-45 border-b border-r border-primary/12 bg-gradient-to-br from-primary/5 to-transparent"
-        aria-hidden
-      />
+      {!compact ? (
+        <span
+          className="absolute -bottom-1 left-6 h-2 w-2 rotate-45 border-b border-r border-primary/12 bg-gradient-to-br from-primary/5 to-transparent"
+          aria-hidden
+        />
+      ) : null}
     </div>
   );
 }

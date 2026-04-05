@@ -12,6 +12,8 @@ interface CalorieGaugeProps {
   current: number;
   target: number;
   macros?: MacroTotals | null;
+  /** 상단 히어로: 작은 호·간격 축소·탄단지 카드 생략 */
+  compact?: boolean;
 }
 
 function zoneStyle(zone: ReturnType<typeof getCalorieZone>): {
@@ -84,6 +86,7 @@ export function CalorieGauge({
   current,
   target,
   macros = null,
+  compact = false,
 }: CalorieGaugeProps) {
   const gradId = `gg${useId().replace(/:/g, "")}`;
   const percentage = target > 0 ? (current / target) * 100 : 0;
@@ -93,11 +96,11 @@ export function CalorieGauge({
   const isDanger = zone === "danger";
   const isEmpty = zone === "empty";
 
-  const size = 220;
-  const strokeWidth = 14;
-  const radius = (size - strokeWidth) / 2 - 10;
+  const size = compact ? 168 : 220;
+  const strokeWidth = compact ? 11 : 14;
+  const radius = (size - strokeWidth) / 2 - (compact ? 8 : 10);
   const cx = size / 2;
-  const cy = size / 2 + 10;
+  const cy = size / 2 + (compact ? 7 : 10);
 
   const startAngle = Math.PI;
   const endAngle = 0;
@@ -107,15 +110,16 @@ export function CalorieGauge({
   const progressOffset = arcLength - (clampedPct / 100) * arcLength;
 
   const macroBlock =
-    macros != null ? (
+    macros != null && !compact ? (
       <MacroMiniBars macros={macros} totalMealCalories={current} />
     ) : null;
 
   return (
     <motion.div
       className={cn(
-        "rounded-3xl border p-6 shadow-lg transition-[background-color,box-shadow,backdrop-filter] duration-500",
+        "rounded-3xl border shadow-lg transition-[background-color,box-shadow,backdrop-filter] duration-500",
         "backdrop-blur-xl dark:shadow-black/20",
+        compact ? "rounded-2xl p-4" : "p-6",
         isDanger && "animate-gauge-wobble"
       )}
       style={{
@@ -131,8 +135,8 @@ export function CalorieGauge({
         <div className="relative">
           <svg
             width={size}
-            height={size / 2 + 20}
-            viewBox={`0 0 ${size} ${size / 2 + 30}`}
+            height={size / 2 + (compact ? 16 : 20)}
+            viewBox={`0 0 ${size} ${size / 2 + (compact ? 24 : 30)}`}
           >
             <defs>
               <linearGradient
@@ -170,10 +174,16 @@ export function CalorieGauge({
             />
           </svg>
 
-          <div className="absolute inset-0 flex flex-col items-center justify-end pb-2">
+          <div
+            className={cn(
+              "absolute inset-0 flex flex-col items-center justify-end",
+              compact ? "pb-1" : "pb-2"
+            )}
+          >
             <Flame
               className={cn(
-                "mb-1 h-5 w-5",
+                "mb-0.5",
+                compact ? "h-4 w-4" : "mb-1 h-5 w-5",
                 isEmpty &&
                   "text-foreground/70 dark:text-foreground/85"
               )}
@@ -182,7 +192,8 @@ export function CalorieGauge({
             />
             <motion.p
               className={cn(
-                "font-data text-3xl font-bold tabular-nums",
+                "font-data font-bold tabular-nums",
+                compact ? "text-2xl" : "text-3xl",
                 isEmpty
                   ? "text-foreground/80 dark:text-foreground/90"
                   : style.textClass
@@ -196,7 +207,7 @@ export function CalorieGauge({
             </motion.p>
             <p
               className={cn(
-                "mt-0.5 text-xs",
+                compact ? "mt-0 text-[11px]" : "mt-0.5 text-xs",
                 isEmpty
                   ? "text-foreground/65 dark:text-foreground/75"
                   : "text-muted-foreground"
@@ -204,25 +215,33 @@ export function CalorieGauge({
             >
               / {target.toLocaleString()} kcal
             </p>
+            {compact && current > 0 ? (
+              <p className="mt-0.5 text-[10px] tabular-nums text-muted-foreground">
+                달성 {Math.round(percentage)}% · 남은{" "}
+                {Math.max(target - current, 0).toLocaleString()}kcal
+              </p>
+            ) : null}
           </div>
         </div>
 
-        <motion.p
-          className={cn(
-            "mt-3 text-sm font-medium",
-            isEmpty
-              ? "text-foreground/85 dark:text-foreground/90"
-              : style.textClass
-          )}
-          key={style.message}
-          initial={{ opacity: 0, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.28 }}
-        >
-          {style.message}
-        </motion.p>
+        {!compact ? (
+          <motion.p
+            className={cn(
+              "mt-3 text-sm font-medium",
+              isEmpty
+                ? "text-foreground/85 dark:text-foreground/90"
+                : style.textClass
+            )}
+            key={style.message}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.28 }}
+          >
+            {style.message}
+          </motion.p>
+        ) : null}
 
-        {current > 0 && (
+        {!compact && current > 0 ? (
           <div className="mt-4 flex gap-6 text-xs text-muted-foreground">
             <div className="text-center">
               <p
@@ -241,7 +260,7 @@ export function CalorieGauge({
               <p>남은 kcal</p>
             </div>
           </div>
-        )}
+        ) : null}
 
         {macroBlock}
       </div>

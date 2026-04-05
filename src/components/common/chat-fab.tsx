@@ -43,12 +43,14 @@ interface ChatFabProps {
 
 function formatInlineBold(
   text: string,
-  variant: "default" | "coach" = "default"
+  variant: "default" | "coach" | "coach-roast" = "default"
 ): ReactNode {
   const strongCls =
-    variant === "coach"
-      ? "font-bold text-primary tabular-nums"
-      : "font-semibold text-foreground tabular-nums";
+    variant === "default"
+      ? "font-semibold text-foreground tabular-nums"
+      : variant === "coach-roast"
+        ? "not-italic font-bold text-primary tabular-nums"
+        : "font-bold text-primary tabular-nums";
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, i) => {
     if (part.startsWith("**") && part.endsWith("**")) {
@@ -64,33 +66,60 @@ function formatInlineBold(
 
 function CoachStrategicTurnView({ turn }: { turn: CoachStrategicTurn }) {
   return (
-    <div className="space-y-2.5 text-sm leading-relaxed">
+    <div className="space-y-3 text-sm leading-relaxed">
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+        <p
+          className="flex items-center gap-1 text-[11px] font-bold tracking-wide text-primary"
+          role="heading"
+          aria-level={3}
+        >
+          <span className="select-none" aria-hidden>
+            🔍
+          </span>
           분석
         </p>
-        <p className="mt-0.5 text-foreground/95">
+        <p className="mt-1 text-foreground/90">
           {formatInlineBold(turn.analysis, "coach")}
         </p>
       </div>
       <div>
-        <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+        <p
+          className="flex items-center gap-1 text-[11px] font-bold tracking-wide text-[#FF3355] dark:text-[#FF4D6A]"
+          role="heading"
+          aria-level={3}
+        >
+          <span className="select-none" aria-hidden>
+            🚨
+          </span>
           경고
         </p>
-        <p className="mt-0.5 text-foreground/95">
-          {formatInlineBold(turn.roast, "coach")}
+        <p
+          className={cn(
+            "mt-1 rounded-lg border border-amber-200/55 bg-amber-100/50 px-2.5 py-2 italic leading-relaxed",
+            "text-foreground/95 ring-1 ring-amber-300/25",
+            "dark:border-amber-500/35 dark:bg-amber-400/12 dark:ring-amber-400/15"
+          )}
+        >
+          {formatInlineBold(turn.roast, "coach-roast")}
         </p>
       </div>
       <div
         className={cn(
-          "rounded-xl border border-primary/30 bg-primary/[0.07] px-2.5 py-2",
-          "dark:border-primary/35 dark:bg-primary/[0.12]"
+          "rounded-xl border border-teal-500/35 bg-teal-500/[0.08] px-2.5 py-2",
+          "dark:border-teal-400/30 dark:bg-teal-400/[0.1]"
         )}
       >
-        <p className="text-[10px] font-bold uppercase tracking-wider text-primary">
+        <p
+          className="flex items-center gap-1 text-[11px] font-bold tracking-wide text-teal-600 dark:text-teal-400"
+          role="heading"
+          aria-level={3}
+        >
+          <span className="select-none" aria-hidden>
+            🎯
+          </span>
           미션
         </p>
-        <p className="mt-0.5 text-foreground/95">
+        <p className="mt-1 text-foreground/90">
           {formatInlineBold(turn.mission, "coach")}
         </p>
       </div>

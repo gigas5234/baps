@@ -5,9 +5,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Loader2, Sparkles } from "lucide-react";
 import { MEAL_QUICK_PRESETS } from "@/lib/meal-presets";
 import { cn } from "@/lib/utils";
-
-const PORTION_STEPS = [0, 25, 50, 75, 100] as const;
-type PortionStep = (typeof PORTION_STEPS)[number];
+import {
+  PortionPctSlider,
+  type PortionStep,
+} from "@/components/meal/portion-pct-slider";
 
 function scaleCal(base: number, pct: PortionStep) {
   return Math.round((base * pct) / 100);
@@ -343,28 +344,10 @@ export function ManualInputModal({
                 <strong className="text-foreground">자주 먹는 등록</strong>은
                 항상 100%·1인분 기준으로 저장돼요.
               </p>
-              <div
-                className={cn(
-                  "flex gap-2 overflow-x-auto pb-1 pl-0.5 pr-1 [-ms-overflow-style:none] [scrollbar-width:none]",
-                  "[&::-webkit-scrollbar]:hidden"
-                )}
-              >
-                {PORTION_STEPS.map((step) => (
-                  <button
-                    key={step}
-                    type="button"
-                    onClick={() => setPortionPct(step)}
-                    className={cn(
-                      "min-w-[4.75rem] shrink-0 snap-center rounded-2xl border py-3 text-center text-sm font-semibold transition-colors",
-                      portionPct === step
-                        ? "border-scanner bg-scanner/20 text-foreground shadow-sm"
-                        : "border-border bg-muted/40 text-muted-foreground hover:bg-muted/70"
-                    )}
-                  >
-                    {step}%
-                  </button>
-                ))}
-              </div>
+              <PortionPctSlider
+                value={portionPct}
+                onChange={setPortionPct}
+              />
             </div>
 
             <div className="space-y-1.5">
