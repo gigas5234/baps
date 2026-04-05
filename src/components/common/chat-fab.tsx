@@ -454,6 +454,7 @@ export function ChatFab({
     if (openingCoachSynced.current === coachPersona) return;
 
     let cancelled = false;
+    setQuickChips([]);
     setBootLoading(true);
 
     (async () => {
@@ -530,7 +531,25 @@ export function ChatFab({
         setQuickChips(chips);
         openingCoachSynced.current = coachPersona;
       } catch {
-        /* 유지 */
+        if (!cancelled) {
+          openingCoachSynced.current = coachPersona;
+          setQuickChips([
+            {
+              label: "오늘의 설계 결함 분석",
+              prompt:
+                "오늘 기록된 데이터에서 가장 치명적인 결함 3가지만 짚어줘.",
+            },
+            {
+              label: "남은 예산 최적 집행",
+              prompt: `오늘 ${totalCal}kcal / 목표 ${targetCal}kcal 기준 남은 kcal를 아껴 쓰는 집행안을 명령해.`,
+            },
+            {
+              label: "야식 욕구 회로 차단",
+              prompt:
+                "지금 먹고 싶은 게 생리적 허기인지 심리적 오류인지 팩트로 판독해줘.",
+            },
+          ]);
+        }
       } finally {
         if (!cancelled) {
           setBootLoading(false);
@@ -541,7 +560,14 @@ export function ChatFab({
     return () => {
       cancelled = true;
     };
-  }, [coachPersona, isOpen, isLoading, selectedDate]);
+  }, [
+    coachPersona,
+    isOpen,
+    isLoading,
+    selectedDate,
+    totalCal,
+    targetCal,
+  ]);
 
   /**
    * @param source chip | card — 입력창을 거치지 않고 곧바로 API만 호출. 보내기 버튼은 직접 입력용.
@@ -749,6 +775,17 @@ export function ChatFab({
                 <div className="flex flex-col items-center justify-center gap-2 px-3 pt-16 text-sm text-muted-foreground">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                   <span>코치가 데이터 보고 입 열 준비 중…</span>
+                </div>
+              ) : null}
+
+              {bootLoading && messages.length > 0 ? (
+                <div
+                  className="flex items-center gap-2 rounded-lg border border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-[12px] text-muted-foreground dark:bg-primary/10"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
+                  <span>코치 교대 중 · 빠른 요청 갱신 중…</span>
                 </div>
               ) : null}
 

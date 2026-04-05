@@ -34,9 +34,10 @@ function formatInlineBold(
   text: string,
   variant: "bubble" | "roast" = "bubble"
 ): ReactNode {
+  /** bubble: 말풍선·카드가 이미 대비 색을 정함 — 강조만 굵게 두고 색은 상속 (미션 톤 다크배경에서 zinc-900 덮어쓰기 버그 방지) */
   const strongCls =
     variant === "bubble"
-      ? "font-semibold text-foreground tabular-nums dark:text-zinc-900"
+      ? "font-semibold tabular-nums text-inherit"
       : "font-bold text-rose-700 tabular-nums dark:text-rose-300";
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, i) => {
