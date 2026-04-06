@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 const VIDEO_PATH = "/main.mp4";
-/** `#t=` 는 일부 모바일/프록시에서 Range 요청을 깨뜨릴 수 있어 생 URL만 사용 */
 const SOURCE_SRC = VIDEO_PATH;
 
 interface LandingHeroVideoProps {
+  /** 바깥 래퍼(positions, z-index, h/w) */
   className?: string;
+  /** video 태그에만 적용(대비·채도 등) */
+  videoClassName?: string;
 }
 
 function armAutoplayPolicies(el: HTMLVideoElement) {
@@ -43,13 +45,17 @@ function tryPlay(el: HTMLVideoElement | null) {
 }
 
 /**
- * 로그인·랜딩 히어로 배경용 MP4.
- * - muted + playsInline + JS에서 muted 재확인(브라우저 자동재생 정책)
- * - canplay / loadeddata / stalled / 탭 복귀 / bfcache 복원 시 play() 재시도
+ * 로그인·랜딩 히어로 배경 MP4.
+ * - 로딩·디코딩 전에는 플레이스홀더로 ‘로딩 구간’이 보이게 함(게스트 페이지가 바로 그려질 때 빈 느낌 완화)
+ * - 재생 정책·네트워크 이슈 대비: canplay, pageshow 등
  */
-export function LandingHeroVideo({ className }: LandingHeroVideoProps) {
+export function LandingHeroVideo({
+  className,
+  videoClassName,
+}: LandingHeroVideoProps) {
   const ref = useRef<HTMLVideoElement>(null);
   const errorRetries = useRef(0);
+  const [mediaReady, setMediaReady] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
@@ -57,17 +63,24 @@ export function LandingHeroVideo({ className }: LandingHeroVideoProps) {
 
     armAutoplayPolicies(el);
 
+    const markReady = () => setMediaReady(true);
+
     const onVisibility = () => {
       if (document.visibilityState === "visible") tryPlay(el);
     };
 
     const onPageShow = (_e: PageTransitionEvent) => {
-      /** bfcache 복원뿐 아니라 iOS 등에서 앞으로/뒤로 이동 후에도 재생 재시도 */
       tryPlay(el);
     };
 
-    const onCanPlay = () => tryPlay(el);
-    const onLoadedData = () => tryPlay(el);
+    const onCanPlay = () => {
+      markReady();
+      tryPlay(el);
+    };
+    const onLoadedData = () => {
+      markReady();
+      tryPlay(el);
+    };
     const onStalled = () => tryPlay(el);
     const onWaiting = () => tryPlay(el);
 
@@ -100,18 +113,43 @@ export function LandingHeroVideo({ className }: LandingHeroVideoProps) {
   }, []);
 
   return (
-    <video
-      ref={ref}
-      className={cn(className)}
-      autoPlay
-      muted
-      loop
-      playsInline
-      preload="auto"
-      disableRemotePlayback
-      aria-label="BAPS 앱 소개 영상"
-    >
-      <source src={SOURCE_SRC} type="video/mp4" />
-    </video>
+    <div className={cn("relative overflow-hidden", className)}>
+      {/* 영상 버퍼·디코딩 전: 로딩 레이어(메인 `/` 게스트는 영상 자체가 없어 여기서 체감 차이가 큼) */}
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-0 z-0 bg-gradient-to-br from-muted via-muted/90 to-background",
+          "transition-opacity duration-500 ease-out",
+          mediaReady ? "opacity-0" : "opacity-100"
+        )}
+        aria-hidden
+      />
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-0 z-0 bg-gradient-to-t from-background/25 via-transparent to-transparent",
+          !mediaReady && "animate-pulse",
+          mediaReady ? "opacity-0" : "opacity-100"
+        )}
+        style={{ transition: "opacity 0.45s ease-out" }}
+        aria-hidden
+      />
+      <video
+        ref={ref}
+        className={cn(
+          "absolute inset-0 z-[1] h-full w-full object-cover object-center",
+          "transition-opacity duration-500 ease-out",
+          mediaReady ? "opacity-100" : "opacity-0",
+          videoClassName
+        )}
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="auto"
+        disableRemotePlayback
+        aria-label="BAPS 앱 소개 영상"
+      >
+        <source src={SOURCE_SRC} type="video/mp4" />
+      </video>
+    </div>
   );
 }

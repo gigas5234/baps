@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { GoogleSignInButtonBlock } from "@/components/common/google-sign-in-button-block";
 import { cn } from "@/lib/utils";
 import { LandingHeroVideo } from "@/components/home/landing-hero-video";
+import { LandingPitchBody } from "@/components/home/landing-pitch-body";
 
 type HomeLandingPhase = "loading" | "guest" | "member";
 
@@ -140,7 +141,10 @@ export function HomeLanding({ phase }: HomeLandingProps) {
             BAPS
           </p>
         </div>
-        <LandingHeroVideo className="absolute inset-0 z-0 h-full w-full object-cover object-center contrast-[1.03] saturate-[1.06] dark:opacity-90" />
+        <LandingHeroVideo
+          className="absolute inset-0 z-0 h-full w-full"
+          videoClassName="contrast-[1.03] saturate-[1.06] dark:opacity-90"
+        />
         {/* 라이트 모드에서 영상이 스크림에 데이지 않도록 톤 다운 */}
         <div
           className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-b from-white/[0.05] via-transparent to-transparent dark:from-white/[0.04]"
@@ -185,11 +189,7 @@ export function HomeLanding({ phase }: HomeLandingProps) {
             <br />
             완벽한 식단 기록
           </h1>
-          <p className="mt-3 font-sans text-[0.9375rem] leading-relaxed text-white/85 sm:text-base">
-            사진만 찍으면 AI가 칼로리와 탄수화물·단백질·지방을 자동으로 분석해
-            드립니다. 물 섭취량과 체중 변화까지 한곳에서 관리하며, 복잡한
-            입력 없이 간편하게 건강한 습관을 만들어 가세요.
-          </p>
+          <LandingPitchBody className="mt-3 font-sans text-[0.9375rem] leading-relaxed text-white/85 sm:text-base" />
         </div>
       </div>
 

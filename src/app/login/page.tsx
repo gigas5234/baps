@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase-browser";
 import { GoogleSignInButtonBlock } from "@/components/common/google-sign-in-button-block";
 import { LandingHeroHud } from "@/components/home/home-landing";
 import { LandingHeroVideo } from "@/components/home/landing-hero-video";
+import { LandingPitchBody } from "@/components/home/landing-pitch-body";
 import { cn } from "@/lib/utils";
 
 /** Supabase에 Kakao OAuth 연동 후 `true`로 전환 */
@@ -87,11 +88,7 @@ export default function LoginPage() {
             <br />
             완벽한 식단 기록
           </h2>
-          <p className="mt-3 font-sans text-[0.9375rem] leading-relaxed text-white/85 sm:text-base">
-            사진만 찍으면 AI가 칼로리와 탄수화물·단백질·지방을 자동으로 분석해
-            드립니다. 물 섭취량과 체중 변화까지 한곳에서 관리하며, 복잡한
-            입력 없이 간편하게 건강한 습관을 만들어 가세요.
-          </p>
+          <LandingPitchBody className="mt-3 font-sans text-[0.9375rem] leading-relaxed text-white/85 sm:text-base" />
         </div>
       </div>
 

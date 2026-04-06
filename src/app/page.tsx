@@ -884,6 +884,7 @@ export default function HomePage() {
     }
   };
 
+  /** 세션 확인 중: HomeLanding(배경 MP4) — 비로그인 게스트가 머무는 `/` 본문에는 MP4 없고 대시보드 UI만 */
   if (authLoading) {
     return <HomeLanding phase="loading" />;
   }
