@@ -16,7 +16,7 @@ export function LandingPitchBody({
   return (
     <p className={className}>
       사진만 찍으면{" "}
-      <span className={cn(baseLead, "text-scanner")}>AI</span>가{" "}
+      <span className={cn(baseLead, "text-white")}>AI</span>가{" "}
       <span className={cn(baseLead, "text-white")}>칼로리</span>와{" "}
       <span className="font-bold text-white">탄수화물</span>
       <span className="text-white/45">·</span>
@@ -26,9 +26,7 @@ export function LandingPitchBody({
       을 자동으로 분석해 드립니다.{" "}
       <span className="font-semibold text-white">물 섭취량</span>과{" "}
       <span className="font-semibold text-white">체중 변화</span>까지{" "}
-      <span className="font-semibold text-primary drop-shadow-[0_0_14px_color-mix(in_srgb,var(--primary)_40%,transparent)]">
-        한곳에서
-      </span>{" "}
+      <span className={cn(baseLead, "text-white")}>한곳에서</span>{" "}
       관리하며, 복잡한 입력 없이 간편하게 건강한 습관을 만들어 가세요.
     </p>
   );
