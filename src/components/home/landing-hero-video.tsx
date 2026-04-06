@@ -4,8 +4,8 @@ import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 
 const VIDEO_PATH = "/main.mp4";
-/** iOS 등에서 첫 프레임·디코더 깨우기용(일부 브라우저만 해석) */
-const SOURCE_SRC = `${VIDEO_PATH}#t=0.001`;
+/** `#t=` 는 일부 모바일/프록시에서 Range 요청을 깨뜨릴 수 있어 생 URL만 사용 */
+const SOURCE_SRC = VIDEO_PATH;
 
 interface LandingHeroVideoProps {
   className?: string;
@@ -16,6 +16,7 @@ function armAutoplayPolicies(el: HTMLVideoElement) {
   el.defaultMuted = true;
   el.setAttribute("muted", "");
   el.setAttribute("playsinline", "");
+  el.setAttribute("fetchpriority", "high");
   el.playsInline = true;
   const legacy = el as HTMLVideoElement & {
     webkitPlaysinline?: boolean;
@@ -60,8 +61,9 @@ export function LandingHeroVideo({ className }: LandingHeroVideoProps) {
       if (document.visibilityState === "visible") tryPlay(el);
     };
 
-    const onPageShow = (e: PageTransitionEvent) => {
-      if (e.persisted) tryPlay(el);
+    const onPageShow = (_e: PageTransitionEvent) => {
+      /** bfcache 복원뿐 아니라 iOS 등에서 앞으로/뒤로 이동 후에도 재생 재시도 */
+      tryPlay(el);
     };
 
     const onCanPlay = () => tryPlay(el);

@@ -140,26 +140,26 @@ export function HomeLanding({ phase }: HomeLandingProps) {
             BAPS
           </p>
         </div>
-        <LandingHeroVideo className="absolute inset-0 h-full w-full object-cover contrast-[1.03] saturate-[1.06] dark:opacity-90" />
-        {/* 살짝 선명한 제품사진 톤 */}
+        <LandingHeroVideo className="absolute inset-0 z-0 h-full w-full object-cover object-center contrast-[1.03] saturate-[1.06] dark:opacity-90" />
+        {/* 라이트 모드에서 영상이 스크림에 데이지 않도록 톤 다운 */}
         <div
-          className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.07] via-transparent to-transparent dark:from-white/[0.04]"
+          className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-b from-white/[0.05] via-transparent to-transparent dark:from-white/[0.04]"
           aria-hidden
         />
         <div
           className={cn(
-            "pointer-events-none absolute inset-0 bg-gradient-to-b",
-            "from-background/55 via-background/15 to-background/85",
+            "pointer-events-none absolute inset-0 z-[1] bg-gradient-to-b",
+            "from-background/28 via-background/[0.08] to-background/78",
             "dark:from-background/40 dark:via-black/25 dark:to-background"
           )}
           aria-hidden
         />
         <div
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_95%_75%_at_50%_35%,transparent_0%,rgba(0,0,0,0.08)_100%)] dark:bg-[radial-gradient(ellipse_95%_75%_at_50%_35%,transparent_0%,rgba(0,0,0,0.38)_100%)]"
+          className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_95%_75%_at_50%_35%,transparent_0%,rgba(0,0,0,0.04)_100%)] dark:bg-[radial-gradient(ellipse_95%_75%_at_50%_35%,transparent_0%,rgba(0,0,0,0.38)_100%)]"
           aria-hidden
         />
 
-        <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-[0.76] dark:opacity-[0.88]">
+        <div className="pointer-events-none absolute inset-0 z-[1] overflow-hidden opacity-[0.58] dark:opacity-[0.88]">
           <LandingHeroHud />
         </div>
       </div>
@@ -186,7 +186,7 @@ export function HomeLanding({ phase }: HomeLandingProps) {
             완벽한 식단 기록
           </h1>
           <p className="mt-3 font-sans text-[0.9375rem] leading-relaxed text-white/85 sm:text-base">
-            사진만 찍으면 AI가 칼로리와 탄단지 영양소를 자동으로 분석해
+            사진만 찍으면 AI가 칼로리와 탄수화물·단백질·지방을 자동으로 분석해
             드립니다. 물 섭취량과 체중 변화까지 한곳에서 관리하며, 복잡한
             입력 없이 간편하게 건강한 습관을 만들어 가세요.
           </p>
