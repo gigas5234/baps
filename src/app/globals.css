@@ -298,6 +298,39 @@
   }
 }
 
+/* 매크로 링 — 목표 초과 시 불·글리치 느낌 */
+@keyframes gauge-ring-burn {
+  0%,
+  100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--gauge-danger) 70%, transparent))
+      drop-shadow(0 0 14px color-mix(in srgb, var(--chart-3) 55%, transparent))
+      drop-shadow(0 0 22px color-mix(in srgb, var(--gauge-danger) 35%, transparent));
+  }
+  33% {
+    opacity: 0.88;
+    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--gauge-caution) 75%, transparent))
+      drop-shadow(0 0 18px color-mix(in srgb, var(--gauge-danger) 65%, transparent))
+      drop-shadow(0 0 26px color-mix(in srgb, var(--chart-3) 40%, transparent));
+  }
+  66% {
+    opacity: 0.95;
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--gauge-danger) 85%, transparent))
+      drop-shadow(0 0 16px color-mix(in srgb, var(--gauge-caution) 50%, transparent));
+  }
+}
+
+.gauge-ring-burn-motion {
+  animation: gauge-ring-burn 0.55s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gauge-ring-burn-motion {
+    animation: none;
+    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--gauge-danger) 50%, transparent)) !important;
+  }
+}
+
 /* Landing hero: analysis HUD & CTA ring */
 @keyframes landing-scan-beam {
   0% {
