@@ -44,7 +44,10 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <LandingHeroVideo className="absolute inset-0 z-0 h-full w-full object-cover object-center contrast-[1.03] saturate-[1.06] dark:opacity-90" />
+        <LandingHeroVideo
+          className="absolute inset-0 z-0 h-full w-full"
+          videoClassName="contrast-[1.03] saturate-[1.06] dark:opacity-90"
+        />
         <div
           className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-b from-white/[0.05] via-transparent to-transparent dark:from-white/[0.04]"
           aria-hidden
