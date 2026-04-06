@@ -103,7 +103,7 @@ export function QuickLogSlider({
           />
           퀵 로그 · 자주 찾는 식단
         </h2>
-        {headerAddon}
+        {visible.length > 0 ? headerAddon : null}
       </div>
       <div
         className={cn(
@@ -114,7 +114,9 @@ export function QuickLogSlider({
         )}
         style={{ WebkitOverflowScrolling: "touch" }}
       >
-        <GhostRegisterChip onClick={onOpenAddSheet} />
+        {visible.length === 0 ? (
+          <GhostRegisterChip onClick={onOpenAddSheet} />
+        ) : null}
         {visible.map((m) => {
           const busy = busyId === m.id;
           const src = m.image_url?.trim();
