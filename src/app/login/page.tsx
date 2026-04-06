@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase-browser";
 import { GoogleSignInButtonBlock } from "@/components/common/google-sign-in-button-block";
 import { LandingHeroHud } from "@/components/home/home-landing";
+import { LandingHeroVideo } from "@/components/home/landing-hero-video";
 import { cn } from "@/lib/utils";
 
 /** Supabase에 Kakao OAuth 연동 후 `true`로 전환 */
@@ -42,16 +43,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <video
-          className="absolute inset-0 h-full w-full object-cover contrast-[1.03] saturate-[1.06] dark:opacity-90"
-          autoPlay
-          muted
-          loop
-          playsInline
-          aria-label="BAPS 앱 소개 영상"
-        >
-          <source src="/main.mp4" type="video/mp4" />
-        </video>
+        <LandingHeroVideo className="absolute inset-0 h-full w-full object-cover contrast-[1.03] saturate-[1.06] dark:opacity-90" />
         <div
           className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.07] via-transparent to-transparent dark:from-white/[0.04]"
           aria-hidden

@@ -118,19 +118,18 @@ function macroRatiosOpen(
 
 function MacroGramReadout({
   label,
-  short,
   currentG,
   targetG,
-  over,
+  macroOver,
   accentClass,
   align,
   compact,
 }: {
   label: string;
-  short: string;
   currentG: number;
   targetG: number;
-  over: boolean;
+  /** 목표 초과 시 굵게만 — 색은 탄·단·지 톤 유지 */
+  macroOver: boolean;
   accentClass: string;
   align: "left" | "right";
   compact: boolean;
@@ -140,29 +139,29 @@ function MacroGramReadout({
   return (
     <div
       className={cn(
-        "flex flex-col gap-0.5",
+        "flex flex-col gap-1",
         align === "right" ? "items-end text-right" : "items-start text-left",
-        compact ? "min-w-[3.25rem]" : "min-w-[4rem]"
+        compact ? "max-w-[5.2rem]" : "max-w-[6.25rem]"
       )}
-      title={label}
     >
       <span
         className={cn(
-          "font-data text-[9px] font-bold uppercase tracking-wide text-muted-foreground",
-          compact && "text-[8px]"
+          "break-keep text-[10px] font-semibold leading-snug text-muted-foreground",
+          compact && "text-[9px]"
         )}
       >
-        {short}
+        {label}
       </span>
       <p
         className={cn(
-          "font-data tabular-nums leading-tight",
+          "font-data tabular-nums leading-snug",
           compact ? "text-[10px]" : "text-[11px]",
-          over ? "font-bold text-gauge-danger" : `font-semibold ${accentClass}`
+          macroOver ? "font-bold" : "font-semibold",
+          accentClass
         )}
       >
         {cur}
-        <span className="mx-0.5 text-muted-foreground/80">/</span>
+        <span className="mx-0.5 text-muted-foreground/85">/</span>
         {tgt}
         <span className="ml-0.5 text-[0.85em] text-muted-foreground">g</span>
       </p>
@@ -213,12 +212,8 @@ export function CalorieGauge({
   );
 
   const fatHeavy = !isEmpty && isFatHeavy(macroTotals) && current > 0;
-  const fatMist =
-    fatHeavy ||
-    macroR.fat > 1 ||
-    macroR.carb > 1 ||
-    macroR.protein > 1 ||
-    isDangerCal;
+  /** 매크로 초과만으로 카드 전체 붉은 안개 X — 지방 코칭·일일 칼로리 초과만 */
+  const fatMist = fatHeavy || isDangerCal;
 
   const nextAction = buildDashboardNextAction(
     zone,
@@ -233,11 +228,11 @@ export function CalorieGauge({
     macros
   );
 
-  /** 넉넉한 반경·간격(불 이펙트·가독성) */
+  /** 반원은 위로 올려 중앙~하단에 칼로리 텍스트 전용 여유 확보(4자리 대응) */
   const vbW = compact ? 220 : 290;
-  const vbH = compact ? 128 : 148;
+  const vbH = compact ? 120 : 136;
   const cx = vbW / 2;
-  const cy = compact ? 112 : 122;
+  const cy = compact ? 100 : 108;
   const stroke = compact ? 5.5 : 7;
   const ringGap = compact ? 10 : 14;
   const ringStep = stroke + ringGap;
@@ -337,20 +332,18 @@ export function CalorieGauge({
             >
               <MacroGramReadout
                 label="탄수화물"
-                short="탄"
                 currentG={macroTotals.carbsG}
                 targetG={macroTargets.carbsG}
-                over={macroR.carb > 1}
+                macroOver={macroR.carb > 1}
                 accentClass="text-chart-1"
                 align="right"
                 compact={compact}
               />
               <MacroGramReadout
                 label="단백질"
-                short="단"
                 currentG={macroTotals.proteinG}
                 targetG={macroTargets.proteinG}
-                over={macroR.protein > 1}
+                macroOver={macroR.protein > 1}
                 accentClass="text-chart-2"
                 align="right"
                 compact={compact}
@@ -358,22 +351,26 @@ export function CalorieGauge({
             </div>
           ) : null}
 
-          <div className="relative min-w-0 flex-1 px-0.5">
+          <div
+            className={cn(
+              "flex min-w-0 flex-1 flex-col items-center px-0.5",
+              "[container-type:inline-size]"
+            )}
+          >
             <svg
               width="100%"
-              height={compact ? 118 : 138}
+              height={compact ? 92 : 104}
               viewBox={`0 0 ${vbW} ${vbH}`}
-              className="mx-auto block overflow-visible"
+              className="mx-auto block shrink-0 overflow-visible"
               aria-hidden
             >
               {ringMeta.map(({ key, r, ratio, stop, glow }) => {
                 const arc = describeArc(cx, cy, r, startAngle, endAngle);
                 const arcLen = Math.PI * r;
-                const fillPortion = Math.min(Math.max(ratio, 0), 1);
-                const offset = arcLen - fillPortion * arcLen;
-                const over = ratio > 1;
-                const dangerStroke = "var(--gauge-danger)";
-                const strokeColor = over ? dangerStroke : stop;
+                const raw = Math.max(ratio, 0);
+                const overMacro = raw > 1;
+                const fillPortion = overMacro ? 1 : Math.min(raw, 1);
+                const offset = isEmpty ? arcLen : arcLen - fillPortion * arcLen;
                 return (
                   <g key={key}>
                     <path
@@ -395,7 +392,7 @@ export function CalorieGauge({
                       strokeDasharray={arcLen}
                       initial={false}
                       animate={{
-                        strokeDashoffset: isEmpty ? arcLen : offset,
+                        strokeDashoffset: offset,
                       }}
                       transition={{
                         type: "spring",
@@ -403,12 +400,10 @@ export function CalorieGauge({
                         damping: 16,
                         mass: 0.82,
                       }}
-                      className={cn(over && "gauge-ring-burn-motion")}
+                      className={cn(overMacro && "gauge-ring-ember-motion")}
                       style={{
-                        stroke: strokeColor,
-                        ...(over
-                          ? {}
-                          : { filter: glow }),
+                        stroke: stop,
+                        ...(overMacro ? {} : { filter: glow }),
                       }}
                     />
                   </g>
@@ -418,13 +413,13 @@ export function CalorieGauge({
 
             <div
               className={cn(
-                "pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center justify-end",
-                compact ? "pb-0" : "pb-1"
+                "flex w-full max-w-[13.5rem] flex-col items-center gap-1.5 px-1",
+                compact ? "pt-0.5" : "pt-1"
               )}
             >
               <Circle
                 className={cn(
-                  "mb-1 shrink-0 stroke-2 text-chart-2/80 dark:text-chart-2",
+                  "shrink-0 stroke-2 text-chart-2/80 dark:text-chart-2",
                   compact ? "h-2.5 w-2.5" : "h-3 w-3",
                   isEmpty && "text-muted-foreground"
                 )}
@@ -433,8 +428,10 @@ export function CalorieGauge({
               />
               <motion.p
                 className={cn(
-                  "font-data font-bold tabular-nums tracking-tight",
-                  compact ? "text-2xl" : "text-[2.05rem] sm:text-4xl",
+                  "w-full text-center font-data font-bold tabular-nums tracking-tight leading-none",
+                  compact
+                    ? "text-2xl"
+                    : "text-[clamp(1.65rem,22cqw,2.45rem)] sm:text-[clamp(1.85rem,18cqw,2.55rem)]",
                   isEmpty
                     ? "text-foreground/85"
                     : isDangerCal
@@ -444,22 +441,24 @@ export function CalorieGauge({
                 style={{
                   textShadow: isEmpty
                     ? undefined
-                    : "0 0 24px color-mix(in srgb, var(--foreground) 12%, transparent)",
+                    : isDangerCal
+                      ? "0 0 20px color-mix(in srgb, var(--gauge-danger) 28%, transparent)"
+                      : "0 0 20px color-mix(in srgb, var(--foreground) 10%, transparent)",
                 }}
               >
                 {displayKcal.toLocaleString()}
               </motion.p>
               <p
                 className={cn(
-                  "font-data text-muted-foreground",
-                  compact ? "text-[10px]" : "text-xs"
+                  "text-center font-data text-muted-foreground",
+                  compact ? "text-[10px] leading-snug" : "text-xs leading-snug"
                 )}
               >
                 / {target.toLocaleString()}{" "}
                 <span className="text-[0.92em] font-semibold">kcal</span>
               </p>
               {compact && current > 0 ? (
-                <p className="mt-0.5 text-[10px] tabular-nums text-muted-foreground">
+                <p className="text-center text-[10px] tabular-nums leading-snug text-muted-foreground">
                   달성 {Math.round(percentage)}% · 남은{" "}
                   {Math.max(target - current, 0).toLocaleString()}kcal
                 </p>
@@ -476,10 +475,9 @@ export function CalorieGauge({
             >
               <MacroGramReadout
                 label="지방"
-                short="지"
                 currentG={macroTotals.fatG}
                 targetG={macroTargets.fatG}
-                over={macroR.fat > 1}
+                macroOver={macroR.fat > 1}
                 accentClass="text-chart-3"
                 align="left"
                 compact={compact}
@@ -545,12 +543,7 @@ export function CalorieGauge({
         {!compact && current > 0 ? (
           <div className="mt-3 flex gap-6 font-data text-xs text-muted-foreground">
             <div className="text-center">
-              <p
-                className={cn(
-                  "text-base font-bold tabular-nums text-foreground",
-                  isDangerCal && "text-gauge-danger"
-                )}
-              >
+              <p className="text-base font-bold tabular-nums text-foreground">
                 {Math.round(percentage)}%
               </p>
               <p className="text-[10px] font-medium">달성률</p>

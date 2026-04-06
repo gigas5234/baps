@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { GoogleSignInButtonBlock } from "@/components/common/google-sign-in-button-block";
 import { cn } from "@/lib/utils";
+import { LandingHeroVideo } from "@/components/home/landing-hero-video";
 
 type HomeLandingPhase = "loading" | "guest" | "member";
 
@@ -139,16 +140,7 @@ export function HomeLanding({ phase }: HomeLandingProps) {
             BAPS
           </p>
         </div>
-        <video
-          className="absolute inset-0 h-full w-full object-cover contrast-[1.03] saturate-[1.06] dark:opacity-90"
-          autoPlay
-          muted
-          loop
-          playsInline
-          aria-label="BAPS 앱 소개 영상"
-        >
-          <source src="/main.mp4" type="video/mp4" />
-        </video>
+        <LandingHeroVideo className="absolute inset-0 h-full w-full object-cover contrast-[1.03] saturate-[1.06] dark:opacity-90" />
         {/* 살짝 선명한 제품사진 톤 */}
         <div
           className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.07] via-transparent to-transparent dark:from-white/[0.04]"

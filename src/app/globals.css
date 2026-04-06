@@ -298,7 +298,32 @@
   }
 }
 
-/* 매크로 링 — 목표 초과 시 불·글리치 느낌 */
+/* 매크로 링 — 목표 초과 시 (칼로리와 구분) 은은한 엠버 글로우 */
+@keyframes gauge-ring-ember {
+  0%,
+  100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--chart-3) 55%, transparent))
+      drop-shadow(0 0 12px color-mix(in srgb, var(--gauge-caution) 35%, transparent));
+}
+  50% {
+    opacity: 0.92;
+    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--gauge-caution) 50%, transparent))
+      drop-shadow(0 0 16px color-mix(in srgb, var(--chart-3) 40%, transparent));
+  }
+}
+
+.gauge-ring-ember-motion {
+  animation: gauge-ring-ember 0.65s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gauge-ring-ember-motion {
+    animation: none;
+  }
+}
+
+/* 일일 칼로리 한도 초과 시 링 · 강한 경고 (선택 적용) */
 @keyframes gauge-ring-burn {
   0%,
   100% {
