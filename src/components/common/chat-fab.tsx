@@ -33,7 +33,10 @@ import {
   type QuickChip,
 } from "@/lib/chat-coach";
 import { coachStreamSegmentForReplay } from "@/lib/coach-stream-tts";
-import { CoachStreamTtsSentencePipeline } from "@/lib/coach-stream-tts-pipeline";
+import {
+  CoachStreamTtsSentencePipeline,
+  type StreamTtsChunk,
+} from "@/lib/coach-stream-tts-pipeline";
 import {
   COACH_PERSONAS_UI,
   COACH_QUICK_CHIP_ACCENT,
@@ -352,9 +355,9 @@ export function ChatFab({
   const streamTtsPipelineRef = useRef<CoachStreamTtsSentencePipeline | null>(
     null
   );
-  const streamTtsQueueRef = useRef<{ text: string; coachId: CoachPersonaId }[]>(
-    []
-  );
+  const streamTtsQueueRef = useRef<StreamTtsChunk[]>([]);
+  /** 스트림 중엔 streamId, 응답 파싱 후엔 최종 ai 말풍선 id — TTS 말풍선 글로우 동기화 */
+  const streamTtsUiMessageIdRef = useRef<string | null>(null);
   const streamTtsDrainingRef = useRef(false);
   const streamTtsFinalizedRef = useRef(false);
   const streamTtsHadOutputRef = useRef(false);
@@ -395,6 +398,13 @@ export function ChatFab({
             setTtsInterSpeakerBridge(false);
           }
           streamTtsLastCoachRef.current = next.coachId;
+          const uiMsgId = streamTtsUiMessageIdRef.current;
+          if (uiMsgId) {
+            setTtsBubbleFocus({
+              messageId: uiMsgId,
+              segmentKey: next.focusKey,
+            });
+          }
           try {
             await playCoachNeuralTts(next.text, next.coachId, {
               signal: ac.signal,
@@ -449,6 +459,7 @@ export function ChatFab({
     streamTtsPipelineRef.current?.reset();
     streamTtsPipelineRef.current = null;
     streamTtsHadOutputRef.current = false;
+    streamTtsUiMessageIdRef.current = null;
     streamTtsLastCoachRef.current = null;
     streamTtsDrainingRef.current = false;
     ttsSessionAbortRef.current?.abort();
@@ -973,6 +984,9 @@ export function ChatFab({
       streamDelimited: { segments: [] },
       createdAt: streamStartedAt,
     };
+    if (chatTtsEnabledRef.current) {
+      streamTtsUiMessageIdRef.current = streamId;
+    }
     const nextThread = [...prior, userMsg, streamBubble];
     messagesRef.current = nextThread;
     setMessages(nextThread);
@@ -1002,6 +1016,8 @@ export function ChatFab({
             if (chatTtsEnabledRef.current && streamTtsPipelineRef.current) {
               const chunks = streamTtsPipelineRef.current.feed(p.segments);
               if (chunks.length > 0) {
+                /** 큐 적재 시점부터 턴 전체 TTS 폴백 차단 (첫 shift 전 지연 레이스 방지) */
+                streamTtsHadOutputRef.current = true;
                 streamTtsQueueRef.current.push(...chunks);
                 kickStreamTtsDrain();
               }
@@ -1029,6 +1045,7 @@ export function ChatFab({
       const withoutStream = messagesRef.current.filter((m) => m.id !== streamId);
       messagesRef.current = withoutStream;
       setMessages(withoutStream);
+      streamTtsUiMessageIdRef.current = null;
 
       if (
         outcome.status === 401 ||
@@ -1094,6 +1111,7 @@ export function ChatFab({
         streamSegments,
         createdAt: Date.now(),
       };
+      streamTtsUiMessageIdRef.current = aiMsgId;
       const t = [...messagesRef.current, aiBubble];
       messagesRef.current = t;
       setMessages(t);
@@ -1105,6 +1123,7 @@ export function ChatFab({
           const ac = ttsSessionAbortRef.current;
           if (
             !streamTtsHadOutputRef.current &&
+            streamTtsQueueRef.current.length === 0 &&
             ac &&
             chatTtsEnabledRef.current
           ) {

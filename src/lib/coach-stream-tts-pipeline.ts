@@ -1,6 +1,8 @@
 import { plainCoachTextForTts } from "@/lib/chat-coach";
 import {
   COACH_DELIM_TAG_TO_PERSONA,
+  coachStreamVisualGroupKey,
+  groupCoachStreamSegments,
   type CoachDelimTag,
   type CoachStreamSegment,
 } from "@/lib/coach-delimited-stream";
@@ -9,6 +11,8 @@ import type { CoachPersonaId } from "@/lib/coach-personas";
 export type StreamTtsChunk = {
   text: string;
   coachId: CoachPersonaId;
+  /** `KakaoDelimitedCoachStream` — `ttsFocusSegment === stream:g:${gi}` */
+  focusKey: string;
 };
 
 type PerSeg = {
@@ -16,7 +20,39 @@ type PerSeg = {
   /** 이전 feed까지 반영된 seg.text 길이 */
   lastLen: number;
   coachId: CoachPersonaId;
+  /** complete 처리( tail flush )까지 끝난 키 — 스트림 종료 시 중복 feed 방지 */
+  isCompleted: boolean;
 };
+
+/** 필터된 segments와 동일하게 그룹 인덱스 산출 */
+function streamTtsFocusKeyForSegmentIndex(
+  segments: CoachStreamSegment[],
+  segIndex: number
+): string {
+  const groups = groupCoachStreamSegments(segments);
+  let idx = 0;
+  for (let gi = 0; gi < groups.length; gi++) {
+    const group = groups[gi]!;
+    for (const _ of group) {
+      if (idx === segIndex) return `stream:g:${gi}`;
+      idx++;
+    }
+  }
+  return "stream:g:0";
+}
+
+/** INVITE 필터 등으로 segments 배열 인덱스가 밀려도 동일 블록을 가리키도록 시각 그룹 + 등장 순번 키 */
+function perSegStateKey(
+  segments: CoachStreamSegment[],
+  index: number
+): string {
+  const gk = coachStreamVisualGroupKey(segments[index]!);
+  let ord = 0;
+  for (let j = 0; j < index; j++) {
+    if (coachStreamVisualGroupKey(segments[j]!) === gk) ord++;
+  }
+  return `${gk}:${ord}`;
+}
 
 function coachIdForTag(
   tag: CoachDelimTag,
@@ -137,7 +173,7 @@ function extractSpeakChunksFromCarry(carry: string): {
  */
 export class CoachStreamTtsSentencePipeline {
   private lead: CoachPersonaId;
-  private readonly perSeg = new Map<number, PerSeg>();
+  private readonly perSeg = new Map<string, PerSeg>();
 
   constructor(leadPersonaId: CoachPersonaId) {
     this.lead = leadPersonaId;
@@ -159,13 +195,18 @@ export class CoachStreamTtsSentencePipeline {
       const coachId = coachIdForTag(seg.tag, this.lead);
       if (!coachId) return;
 
+      const ttsFocusKey = streamTtsFocusKeyForSegmentIndex(segments, i);
+      const key = perSegStateKey(segments, i);
       const text = seg.text ?? "";
-      let st = this.perSeg.get(i);
+      let st = this.perSeg.get(key);
       if (!st || st.coachId !== coachId) {
-        st = { carry: "", lastLen: 0, coachId };
+        st = { carry: "", lastLen: 0, coachId, isCompleted: false };
       }
       if (text.length < st.lastLen) {
-        st = { carry: "", lastLen: 0, coachId };
+        st = { carry: "", lastLen: 0, coachId, isCompleted: false };
+      }
+      if (st.isCompleted) {
+        return;
       }
 
       const delta = text.slice(st.lastLen);
@@ -177,16 +218,18 @@ export class CoachStreamTtsSentencePipeline {
 
       for (const raw of chunks) {
         const t = plainCoachTextForTts(raw).trim();
-        if (t.length > 0) out.push({ text: t, coachId });
+        if (t.length > 0) out.push({ text: t, coachId, focusKey: ttsFocusKey });
       }
 
       if (seg.complete) {
         const tail = plainCoachTextForTts(st.carry).trim();
-        if (tail.length > 0) out.push({ text: tail, coachId });
+        if (tail.length > 0)
+          out.push({ text: tail, coachId, focusKey: ttsFocusKey });
         st.carry = "";
+        st.isCompleted = true;
       }
 
-      this.perSeg.set(i, st);
+      this.perSeg.set(key, st);
     });
 
     return out;
