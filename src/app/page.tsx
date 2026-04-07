@@ -1233,6 +1233,7 @@ export default function HomePage() {
             totalCal={totalCalories}
             targetCal={target}
             macros={macroTotals}
+            listenerDisplayName={displayName}
           />
         </>
       ) : null}

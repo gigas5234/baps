@@ -455,3 +455,25 @@
     opacity: 0.55;
   }
 }
+
+/* Chat FAB · 음성 STT "데이터 스캔 중" 인디케이터 */
+@keyframes baps-voice-scan-line {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+.baps-voice-scan-line {
+  animation: baps-voice-scan-line 1.12s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .baps-voice-scan-line {
+    animation: none;
+    transform: translateX(0);
+    opacity: 0.75;
+  }
+}

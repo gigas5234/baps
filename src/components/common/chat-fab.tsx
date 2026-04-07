@@ -59,6 +59,38 @@ interface ChatFabProps {
   totalCal: number;
   targetCal: number;
   macros: MacroTotals;
+  /** 음성 세션 안내 문구 (예: 홍길동 → "홍길동님, 듣고 있어요") */
+  listenerDisplayName?: string | null;
+}
+
+/** STT 연동 전 · 디자인 검증용 데모 확정 문장 (API 연결 시 제거) */
+const VOICE_STT_DEMO_FINAL = "오늘 점심은 김치찌개를 먹었어요";
+
+function listenerPresenceLine(name?: string | null): string {
+  const n = name?.trim();
+  if (!n) return "듣고 있어요";
+  return `${n}님, 듣고 있어요`;
+}
+
+/** 라디오 주파수 / 심박 느낌의 파동 아이콘 (마이크 대체) */
+function VoiceLinkIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+    >
+      <path
+        d="M3 12h2.5M18.5 12H21M6 16l2.2-8M15.8 16L18 8M9.8 19l1.2-14M13 19l1.2-14"
+        stroke="currentColor"
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
 }
 
 function CoachDataCardView({
@@ -243,6 +275,7 @@ export function ChatFab({
   totalCal,
   targetCal,
   macros,
+  listenerDisplayName = null,
 }: ChatFabProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -255,6 +288,12 @@ export function ChatFab({
   const [bootLoading, setBootLoading] = useState(false);
   /** 코치 교대·빠른 요청 영역 접기 (대화 가리지 않도록) */
   const [accessoryExpanded, setAccessoryExpanded] = useState(true);
+  /** 음성 커뮤니케이션 링크 UI (그리드 오버레이 + 홀드 시 STT 시뮬) */
+  const [voiceSessionOpen, setVoiceSessionOpen] = useState(false);
+  const [voicePressing, setVoicePressing] = useState(false);
+  const [voiceGhostText, setVoiceGhostText] = useState("");
+  const voiceHoldDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const suppressVoiceToggleClickRef = useRef(false);
   const wasChatOpenRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   /** send 직후에도 최신 대화로 history를 만들기 위함 (칩/카드는 입력 없이 즉시 API) */
@@ -272,8 +311,29 @@ export function ChatFab({
     if (!isOpen) {
       openingCoachSynced.current = null;
       quickChipsBootstrapKeyRef.current = "";
+      setVoiceSessionOpen(false);
+      setVoicePressing(false);
+      setVoiceGhostText("");
+      if (voiceHoldDelayRef.current) {
+        clearTimeout(voiceHoldDelayRef.current);
+        voiceHoldDelayRef.current = null;
+      }
     }
   }, [isOpen]);
+
+  /** 홀드 중 데모 interim 텍스트 (Azure partial 결과 대체) */
+  useEffect(() => {
+    if (!voicePressing) return;
+    const full = VOICE_STT_DEMO_FINAL;
+    let i = 0;
+    setVoiceGhostText("");
+    const t = window.setInterval(() => {
+      i += 1;
+      setVoiceGhostText(full.slice(0, Math.min(i, full.length)));
+      if (i >= full.length) clearInterval(t);
+    }, 36);
+    return () => clearInterval(t);
+  }, [voicePressing]);
 
   useEffect(() => {
     if (isOpen) setAccessoryExpanded(true);
@@ -760,6 +820,48 @@ export function ChatFab({
     }
   };
 
+  const clearVoiceHoldDelay = () => {
+    if (voiceHoldDelayRef.current) {
+      clearTimeout(voiceHoldDelayRef.current);
+      voiceHoldDelayRef.current = null;
+    }
+  };
+
+  const onVoicePointerDown = () => {
+    if (!voiceSessionOpen) return;
+    clearVoiceHoldDelay();
+    voiceHoldDelayRef.current = setTimeout(() => {
+      voiceHoldDelayRef.current = null;
+      setVoicePressing(true);
+    }, 200);
+  };
+
+  const onVoicePointerUpEnd = () => {
+    clearVoiceHoldDelay();
+    if (voicePressing) {
+      suppressVoiceToggleClickRef.current = true;
+      setInput(VOICE_STT_DEMO_FINAL);
+    }
+    setVoicePressing(false);
+    setVoiceGhostText("");
+  };
+
+  const onVoiceClick = () => {
+    if (suppressVoiceToggleClickRef.current) {
+      suppressVoiceToggleClickRef.current = false;
+      return;
+    }
+    setVoiceSessionOpen((open) => {
+      const next = !open;
+      if (!next) {
+        setVoicePressing(false);
+        setVoiceGhostText("");
+        clearVoiceHoldDelay();
+      }
+      return next;
+    });
+  };
+
   return (
     <>
       <AnimatePresence>
@@ -771,7 +873,7 @@ export function ChatFab({
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
             className="fixed inset-0 z-50 flex max-h-[100dvh] flex-col overflow-hidden bg-background text-foreground overscroll-none touch-pan-y"
           >
-            <div className="flex items-center justify-between border-b border-border bg-background px-4 py-3">
+            <div className="relative z-20 flex shrink-0 items-center justify-between border-b border-border bg-background px-4 py-3">
               <div>
                 <h2 className="text-base font-bold text-foreground">BAPS 분석실</h2>
                 <p className="mt-0.5 text-[10px] font-medium text-primary">
@@ -796,7 +898,8 @@ export function ChatFab({
               </button>
             </div>
 
-            <div className="min-h-0 flex-1 touch-pan-y space-y-3 overflow-y-auto overscroll-y-contain bg-background p-4">
+            <div className="relative min-h-0 flex-1">
+              <div className="h-full min-h-0 space-y-3 overflow-y-auto overscroll-y-contain bg-background p-4 touch-pan-y">
               {bootLoading && messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-2 px-3 pt-16 text-sm text-muted-foreground">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -890,9 +993,59 @@ export function ChatFab({
                 </div>
               ) : null}
               <div ref={messagesEndRef} />
+              </div>
+
+              <AnimatePresence>
+                {voiceSessionOpen ? (
+                  <motion.div
+                    key="voice-scan-overlay"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.22 }}
+                    className="pointer-events-none absolute inset-0 z-10 flex flex-col"
+                    aria-hidden
+                  >
+                    <div className="absolute inset-0 bg-background/60 backdrop-blur-[1px] dark:bg-background/52" />
+                    <div
+                      className={cn(
+                        "absolute inset-0 opacity-[0.92]",
+                        "bg-[linear-gradient(to_right,rgb(0_0_0/_0.038)_1px,transparent_1px),linear-gradient(to_bottom,rgb(0_0_0/_0.038)_1px,transparent_1px)]",
+                        "[background-size:1.375rem_1.375rem]",
+                        "dark:bg-[linear-gradient(to_right,rgb(255_255_255/_0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgb(255_255_255/_0.06)_1px,transparent_1px)]"
+                      )}
+                    />
+                    <div className="relative flex flex-1 flex-col items-center justify-center px-6 pb-28 pt-12 text-center">
+                      <p className="max-w-[min(100%,20rem)] text-[1.05rem] font-semibold leading-snug tracking-tight text-foreground/88 sm:text-lg">
+                        {listenerPresenceLine(listenerDisplayName)}
+                      </p>
+                      {voicePressing ? (
+                        <div
+                          className="mt-4 flex flex-col items-center gap-1.5"
+                          role="status"
+                          aria-live="polite"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <span className="relative flex h-2 w-2">
+                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal-400/90 opacity-70 dark:bg-teal-300/80" />
+                              <span className="relative inline-flex h-2 w-2 rounded-full bg-teal-500 dark:bg-teal-400" />
+                            </span>
+                            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700/90 dark:text-teal-300/95">
+                              데이터 스캔 중
+                            </span>
+                          </div>
+                          <div className="h-0.5 w-36 overflow-hidden rounded-full bg-teal-500/15 dark:bg-teal-400/20">
+                            <div className="h-full w-2/3 rounded-full bg-gradient-to-r from-transparent via-teal-400/85 to-transparent dark:via-teal-300/90 baps-voice-scan-line" />
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
             </div>
 
-            <div className="border-t border-border bg-card pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <div className="relative z-20 shrink-0 border-t border-border bg-card pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               <button
                 type="button"
                 onClick={() => setAccessoryExpanded((e) => !e)}
@@ -937,15 +1090,60 @@ export function ChatFab({
               <div className="flex items-center gap-2 px-3 pb-3 pt-1">
                 <input
                   type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
+                  value={voicePressing ? voiceGhostText : input}
+                  onChange={(e) => {
+                    if (voicePressing) return;
+                    setInput(e.target.value);
+                  }}
                   onKeyDown={(e) => {
+                    if (voicePressing) return;
                     if (e.key === "Enter") void sendWithText(input, "input");
                   }}
                   placeholder="코치에게 보고하기…"
-                  className="flex-1 rounded-full border border-border bg-background px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  readOnly={voicePressing}
+                  aria-busy={voicePressing}
+                  className={cn(
+                    "min-w-0 flex-1 rounded-full border border-border bg-background px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary",
+                    voicePressing &&
+                      "text-foreground/45 caret-transparent selection:bg-transparent dark:text-white/40"
+                  )}
                   disabled={isLoading || bootLoading}
                 />
+                <button
+                  type="button"
+                  onClick={onVoiceClick}
+                  onPointerDown={onVoicePointerDown}
+                  onPointerUp={onVoicePointerUpEnd}
+                  onPointerCancel={onVoicePointerUpEnd}
+                  onPointerLeave={(e) => {
+                    if (e.buttons === 0) onVoicePointerUpEnd();
+                  }}
+                  disabled={isLoading || bootLoading}
+                  aria-pressed={voiceSessionOpen}
+                  aria-label={
+                    voiceSessionOpen
+                      ? "음성 입력 종료 · 짧게 누르면 닫아요. 길게 누르면 말하기"
+                      : "음성 입력 열기"
+                  }
+                  className={cn(
+                    "relative shrink-0 rounded-2xl p-2.5 transition-transform active:scale-95",
+                    "border border-border bg-muted/45 text-foreground/85 shadow-sm",
+                    "hover:bg-muted/70 disabled:pointer-events-none disabled:opacity-40",
+                    "dark:border-white/12 dark:bg-muted/25 dark:text-foreground/90",
+                    voiceSessionOpen &&
+                      "border-teal-500/35 bg-teal-500/10 text-teal-800 shadow-[0_0_0_1px_rgba(45,212,191,0.25)] dark:border-teal-400/30 dark:bg-teal-500/15 dark:text-teal-100",
+                    voicePressing &&
+                      "border-teal-400/55 shadow-[0_0_22px_rgba(110,231,216,0.45),0_0_0_1px_rgba(45,212,191,0.35)] dark:shadow-[0_0_26px_rgba(94,234,212,0.38),0_0_0_1px_rgba(94,234,212,0.3)]"
+                  )}
+                >
+                  {voicePressing ? (
+                    <>
+                      <span className="pointer-events-none absolute inset-[-3px] animate-ping rounded-2xl border-2 border-teal-400/45 [animation-duration:1.35s] dark:border-teal-300/40" />
+                      <span className="pointer-events-none absolute inset-[-3px] animate-ping rounded-2xl border border-teal-300/35 opacity-90 [animation-delay:0.4s] [animation-duration:1.35s] dark:border-teal-200/28" />
+                    </>
+                  ) : null}
+                  <VoiceLinkIcon className="relative z-[1] h-[1.125rem] w-[1.125rem]" />
+                </button>
                 <button
                   type="button"
                   onClick={() => void sendWithText(input, "input")}
