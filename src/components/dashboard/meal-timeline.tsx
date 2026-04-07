@@ -276,9 +276,6 @@ function MealTrayStrip({
               />
             ))}
           </div>
-          <p className="text-[10px] font-medium tabular-nums text-muted-foreground">
-            {dotIdx + 1}번째 기록 · 총 {trays.length}개 · 스와이프 또는 점으로 이동
-          </p>
         </div>
       ) : null}
     </div>

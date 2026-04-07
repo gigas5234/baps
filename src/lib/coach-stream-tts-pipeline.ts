@@ -213,12 +213,22 @@ export class CoachStreamTtsSentencePipeline {
       st.lastLen = text.length;
       st.carry += delta;
 
-      const { chunks, rest } = extractSpeakChunksFromCarry(st.carry);
-      st.carry = rest;
+      /**
+       * 스트림 끝에서 같은 full로 `parse(..., false)` 직후 `parse(..., true)`가 오면
+       * delta=0인데 extract를 다시 돌려 같은 문장이 TTS 큐에 두 번 쌓인다.
+       * 새 글자가 없으면 문장 추출은 생략하고, complete 전환 시에만 tail 플러시.
+       */
+      if (delta.length > 0) {
+        const { chunks, rest } = extractSpeakChunksFromCarry(st.carry);
+        st.carry = rest;
 
-      for (const raw of chunks) {
-        const t = plainCoachTextForTts(raw).trim();
-        if (t.length > 0) out.push({ text: t, coachId, focusKey: ttsFocusKey });
+        for (const raw of chunks) {
+          const t = plainCoachTextForTts(raw).trim();
+          if (t.length > 0) out.push({ text: t, coachId, focusKey: ttsFocusKey });
+        }
+      } else if (!seg.complete) {
+        this.perSeg.set(key, st);
+        return;
       }
 
       if (seg.complete) {

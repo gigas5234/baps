@@ -45,6 +45,7 @@ import {
   DEFAULT_COACH_PERSONA_ID,
   buildChatAtriumWelcome,
   coachMeta,
+  getAtriumDefaultQuickChips,
   personalizeAtriumQuote,
   type CoachPersonaId,
 } from "@/lib/coach-personas";
@@ -188,51 +189,60 @@ function CoachDataCardView({
   );
 }
 
-/** 아트리움: 코치 탭 → 소개 / 같은 코치 재탭 → 대화 진입 */
+/** 아트리움: 가로 코치 선택(한눈에 5명) — 소개는 가운데 패널, 같은 코치 재탭 → 대화 진입 */
 function AtriumCoachTapDeck({
   coachPersona,
+  atriumFocusCoachId,
   disabled,
   onCoachTap,
 }: {
   coachPersona: CoachPersonaId;
+  atriumFocusCoachId: CoachPersonaId | null;
   disabled: boolean;
   onCoachTap: (id: CoachPersonaId) => void;
 }) {
   return (
     <div className="space-y-2">
-      <div className="flex flex-col gap-1.5">
+      <div
+        className={cn(
+          "flex gap-2 overflow-x-auto pb-1 -mx-0.5 px-0.5 snap-x snap-mandatory",
+          "[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        )}
+        role="listbox"
+        aria-label="코치 선택"
+      >
         {COACH_PERSONAS_UI.map((c) => {
-          const selected = coachPersona === c.id;
+          const selected =
+            atriumFocusCoachId !== null && coachPersona === c.id;
           const blurb = COACH_ATRIUM_BLURB[c.id];
           return (
             <button
               key={c.id}
               type="button"
+              role="option"
+              aria-selected={selected}
               disabled={disabled}
               onClick={() => onCoachTap(c.id)}
               className={cn(
-                "rounded-xl border px-3 py-2.5 text-left transition-colors",
-                "text-[11px] font-semibold leading-snug",
+                "flex shrink-0 snap-start flex-col items-center gap-0.5 rounded-xl border px-1.5 py-2 text-center transition-colors",
+                "min-w-[4.25rem] max-w-[5.5rem] sm:min-w-[4.75rem]",
                 selected
                   ? "border-primary bg-primary/12 shadow-sm ring-1 ring-primary/25"
                   : "border-border bg-muted/30 hover:bg-muted/55 dark:border-white/12",
                 disabled && "pointer-events-none opacity-45"
               )}
             >
-              <span className="text-[15px] leading-none" aria-hidden>
+              <span className="text-[1.35rem] leading-none" aria-hidden>
                 {c.emoji}
-              </span>{" "}
-              <span>{blurb.label}</span>
-              <span className="mt-0.5 block text-[10px] font-normal text-muted-foreground">
+              </span>
+              <span className="text-[9px] font-bold leading-tight">{c.label}</span>
+              <span className="line-clamp-2 text-[8px] font-normal leading-snug text-muted-foreground">
                 {blurb.tagline}
               </span>
             </button>
           );
         })}
       </div>
-      <p className="mt-2 text-center text-[10px] text-muted-foreground">
-        코치를 눌러 소개를 보고, 같은 코치를 한 번 더 누르면 대화가 시작됩니다.
-      </p>
     </div>
   );
 }
@@ -299,11 +309,14 @@ function QuickChipRow({
   coachId,
   disabled,
   onPick,
+  sectionTitle = "빠른 요청",
 }: {
   chips: QuickChip[];
   coachId: CoachPersonaId;
   disabled: boolean;
   onPick: (prompt: string) => void;
+  /** 아트리움 등에서 "추천 멘트" 등으로 바꿀 때 */
+  sectionTitle?: string;
 }) {
   if (!chips.length) return null;
   const accent = COACH_QUICK_CHIP_ACCENT[coachId];
@@ -316,7 +329,7 @@ function QuickChipRow({
     >
       <p className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
         <ListTodo className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        빠른 요청
+        {sectionTitle}
       </p>
       <div className="flex flex-col gap-1.5">
         {chips.map((c, i) => (
@@ -1227,6 +1240,8 @@ export function ChatFab({
         Array.isArray(streamSegmentsRaw) && streamSegmentsRaw.length > 0
           ? streamSegmentsRaw
           : undefined;
+      const hasDelimitedStreamSegments =
+        streamSegments != null && streamSegments.length > 0;
       const coachTurn: CoachStrategicTurn = {
         analysis: normalized.analysis,
         roast: normalized.roast,
@@ -1255,6 +1270,7 @@ export function ChatFab({
           await awaitStreamTtsDrainIdle();
           const ac = ttsSessionAbortRef.current;
           if (
+            !hasDelimitedStreamSegments &&
             !streamTtsHadOutputRef.current &&
             streamTtsQueueRef.current.length === 0 &&
             ac &&
@@ -1722,8 +1738,13 @@ export function ChatFab({
                 aria-expanded={accessoryExpanded}
               >
                 <span className="text-[11px] font-semibold text-muted-foreground">
-                  코치 교대
-                  {quickChips.length > 0 ? (
+                  {inAtrium ? "코치 선택" : "코치 교대"}
+                  {inAtrium && atriumFocusCoachId ? (
+                    <span className="ml-1 font-normal text-muted-foreground/85">
+                      · 추천 멘트{" "}
+                      {getAtriumDefaultQuickChips(atriumFocusCoachId).length}
+                    </span>
+                  ) : !inAtrium && quickChips.length > 0 ? (
                     <span className="ml-1 font-normal text-muted-foreground/85">
                       · 빠른 요청 {quickChips.length}
                     </span>
@@ -1744,26 +1765,38 @@ export function ChatFab({
               {accessoryExpanded ? (
                 <div className="space-y-2.5 p-3">
                   {inAtrium ? (
-                    <AtriumCoachTapDeck
-                      coachPersona={coachPersona}
-                      disabled={isLoading}
-                      onCoachTap={handleAtriumCoachTap}
-                    />
+                    <>
+                      <AtriumCoachTapDeck
+                        coachPersona={coachPersona}
+                        atriumFocusCoachId={atriumFocusCoachId}
+                        disabled={isLoading}
+                        onCoachTap={handleAtriumCoachTap}
+                      />
+                      {atriumFocusCoachId ? (
+                        <QuickChipRow
+                          chips={getAtriumDefaultQuickChips(atriumFocusCoachId)}
+                          coachId={atriumFocusCoachId}
+                          disabled={isLoading}
+                          sectionTitle="추천 멘트"
+                          onPick={(prompt) => void sendWithText(prompt, "chip")}
+                        />
+                      ) : null}
+                    </>
                   ) : (
-                    <CoachPersonaPicker
-                      value={coachPersona}
-                      onChange={setCoachPersona}
-                      disabled={isLoading}
-                    />
+                    <>
+                      <CoachPersonaPicker
+                        value={coachPersona}
+                        onChange={setCoachPersona}
+                        disabled={isLoading}
+                      />
+                      <QuickChipRow
+                        chips={quickChips}
+                        coachId={coachPersona}
+                        disabled={isLoading}
+                        onPick={(prompt) => void sendWithText(prompt, "chip")}
+                      />
+                    </>
                   )}
-                  {!inAtrium ? (
-                    <QuickChipRow
-                      chips={quickChips}
-                      coachId={coachPersona}
-                      disabled={isLoading}
-                      onPick={(prompt) => void sendWithText(prompt, "chip")}
-                    />
-                  ) : null}
                 </div>
               ) : null}
               <div className="flex items-center gap-2 px-3 pb-3 pt-1">

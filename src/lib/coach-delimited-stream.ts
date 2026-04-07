@@ -18,6 +18,21 @@ import {
 const DELIM_RE =
   /\[(ANALYSIS|MISSION|INVITE|DIET|NUTRITION|EXERCISE|MENTAL|ROI|QUICK_CHIPS|DATA_CARD)\]/gi;
 
+/** 아직 `[ANALYSIS]` 등 완성 전 — 잘못하면 "anal" / "[AN" 이 본문으로 새는 것 방지 */
+function hasCompleteDelimTag(raw: string): boolean {
+  return raw.match(DELIM_RE) !== null;
+}
+
+function looksLikeIncompleteLeadingDelim(
+  raw: string,
+  streamFinished: boolean
+): boolean {
+  if (streamFinished) return false;
+  const s = raw.trimStart();
+  if (!s.startsWith("[")) return false;
+  return !hasCompleteDelimTag(raw);
+}
+
 export type CoachDelimTag =
   | "ANALYSIS"
   | "MISSION"
@@ -160,6 +175,9 @@ export function parseCoachDelimitedStream(
   const matches = [...raw.matchAll(DELIM_RE)];
   if (matches.length === 0) {
     if (!raw.trim()) return { segments: [] };
+    if (looksLikeIncompleteLeadingDelim(raw, streamFinished)) {
+      return { segments: [] };
+    }
     return {
       segments: [
         {

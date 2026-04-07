@@ -198,6 +198,94 @@ export function buildChatAtriumWelcome(displayName: string): string {
   return `반가워요, ${n}님. 오늘도 '내일부터'라는 마법의 주문을 외우고 오신 건 아니죠?\n\n지금 아래의 다섯 코치 중 한 명을 깨워보세요.\n오늘 ${n}님이 무엇을 하셨는지, 냉정하게 분석해 드릴게요.`;
 }
 
+/** 아트리움에서 코치만 고른 뒤(대화 스레드 전) 표시 — 서버 칩 수신 전 폴백 */
+export type AtriumQuickChip = { label: string; prompt: string };
+
+export const ATRIUM_DEFAULT_QUICK_CHIPS: Record<CoachPersonaId, AtriumQuickChip[]> =
+  {
+    diet: [
+      {
+        label: "오늘 섭취 팩트 평가",
+        prompt: "오늘 기록된 섭취를 팩트로 짧게 평가해줘.",
+      },
+      {
+        label: "목표 대비 지금 상태",
+        prompt: `오늘 목표 칼로리 대비 지금 어떤 상태인지 숫자로 말해줘.`,
+      },
+      {
+        label: "야식 욕구 차단",
+        prompt:
+          "야식 욕구가 올 때 바로 끊을 수 있는 대체 행동 하나만 명령해.",
+      },
+    ],
+    nutrition: [
+      {
+        label: "탄단지 밸런스",
+        prompt: "오늘 탄단지 비율이 균형 잡혀 있는지 팩트로 짚어줘.",
+      },
+      {
+        label: "단백질 보충 2가지",
+        prompt: "단백질이 부족하면 보충할 만한 음식을 딱 2가지만 말해줘.",
+      },
+      {
+        label: "혈당 스파이크 점검",
+        prompt: "혈당 스파이크가 올 수 있는 식사를 냉정하게 분석해줘.",
+      },
+    ],
+    exercise: [
+      {
+        label: "먹은 만큼 환산",
+        prompt:
+          "오늘 활동량을 오늘 먹은 칼로리 기준으로 환산하면 얼마나 움직여야 하는지 말해줘.",
+      },
+      {
+        label: "15분 운동 하나",
+        prompt: "지금 15분 안에 할 수 있는 운동 하나만 명령해.",
+      },
+      {
+        label: "게으름 수치화",
+        prompt: "오늘 기록이 목표 대비 얼마나 게으른지 숫자로 말해줘.",
+      },
+    ],
+    mental: [
+      {
+        label: "진짜 허기 vs 심리",
+        prompt: "지금 배고픔이 진짜 허기인지 심리적 각인인지 팩트로 판독해줘.",
+      },
+      {
+        label: "야식 멘탈 루틴",
+        prompt: "야식 욕구가 올 때 바로 끊는 멘탈 루틴 하나만.",
+      },
+      {
+        label: "수면·스트레스 영향",
+        prompt: "오늘 수면·스트레스가 식욕에 영향 줬는지 짧게 짚어줘.",
+      },
+    ],
+    roi: [
+      {
+        label: "간식 = 운동 몇 분",
+        prompt: "오늘 먹은 간식을 칼로리로만 보면 운동으로 몇 분이야?",
+      },
+      {
+        label: "시급 대비 식사 가성비",
+        prompt: "시급 대비 오늘 식사 가성비가 나는지 냉정하게 분석해줘.",
+      },
+      {
+        label: "남은 예산 한 끼",
+        prompt: "남은 칼로리 예산으로 최적의 한 끼를 뭐로 먹을지 고민해줘.",
+      },
+    ],
+  };
+
+export function getAtriumDefaultQuickChips(
+  id: CoachPersonaId
+): AtriumQuickChip[] {
+  return (
+    ATRIUM_DEFAULT_QUICK_CHIPS[id] ??
+    ATRIUM_DEFAULT_QUICK_CHIPS[DEFAULT_COACH_PERSONA_ID]
+  );
+}
+
 /**
  * Azure TTS `ko-KR` Neural 보이스 이름 (Language support 표).
  * HD(`:DragonHDLatestNeural`)·다국어 보이스는 리전·리소스 SKU에 따라 404/거절될 수 있음.
