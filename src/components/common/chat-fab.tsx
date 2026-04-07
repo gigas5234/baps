@@ -320,6 +320,8 @@ export function ChatFab({
   const [bootLoading, setBootLoading] = useState(false);
   /** 코치 교대·빠른 요청 영역 접기 (대화 가리지 않도록) */
   const [accessoryExpanded, setAccessoryExpanded] = useState(true);
+  /** 사용자가 교대 칩을 접어 둔 경우 — 패널을 다시 열어도 강제 펼침하지 않음 */
+  const accessoryUserCollapsedRef = useRef(false);
   /** 음성: 오버레이 세션 · 탭으로 수신 시작 · 무음 2초면 자동 종료(VAD) */
   const [voiceSessionOpen, setVoiceSessionOpen] = useState(false);
   const [voiceListening, setVoiceListening] = useState(false);
@@ -342,7 +344,11 @@ export function ChatFab({
   /** 코치(`coachId`) 바뀔 때 1.5초 쉼·타이머 구간 — abort 시 즉시 해제 */
   const [ttsInterSpeakerBridge, setTtsInterSpeakerBridge] = useState(false);
   const wasChatOpenRef = useRef(false);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  /** 하단 근처(스크롤 끝)에 있을 때만 자동 스크롤 */
+  const stickToBottomRef = useRef(true);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   /** send 직후에도 최신 대화로 history를 만들기 위함 (칩/카드는 입력 없이 즉시 API) */
   const messagesRef = useRef<ChatMessage[]>([]);
   /** opening 메시지가 현재 coachPersona와 이미 맞는지 (중복 부트스트랩 방지) */
@@ -622,29 +628,76 @@ export function ChatFab({
   }, [isOpen, stopActiveCoachTts]);
 
   useEffect(() => {
-    if (isOpen) setAccessoryExpanded(true);
+    if (!isOpen) return;
+    setAccessoryExpanded(!accessoryUserCollapsedRef.current);
   }, [isOpen]);
 
-  /** 채팅 패널이 열린 동안 뒤 메인 스크롤 차단 */
+  const updateStickToBottomFromScroll = useCallback(() => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    const slack = 96;
+    const atBottom =
+      el.scrollHeight - el.scrollTop - el.clientHeight <= slack;
+    stickToBottomRef.current = atBottom;
+    if (atBottom) setShowJumpToLatest(false);
+  }, []);
+
+  /** 채팅 패널이 열린 동안 뒤 메인 스크롤 차단 (+ iOS 체이닝 완화) */
   useEffect(() => {
     if (!isOpen) return;
     const prevHtmlOverflow = document.documentElement.style.overflow;
     const prevBodyOverflow = document.body.style.overflow;
     const prevPaddingRight = document.body.style.paddingRight;
+    const prevBodyTouch = document.body.style.touchAction;
+    const prevHtmlOb = document.documentElement.style.overscrollBehavior;
+    const prevBodyOb = document.body.style.overscrollBehavior;
     const sbw = window.innerWidth - document.documentElement.clientWidth;
     document.documentElement.style.overflow = "hidden";
     document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+    document.documentElement.style.overscrollBehavior = "none";
+    document.body.style.overscrollBehavior = "none";
     if (sbw > 0) document.body.style.paddingRight = `${sbw}px`;
     return () => {
       document.documentElement.style.overflow = prevHtmlOverflow;
       document.body.style.overflow = prevBodyOverflow;
       document.body.style.paddingRight = prevPaddingRight;
+      document.body.style.touchAction = prevBodyTouch;
+      document.documentElement.style.overscrollBehavior = prevHtmlOb;
+      document.body.style.overscrollBehavior = prevBodyOb;
     };
   }, [isOpen]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, bootLoading, isLoading]);
+    if (!isOpen) return;
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", updateStickToBottomFromScroll, {
+      passive: true,
+    });
+    return () =>
+      el.removeEventListener("scroll", updateStickToBottomFromScroll);
+  }, [isOpen, updateStickToBottomFromScroll]);
+
+  useEffect(() => {
+    if (isOpen) {
+      stickToBottomRef.current = true;
+      setShowJumpToLatest(false);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const id = window.requestAnimationFrame(() => {
+      if (stickToBottomRef.current) {
+        messagesEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+        setShowJumpToLatest(false);
+      } else {
+        setShowJumpToLatest(true);
+      }
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [messages, bootLoading, isLoading, isOpen]);
 
   useEffect(() => {
     if (wasChatOpenRef.current && !isOpen) {
@@ -689,6 +742,7 @@ export function ChatFab({
           date: selectedDate,
           local_hour: new Date().getHours(),
         });
+        /* 패널 닫힘·deps 재실행 시 이후 setState 금지 */
         if (cancelled) return;
 
         const { ok, status, data } = outcome;
@@ -838,6 +892,7 @@ export function ChatFab({
           date: selectedDate,
           local_hour: new Date().getHours(),
         });
+        /* 패널 닫힘·deps 재실행 시 이후 setState 금지 (레이스 방지) */
         if (cancelled) return;
 
         const { ok, status, data } = outcome;
@@ -940,6 +995,7 @@ export function ChatFab({
     targetCal,
   ]);
 
+
   /**
    * @param source chip | card — 입력창을 거치지 않고 곧바로 API만 호출. 보내기 버튼은 직접 입력용.
    */
@@ -949,6 +1005,9 @@ export function ChatFab({
   ) => {
     const text = raw.trim();
     if (!text || isLoading || bootLoading) return;
+
+    stickToBottomRef.current = true;
+    setShowJumpToLatest(false);
 
     /* Autoplay: 네트워크 대기 전 같은 제스처에서 오디오 맥락을 연다 */
     if (chatTtsEnabledRef.current) {
@@ -1328,7 +1387,7 @@ export function ChatFab({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: "100%" }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            className="fixed inset-0 z-50 flex max-h-[100dvh] flex-col overflow-hidden bg-background text-foreground overscroll-none touch-pan-y"
+            className="fixed inset-0 z-50 flex max-h-[100dvh] flex-col overflow-hidden bg-background text-foreground overscroll-none touch-none"
           >
             <VoiceSessionHudFrame
               mode={voiceHudMode}
@@ -1381,7 +1440,11 @@ export function ChatFab({
             </div>
 
             <div className="relative min-h-0 flex-1">
-              <div className="h-full min-h-0 space-y-3 overflow-y-auto overscroll-y-contain bg-background p-4 touch-pan-y">
+              <div
+                ref={messagesScrollRef}
+                onScroll={updateStickToBottomFromScroll}
+                className="h-full min-h-0 space-y-3 overflow-y-auto overscroll-y-contain bg-background p-4 touch-pan-y"
+              >
               {bootLoading && messages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-2 px-3 pt-16 text-sm text-muted-foreground">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -1502,6 +1565,28 @@ export function ChatFab({
               <div ref={messagesEndRef} />
               </div>
 
+              {showJumpToLatest ? (
+                <div className="pointer-events-none absolute inset-x-0 bottom-3 z-30 flex justify-center px-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stickToBottomRef.current = true;
+                      setShowJumpToLatest(false);
+                      messagesEndRef.current?.scrollIntoView({
+                        behavior: "auto",
+                        block: "end",
+                      });
+                      window.requestAnimationFrame(() =>
+                        updateStickToBottomFromScroll()
+                      );
+                    }}
+                    className="pointer-events-auto rounded-full border border-primary/30 bg-background/95 px-3.5 py-1.5 text-[11px] font-semibold text-primary shadow-md backdrop-blur-sm dark:bg-card/95"
+                  >
+                    최신 메시지
+                  </button>
+                </div>
+              ) : null}
+
               <AnimatePresence>
                 {voiceSessionOpen ? (
                   <motion.div
@@ -1527,7 +1612,13 @@ export function ChatFab({
             <div className="relative z-20 shrink-0 border-t border-border bg-card pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               <button
                 type="button"
-                onClick={() => setAccessoryExpanded((e) => !e)}
+                onClick={() => {
+                  setAccessoryExpanded((e) => {
+                    const next = !e;
+                    accessoryUserCollapsedRef.current = !next;
+                    return next;
+                  });
+                }}
                 className="flex w-full items-center justify-between gap-2 border-b border-border px-3 py-2 text-left text-muted-foreground transition-colors hover:bg-muted/70"
                 aria-expanded={accessoryExpanded}
               >
