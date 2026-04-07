@@ -55,6 +55,19 @@ export async function startAzureChatStt(
     region
   );
   speechConfig.speechRecognitionLanguage = "ko-KR";
+  /** 연속 인식 구간 분할·무음 (서버가 지원할 때 클라이언트 VAD와 함께 동작) */
+  speechConfig.setProperty(
+    SpeechSDK.PropertyId.Speech_SegmentationSilenceTimeoutMs,
+    "2000"
+  );
+  speechConfig.setProperty(
+    SpeechSDK.PropertyId.SpeechServiceConnection_InitialSilenceTimeoutMs,
+    "10000"
+  );
+  speechConfig.setProperty(
+    SpeechSDK.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs,
+    "2000"
+  );
   /** TTS는 별도 연동 시 참고: speechConfig.speechSynthesisVoiceName = "ko-KR-SunHiNeural" */
 
   const audioConfig =

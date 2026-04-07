@@ -14,7 +14,14 @@ type ChatTtsMonitorToggleProps = {
 
 function SonicEqBars({ active }: { active: boolean }) {
   const reduce = useReducedMotion();
-  const heightsPx = [10, 14, 8, 13, 11];
+  /** 실시간 주파수 느낌 — 막대마다 다른 키프레임 시퀀스 */
+  const heightsPx = [9, 14, 7, 16, 10, 12, 8];
+  const rhythms: number[][] = [
+    [0.32, 0.95, 0.48, 1, 0.58, 0.82, 0.36],
+    [0.5, 0.68, 0.9, 0.42, 1, 0.4, 0.72],
+    [0.72, 0.38, 0.88, 0.62, 0.5, 1, 0.55],
+    [0.38, 0.85, 0.55, 0.92, 0.68, 0.45, 0.88],
+  ];
   return (
     <div
       className="flex h-4 items-end justify-center gap-px rounded-sm px-0.5"
@@ -23,24 +30,29 @@ function SonicEqBars({ active }: { active: boolean }) {
       {heightsPx.map((base, i) => (
         <motion.span
           key={i}
-          className="w-[3px] rounded-[1px] bg-teal-400 shadow-[0_0_6px_rgba(45,212,191,0.65)] dark:bg-teal-300"
+          className="w-[2.5px] rounded-[1px] bg-gradient-to-t from-teal-600/90 via-teal-400 to-teal-200 shadow-[0_0_7px_rgba(45,212,191,0.7)] dark:from-teal-500 dark:via-teal-300 dark:to-teal-100"
           initial={false}
           animate={
             reduce || !active
-              ? { scaleY: 0.22 }
+              ? { scaleY: 0.2 }
               : {
-                  scaleY: [0.35, 1, 0.55, 0.9, 0.4, 1.05, 0.35],
+                  scaleY: [
+                    rhythms[0][i]!,
+                    rhythms[1][i]!,
+                    rhythms[2][i]!,
+                    rhythms[3][i]!,
+                    rhythms[0][i]!,
+                  ],
                 }
           }
           transition={
             reduce || !active
               ? { duration: 0.2 }
               : {
-                  duration: 0.52 + i * 0.05,
+                  duration: 1.05 + i * 0.045,
                   repeat: Infinity,
-                  repeatType: "mirror",
-                  ease: "easeInOut",
-                  delay: i * 0.04,
+                  ease: [0.45, 0, 0.55, 1],
+                  delay: i * 0.06,
                 }
           }
           style={{
@@ -71,18 +83,21 @@ export function ChatTtsMonitorToggle({
       aria-pressed={enabled}
       aria-label={enabled ? "코치 음성 끄기" : "코치 음성 켜기"}
       className={cn(
-        "relative flex max-w-[11.5rem] min-w-0 flex-col gap-1 rounded-xl border px-2.5 py-2 text-left transition-[box-shadow,border-color,background-color] duration-200",
+        "relative flex max-w-[11.5rem] min-w-0 flex-col gap-1 overflow-hidden rounded-xl px-2.5 py-2 text-left",
+        "transition-[box-shadow,border-color,backdrop-filter] duration-300 ease-out",
         "touch-manipulation active:scale-[0.98]",
         !enabled &&
           cn(
-            "border-slate-600/40 bg-slate-900/[0.28] dark:border-slate-500/28 dark:bg-slate-950/45",
-            "bg-[linear-gradient(to_right,rgb(15_23_42/_0.14)_1px,transparent_1px),linear-gradient(to_bottom,rgb(15_23_42/_0.14)_1px,transparent_1px)] [background-size:7px_7px]",
-            "dark:bg-[linear-gradient(to_right,rgb(148_163_184/_0.09)_1px,transparent_1px),linear-gradient(to_bottom,rgb(148_163_184/_0.09)_1px,transparent_1px)]"
+            "border border-slate-500/25 bg-slate-900/32 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)]",
+            "backdrop-blur-xl dark:border-white/[0.07] dark:bg-slate-950/45",
+            "dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
           ),
         enabled &&
           cn(
-            "border-teal-400/45 bg-teal-950/15 shadow-[0_0_16px_rgba(20,184,166,0.38)] dark:border-teal-400/35 dark:bg-teal-950/25",
-            "dark:shadow-[0_0_20px_rgba(94,234,212,0.32)]"
+            "border border-teal-400/40 bg-gradient-to-br from-teal-400/[0.14] via-teal-950/18 to-slate-950/35",
+            "shadow-[0_0_22px_rgba(20,184,166,0.34),inset_0_1px_0_rgba(255,255,255,0.12)]",
+            "backdrop-blur-xl dark:from-teal-400/12 dark:via-teal-950/22 dark:to-slate-950/40",
+            "dark:border-teal-400/35 dark:shadow-[0_0_26px_rgba(94,234,212,0.3),inset_0_1px_0_rgba(255,255,255,0.1)]"
           )
       )}
     >
@@ -129,16 +144,16 @@ export function ChatTtsMonitorToggle({
           <>
             <span aria-hidden>🔇</span>
             <span>소리 끔</span>
-            <span className="ml-0.5 font-mono text-[9px] font-semibold uppercase tracking-wide text-amber-500/80 dark:text-amber-400/75">
+            <span className="ml-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-amber-500/85 dark:text-amber-400/80">
               silent
             </span>
           </>
         ) : (
           <>
             <span aria-hidden>🎙️</span>
-            <span className="font-mono">보이스 ON</span>
+            <span className="font-mono tracking-tight">보이스 ON</span>
             <span
-              className="ml-0.5 text-[10px] font-mono text-teal-700/90 dark:text-teal-200/90"
+              className="ml-0.5 font-mono text-[10px] tracking-tight text-teal-800/95 dark:text-teal-100/95"
               aria-hidden
             >
               :-]

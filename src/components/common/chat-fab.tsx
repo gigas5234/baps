@@ -291,16 +291,16 @@ export function ChatFab({
   const [bootLoading, setBootLoading] = useState(false);
   /** 코치 교대·빠른 요청 영역 접기 (대화 가리지 않도록) */
   const [accessoryExpanded, setAccessoryExpanded] = useState(true);
-  /** 음성 커뮤니케이션 링크 UI (그리드 오버레이 + 홀드 시 STT 시뮬) */
+  /** 음성: 오버레이 세션 · 탭으로 수신 시작 · 무음 2초면 자동 종료(VAD) */
   const [voiceSessionOpen, setVoiceSessionOpen] = useState(false);
-  const [voicePressing, setVoicePressing] = useState(false);
+  const [voiceListening, setVoiceListening] = useState(false);
+  const [voiceAnalyzing, setVoiceAnalyzing] = useState(false);
   const [voiceGhostText, setVoiceGhostText] = useState("");
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [voiceHudStream, setVoiceHudStream] = useState<MediaStream | null>(null);
-  const suppressVoiceToggleClickRef = useRef(false);
-  /** 손가락/스타일러스를 누른 동안 true (마이크 입력 구간) */
-  const voiceEngagedRef = useRef(false);
-  const micAbortRef = useRef<AbortController | null>(null);
+  const listeningDesiredRef = useRef(false);
+  const voiceFinalizingRef = useRef(false);
+  const voiceStartInFlightRef = useRef(false);
   const voiceMicStreamRef = useRef<MediaStream | null>(null);
   const sttControllerRef = useRef<AzureSttSession | null>(null);
   /** 코치 TTS 재생 허용(실제 음성 연동 전까지 UI·상태만). 초기 진입·기본값 OFF */
@@ -323,12 +323,11 @@ export function ChatFab({
       openingCoachSynced.current = null;
       quickChipsBootstrapKeyRef.current = "";
       setVoiceSessionOpen(false);
-      setVoicePressing(false);
+      setVoiceListening(false);
+      setVoiceAnalyzing(false);
       setVoiceGhostText("");
       setVoiceError(null);
-      voiceEngagedRef.current = false;
-      micAbortRef.current?.abort();
-      micAbortRef.current = null;
+      listeningDesiredRef.current = false;
       const stt = sttControllerRef.current;
       sttControllerRef.current = null;
       if (stt) void stt.stop().catch(() => {});
@@ -831,157 +830,141 @@ export function ChatFab({
     setVoiceHudStream(null);
   };
 
-  const onVoicePointerDown = () => {
-    if (!voiceSessionOpen) return;
-
-    micAbortRef.current?.abort();
-    micAbortRef.current = new AbortController();
-    const { signal } = micAbortRef.current;
-
-    voiceEngagedRef.current = true;
-    setVoicePressing(true);
-    setVoiceGhostText("");
-    setVoiceError(null);
-
-    const md = navigator.mediaDevices;
-    if (!md?.getUserMedia) {
-      setVoiceError("이 환경에서는 마이크를 사용할 수 없어요.");
-      voiceEngagedRef.current = false;
-      setVoicePressing(false);
-      return;
-    }
-
-    const audioConstraints: MediaTrackConstraints = {
-      echoCancellation: true,
-      noiseSuppression: true,
-    };
-
-    const req = md.getUserMedia(
-      Object.assign(
-        { audio: audioConstraints },
-        { signal }
-      ) as MediaStreamConstraints & { signal: AbortSignal }
-    );
-
-    void req
-      .then(async (stream) => {
-        if (!voiceEngagedRef.current) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        voiceMicStreamRef.current = stream;
-        setVoiceHudStream(stream);
-        try {
-          const ctrl = await startAzureChatStt(
-            {
-              onInterim: (t) => setVoiceGhostText(t),
-              onError: (m) => setVoiceError(m),
-            },
-            { mediaStream: stream }
-          );
-          if (!voiceEngagedRef.current) {
-            await ctrl.stop();
-            stopVoiceMicTracks();
-            return;
-          }
-          sttControllerRef.current = ctrl;
-        } catch (e) {
-          stopVoiceMicTracks();
-          const msg =
-            e instanceof Error ? e.message : "음성 인식을 시작하지 못했어요";
-          setVoiceError(msg);
-          voiceEngagedRef.current = false;
-          setVoicePressing(false);
-          setVoiceGhostText("");
-        }
-      })
-      .catch((e: unknown) => {
-        if (signal.aborted) return;
-        if (e instanceof DOMException && e.name === "AbortError") return;
-        voiceEngagedRef.current = false;
-        setVoicePressing(false);
-        setVoiceGhostText("");
-        if (e instanceof DOMException) {
-          if (e.name === "NotAllowedError" || e.name === "SecurityError") {
-            setVoiceError(
-              "마이크 권한이 필요해요. 브라우저·OS 설정에서 이 사이트의 마이크를 허용해 주세요."
-            );
-            return;
-          }
-          if (e.name === "NotFoundError") {
-            setVoiceError("사용할 수 있는 마이크를 찾지 못했어요.");
-            return;
-          }
-        }
-        setVoiceError("마이크를 열 수 없어요.");
-      });
-  };
-
-  const onVoicePointerUpEnd = () => {
-    micAbortRef.current?.abort();
-    micAbortRef.current = null;
-
-    const engaged = voiceEngagedRef.current;
-    voiceEngagedRef.current = false;
+  const finalizeVoiceSession = async (
+    reason: "vad" | "manual" | "panel_close"
+  ) => {
+    if (voiceFinalizingRef.current) return;
+    voiceFinalizingRef.current = true;
+    listeningDesiredRef.current = false;
 
     const ctrl = sttControllerRef.current;
     sttControllerRef.current = null;
+    const stream = voiceMicStreamRef.current;
 
-    const streamForCleanup = voiceMicStreamRef.current;
+    setVoiceListening(false);
+    setVoiceGhostText("");
 
-    if (engaged || ctrl) {
-      suppressVoiceToggleClickRef.current = true;
-    }
-
-    setVoicePressing(false);
-
-    if (ctrl) {
-      void (async () => {
-        try {
-          await ctrl.stop();
-          const text = ctrl.getLatestText().trim();
-          if (text) setInput(text);
-        } catch {
-          setVoiceError("음성 인식을 마무리하지 못했어요");
-        } finally {
-          streamForCleanup?.getTracks().forEach((t) => t.stop());
-          voiceMicStreamRef.current = null;
-          setVoiceHudStream(null);
-          setVoiceGhostText("");
-        }
-      })();
-    } else {
-      streamForCleanup?.getTracks().forEach((t) => t.stop());
+    try {
+      if (ctrl) {
+        await ctrl.stop();
+        const text = ctrl.getLatestText().trim();
+        if (text) setInput(text);
+      }
+    } catch {
+      setVoiceError("음성 인식을 마무리하지 못했어요");
+    } finally {
+      stream?.getTracks().forEach((t) => t.stop());
       voiceMicStreamRef.current = null;
       setVoiceHudStream(null);
-      setVoiceGhostText("");
+      if (reason === "vad") {
+        setVoiceAnalyzing(true);
+        window.setTimeout(() => setVoiceAnalyzing(false), 1200);
+      } else {
+        setVoiceAnalyzing(false);
+      }
+      voiceFinalizingRef.current = false;
     }
   };
 
-  const onVoiceClick = () => {
-    if (suppressVoiceToggleClickRef.current) {
-      suppressVoiceToggleClickRef.current = false;
+  const startVoiceListening = async () => {
+    if (
+      voiceListening ||
+      voiceAnalyzing ||
+      voiceStartInFlightRef.current ||
+      isLoading ||
+      bootLoading
+    ) {
       return;
     }
-    setVoiceSessionOpen((open) => {
-      const next = !open;
-      if (next) {
-        setVoiceError(null);
-      } else {
-        voiceEngagedRef.current = false;
-        micAbortRef.current?.abort();
-        micAbortRef.current = null;
-        const stt = sttControllerRef.current;
-        sttControllerRef.current = null;
-        if (stt) void stt.stop().catch(() => {});
-        stopVoiceMicTracks();
-        setVoicePressing(false);
-        setVoiceGhostText("");
-        setVoiceError(null);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setVoiceError("이 환경에서는 마이크를 사용할 수 없어요.");
+      return;
+    }
+
+    voiceStartInFlightRef.current = true;
+    setVoiceError(null);
+    setVoiceGhostText("");
+    listeningDesiredRef.current = true;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true },
+      });
+      if (!listeningDesiredRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
       }
-      return next;
-    });
+      voiceMicStreamRef.current = stream;
+      setVoiceHudStream(stream);
+      setVoiceListening(true);
+
+      const ctrl = await startAzureChatStt(
+        {
+          onInterim: (t) => setVoiceGhostText(t),
+          onError: (m) => setVoiceError(m),
+        },
+        { mediaStream: stream }
+      );
+
+      if (!listeningDesiredRef.current) {
+        await ctrl.stop();
+        stopVoiceMicTracks();
+        setVoiceListening(false);
+        return;
+      }
+      sttControllerRef.current = ctrl;
+    } catch (e) {
+      stopVoiceMicTracks();
+      setVoiceListening(false);
+      listeningDesiredRef.current = false;
+      if (e instanceof DOMException) {
+        if (e.name === "NotAllowedError" || e.name === "SecurityError") {
+          setVoiceError(
+            "마이크 권한이 필요해요. 브라우저·OS 설정에서 이 사이트의 마이크를 허용해 주세요."
+          );
+        } else if (e.name === "NotFoundError") {
+          setVoiceError("사용할 수 있는 마이크를 찾지 못했어요.");
+        } else {
+          setVoiceError("마이크를 열 수 없어요.");
+        }
+      } else {
+        const msg =
+          e instanceof Error ? e.message : "음성 인식을 시작하지 못했어요";
+        setVoiceError(msg);
+      }
+      setVoiceGhostText("");
+    } finally {
+      voiceStartInFlightRef.current = false;
+    }
   };
+
+  const handleVoiceWaveClick = () => {
+    if (voiceAnalyzing || isLoading || bootLoading) return;
+    if (voiceListening) {
+      void finalizeVoiceSession("manual");
+      return;
+    }
+    if (!voiceSessionOpen) {
+      setVoiceSessionOpen(true);
+      setVoiceError(null);
+    }
+    void startVoiceListening();
+  };
+
+  const closeVoiceSessionPanel = () => {
+    listeningDesiredRef.current = false;
+    void finalizeVoiceSession("panel_close");
+    setVoiceSessionOpen(false);
+    setVoiceError(null);
+  };
+
+  const voiceHudMode = !voiceSessionOpen
+    ? "hidden"
+    : voiceAnalyzing
+      ? "analyzing"
+      : voiceListening
+        ? "listening"
+        : "hidden";
 
   return (
     <>
@@ -995,8 +978,11 @@ export function ChatFab({
             className="fixed inset-0 z-50 flex max-h-[100dvh] flex-col overflow-hidden bg-background text-foreground overscroll-none touch-pan-y"
           >
             <VoiceSessionHudFrame
-              active={voicePressing}
-              mediaStream={voiceHudStream}
+              mode={voiceHudMode}
+              mediaStream={
+                voiceHudMode === "listening" ? voiceHudStream : null
+              }
+              onSilenceAutoEnd={() => void finalizeVoiceSession("vad")}
             />
             <div className="relative z-20 flex shrink-0 items-start justify-between gap-2 border-b border-border bg-background px-4 py-3">
               <div className="min-w-0 flex-1">
@@ -1009,9 +995,9 @@ export function ChatFab({
                 </p>
                 <p
                   className={cn(
-                    "mt-0.5 text-[10px] text-muted-foreground",
+                    "mt-0.5 text-[10px] text-muted-foreground transition-[font-size,font-weight,color] duration-200",
                     chatTtsEnabled &&
-                      "font-data text-[11px] font-bold tabular-nums tracking-tight text-foreground/88"
+                      "font-data text-[12px] font-bold tabular-nums tracking-tight text-foreground/92"
                   )}
                 >
                   오늘 {totalCal}kcal · 목표 {targetCal}kcal · 단백{" "}
@@ -1162,19 +1148,30 @@ export function ChatFab({
                       )}
                     />
                     <div className="relative flex flex-1 flex-col items-center justify-center px-6 pb-28 pt-12 text-center">
-                      <p className="max-w-[min(100%,20rem)] text-[1.05rem] font-semibold leading-snug tracking-tight text-foreground/88 sm:text-lg">
-                        {listenerPresenceLine(listenerDisplayName)}
-                      </p>
-                      {!voicePressing ? (
+                      {voiceAnalyzing ? (
+                        <p className="baps-chat-holo-scan mt-4 max-w-[min(100%,20rem)] font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-teal-600 dark:text-teal-300">
+                          [ analyzing data… ]
+                        </p>
+                      ) : (
+                        <p className="max-w-[min(100%,20rem)] text-[1.05rem] font-semibold leading-snug tracking-tight text-foreground/88 sm:text-lg">
+                          {listenerPresenceLine(listenerDisplayName)}
+                        </p>
+                      )}
+                      {!voiceListening && !voiceAnalyzing ? (
                         <p className="mt-3 max-w-[min(100%,18rem)] text-[11px] font-medium leading-relaxed text-muted-foreground">
                           아래{" "}
                           <span className="font-semibold text-teal-700 dark:text-teal-300">
-                            파동 버튼을 누른 채로
-                          </span>{" "}
-                          말하면 마이크 권한을 묻고 인식이 시작돼요.
+                            파동 버튼
+                          </span>
+                          을 누르면 감시가 시작돼요. 말을 멈추고{" "}
+                          <span className="font-semibold text-foreground/80">
+                            약 2초 무음
+                          </span>
+                          이 지나면 자동으로 끝나요. 녹음 중 다시 누르면 바로
+                          멈춥니다.
                         </p>
                       ) : null}
-                      {voicePressing ? (
+                      {voiceListening ? (
                         <div
                           className="mt-4 flex flex-col items-center gap-1.5"
                           role="status"
@@ -1193,6 +1190,15 @@ export function ChatFab({
                             <div className="h-full w-2/3 rounded-full bg-gradient-to-r from-transparent via-teal-400/85 to-transparent dark:via-teal-300/90 baps-voice-scan-line" />
                           </div>
                         </div>
+                      ) : null}
+                      {!voiceListening && !voiceAnalyzing ? (
+                        <button
+                          type="button"
+                          onClick={closeVoiceSessionPanel}
+                          className="pointer-events-auto mt-4 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground underline decoration-muted-foreground/50 underline-offset-2 transition-colors hover:text-foreground"
+                        >
+                          음성 패널 닫기
+                        </button>
                       ) : null}
                     </div>
                   </motion.div>
@@ -1245,40 +1251,36 @@ export function ChatFab({
               <div className="flex items-center gap-2 px-3 pb-3 pt-1">
                 <input
                   type="text"
-                  value={voicePressing ? voiceGhostText : input}
+                  value={voiceListening ? voiceGhostText : input}
                   onChange={(e) => {
-                    if (voicePressing) return;
+                    if (voiceListening) return;
                     setInput(e.target.value);
                   }}
                   onKeyDown={(e) => {
-                    if (voicePressing) return;
+                    if (voiceListening) return;
                     if (e.key === "Enter") void sendWithText(input, "input");
                   }}
                   placeholder="코치에게 보고하기…"
-                  readOnly={voicePressing}
-                  aria-busy={voicePressing}
+                  readOnly={voiceListening}
+                  aria-busy={voiceListening}
                   className={cn(
                     "min-w-0 flex-1 rounded-full border border-border bg-background px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary",
-                    voicePressing &&
+                    voiceListening &&
                       "text-foreground/45 caret-transparent selection:bg-transparent dark:text-white/40"
                   )}
                   disabled={isLoading || bootLoading}
                 />
                 <button
                   type="button"
-                  onClick={onVoiceClick}
-                  onPointerDown={onVoicePointerDown}
-                  onPointerUp={onVoicePointerUpEnd}
-                  onPointerCancel={onVoicePointerUpEnd}
-                  onPointerLeave={(e) => {
-                    if (e.buttons === 0) onVoicePointerUpEnd();
-                  }}
+                  onClick={handleVoiceWaveClick}
                   disabled={isLoading || bootLoading}
-                  aria-pressed={voiceSessionOpen}
+                  aria-pressed={voiceSessionOpen || voiceListening}
                   aria-label={
-                    voiceSessionOpen
-                      ? "음성 입력 종료 · 짧게 누르면 닫아요. 길게 누르면 말하기"
-                      : "음성 입력 열기"
+                    voiceListening
+                      ? "음성 입력 수동 종료"
+                      : voiceSessionOpen
+                        ? "음성 감시 시작 · 탭으로 녹음"
+                        : "음성 패널 열고 녹음 시작"
                   }
                   className={cn(
                     "relative shrink-0 rounded-2xl p-2.5 transition-transform active:scale-95",
@@ -1287,11 +1289,11 @@ export function ChatFab({
                     "dark:border-white/12 dark:bg-muted/25 dark:text-foreground/90",
                     voiceSessionOpen &&
                       "border-teal-500/35 bg-teal-500/10 text-teal-800 shadow-[0_0_0_1px_rgba(45,212,191,0.25)] dark:border-teal-400/30 dark:bg-teal-500/15 dark:text-teal-100",
-                    voicePressing &&
+                    voiceListening &&
                       "border-teal-400/55 shadow-[0_0_22px_rgba(110,231,216,0.45),0_0_0_1px_rgba(45,212,191,0.35)] dark:shadow-[0_0_26px_rgba(94,234,212,0.38),0_0_0_1px_rgba(94,234,212,0.3)]"
                   )}
                 >
-                  {voicePressing ? (
+                  {voiceListening ? (
                     <>
                       <span className="pointer-events-none absolute inset-[-3px] animate-ping rounded-2xl border-2 border-teal-400/45 [animation-duration:1.35s] dark:border-teal-300/40" />
                       <span className="pointer-events-none absolute inset-[-3px] animate-ping rounded-2xl border border-teal-300/35 opacity-90 [animation-delay:0.4s] [animation-duration:1.35s] dark:border-teal-200/28" />
