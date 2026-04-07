@@ -96,10 +96,10 @@ const stripMdForSpeech = (s: string) =>
     .trim();
 
 /**
- * 화면(`KakaoStrategicTurnView`)과 동일 순서: 분석 → 단톡(퀵)·또는 로스트 → 미션
+ * 화면(`KakaoStrategicTurnView`) 순서: 분석 → 단톡(퀵)·또는 로스트 → 미션
  *
- * 스트림 UI(`KakaoDelimitedCoachStream`)만 켜진 메시지는 타이핑 템포와 TTS(gemini 처리
- * `coachTurn` 전체)가 어긋날 수 있음 — 장기적으로는 스트림 토큰 단위 TTS/립싱크가 필요.
+ * 스트림 말풍선(`KakaoDelimitedCoachStream`)일 때는 `coach-stream-tts`의
+ * `coachStreamTtsSegments`로 재생 순서·포커스를 맞춘다.
  */
 export function activeCoachQuips(turn: CoachStrategicTurn): CoachQuip[] {
   return turn.coach_quips?.filter((q) => q.zinger?.trim()) ?? [];

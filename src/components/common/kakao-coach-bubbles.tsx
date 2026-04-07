@@ -3,7 +3,9 @@
 import type { KeyboardEvent, ReactNode } from "react";
 import { memo, useMemo } from "react";
 import {
+  COACH_DELIM_TAG_TO_PERSONA,
   filterDelimitedSegmentsForInvites,
+  groupCoachStreamSegments,
   type CoachDelimTag,
   type CoachStreamSegment,
 } from "@/lib/coach-delimited-stream";
@@ -29,13 +31,7 @@ import { cn } from "@/lib/utils";
 const TYPE_MS = 34;
 const GROUP_GAP_MS = 300;
 
-const COACH_TAG_TO_PERSONA: Partial<Record<CoachDelimTag, CoachPersonaId>> = {
-  DIET: "diet",
-  NUTRITION: "nutrition",
-  EXERCISE: "exercise",
-  MENTAL: "mental",
-  ROI: "roi",
-};
+const COACH_TAG_TO_PERSONA = COACH_DELIM_TAG_TO_PERSONA;
 
 function formatInlineBold(
   text: string,
@@ -57,42 +53,6 @@ function formatInlineBold(
     }
     return <span key={i}>{part}</span>;
   });
-}
-
-function visualGroupKey(seg: CoachStreamSegment): string {
-  if (seg.tag === "INVITE") return `invite:${seg.text.trim().toUpperCase()}`;
-  if (seg.tag === "ANALYSIS") return "analysis";
-  if (seg.tag === "MISSION") return "mission";
-  if (seg.tag === "QUICK_CHIPS" || seg.tag === "DATA_CARD") return `meta:${seg.tag}`;
-  const pid = COACH_TAG_TO_PERSONA[seg.tag];
-  return pid ?? seg.tag;
-}
-
-function groupSegments(segments: CoachStreamSegment[]): CoachStreamSegment[][] {
-  const groups: CoachStreamSegment[][] = [];
-  let cur: CoachStreamSegment[] = [];
-  let prev: string | null = null;
-
-  for (const seg of segments) {
-    const k = visualGroupKey(seg);
-    if (seg.tag === "QUICK_CHIPS" || seg.tag === "DATA_CARD") {
-      if (cur.length) {
-        groups.push(cur);
-        cur = [];
-        prev = null;
-      }
-      groups.push([seg]);
-      continue;
-    }
-    if (prev !== null && k !== prev) {
-      groups.push(cur);
-      cur = [];
-    }
-    cur.push(seg);
-    prev = k;
-  }
-  if (cur.length) groups.push(cur);
-  return groups;
 }
 
 function rowMetaForFirst(seg: CoachStreamSegment): {
@@ -139,6 +99,7 @@ export function SingleKakaoCoachRow({
   avatarClass,
   timeLabel,
   bubbleVariant = "default",
+  bubblePending = false,
   ttsActive = false,
   speakingAccent,
   ttsTapReplayEnabled = false,
@@ -151,6 +112,8 @@ export function SingleKakaoCoachRow({
   avatarClass: string;
   timeLabel: string;
   bubbleVariant?: "default" | "mission";
+  /** 스트리밍 중인 말풍선(점선 테두리) */
+  bubblePending?: boolean;
   /** TTS가 이 말풍선을 읽는 중 — 네온·미세 흔들림 */
   ttsActive?: boolean;
   speakingAccent?: CoachTtsVisualAccent;
@@ -206,6 +169,7 @@ export function SingleKakaoCoachRow({
         <IncomingBubble
           showTail
           bubbleVariant={bubbleVariant}
+          isPending={bubblePending}
           speakingBubbleClass={ttsActive ? speakingAccent?.bubble : undefined}
         >
           {children}
@@ -258,22 +222,40 @@ function IncomingBubble({
   );
 }
 
+function streamRowSpeakingAccent(
+  head: CoachStreamSegment,
+  leadPersonaId: CoachPersonaId
+): CoachTtsVisualAccent | undefined {
+  if (head.tag === "ANALYSIS") return TTS_ANALYSIS_VISUAL;
+  if (head.tag === "MISSION") return TTS_MISSION_VISUAL;
+  const pid = COACH_TAG_TO_PERSONA[head.tag];
+  if (pid) return COACH_TTS_VISUAL[pid];
+  return COACH_TTS_VISUAL[leadPersonaId];
+}
+
 /** 스트리밍 단톡 세그먼트 — 카카오톡 수신 말풍선 레이아웃 */
 export function KakaoDelimitedCoachStream({
   segments,
   receivedAt,
   leadPersonaId = DEFAULT_COACH_PERSONA_ID,
+  ttsFocusSegment = null,
+  ttsTapReplayEnabled = false,
+  onTtsReplaySegment,
 }: {
   segments: CoachStreamSegment[];
   receivedAt: Date;
   leadPersonaId?: CoachPersonaId;
+  /** TTS가 읽는 행 — `stream:g:${그룹인덱스}` */
+  ttsFocusSegment?: string | null;
+  ttsTapReplayEnabled?: boolean;
+  onTtsReplaySegment?: (focusKey: string) => void;
 }) {
   const timeLabel = formatKoreanChatTime(receivedAt);
   const filtered = useMemo(
     () => filterDelimitedSegmentsForInvites(segments, leadPersonaId),
     [segments, leadPersonaId]
   );
-  const groups = useMemo(() => groupSegments(filtered), [filtered]);
+  const groups = useMemo(() => groupCoachStreamSegments(filtered), [filtered]);
 
   return (
     <div className="space-y-3">
@@ -310,45 +292,38 @@ export function KakaoDelimitedCoachStream({
         const groupComplete = group.every((s) => s.complete);
         const hasText = combined.trim().length > 0;
         const showWaitLabel = !hasText && !groupComplete;
+        const streamFocusKey = `stream:g:${gi}`;
+        const ttsActive = ttsFocusSegment === streamFocusKey;
 
         return (
-          <div
+          <SingleKakaoCoachRow
             key={`grp-${gi}`}
-            className="flex max-w-[min(100%,20.5rem)] items-start gap-1.5"
+            displayName={meta.displayName}
+            emoji={meta.emoji}
+            avatarClass={meta.avatarClass}
+            timeLabel={timeLabel}
+            bubbleVariant={bubbleVar}
+            bubblePending={!groupComplete}
+            ttsActive={ttsActive}
+            speakingAccent={streamRowSpeakingAccent(head, leadPersonaId)}
+            ttsTapReplayEnabled={ttsTapReplayEnabled}
+            onTtsReplay={
+              onTtsReplaySegment
+                ? () => onTtsReplaySegment(streamFocusKey)
+                : undefined
+            }
+            ttsReplayLabel={`${meta.displayName} 다시 듣기`}
           >
-            <div
-              className={cn(
-                "flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-full text-[15px]",
-                meta.avatarClass
-              )}
-              aria-hidden
-            >
-              {meta.emoji}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="mb-0.5 max-w-[16.5rem] truncate pl-0.5 text-[11px] font-medium text-muted-foreground">
-                {meta.displayName}
-              </p>
-              <IncomingBubble
-                showTail
-                bubbleVariant={bubbleVar}
-                isPending={!groupComplete}
-              >
-                <span className="whitespace-pre-wrap break-words">
-                  {showWaitLabel ? (
-                    <span className="text-[12px] text-muted-foreground">
-                      입력 대기중
-                    </span>
-                  ) : (
-                    formatInlineBold(combined, "bubble")
-                  )}
+            <span className="whitespace-pre-wrap break-words">
+              {showWaitLabel ? (
+                <span className="text-[12px] text-muted-foreground">
+                  입력 대기중
                 </span>
-              </IncomingBubble>
-            </div>
-            <span className="mt-7 shrink-0 self-start text-[10px] tabular-nums text-muted-foreground">
-              {timeLabel}
+              ) : (
+                formatInlineBold(combined, "bubble")
+              )}
             </span>
-          </div>
+          </SingleKakaoCoachRow>
         );
       })}
     </div>

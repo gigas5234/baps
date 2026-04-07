@@ -4,20 +4,15 @@ import {
   coachTurnTtsSegments,
   type CoachStrategicTurn,
 } from "@/lib/chat-coach";
+import { coachStreamTtsSegments } from "@/lib/coach-stream-tts";
+import type { CoachStreamSegment } from "@/lib/coach-delimited-stream";
 import type { CoachPersonaId } from "@/lib/coach-personas";
+import {
+  coachTtsGetActiveAudio,
+  coachTtsSetActiveAudio,
+} from "@/lib/coach-tts-playback";
 
 const MAX_LEN = 4000;
-
-let activeAudio: HTMLAudioElement | null = null;
-
-export function stopCoachNeuralTtsPlayback(): void {
-  if (activeAudio) {
-    activeAudio.pause();
-    activeAudio.removeAttribute("src");
-    activeAudio.load();
-    activeAudio = null;
-  }
-}
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -79,7 +74,7 @@ export async function playCoachNeuralTts(
   const blob = await res.blob();
   const objectUrl = URL.createObjectURL(blob);
   const audio = new Audio(objectUrl);
-  activeAudio = audio;
+  coachTtsSetActiveAudio(audio);
 
   try {
     await new Promise<void>((resolve, reject) => {
@@ -113,24 +108,22 @@ export async function playCoachNeuralTts(
       });
     });
   } finally {
-    if (activeAudio === audio) activeAudio = null;
+    if (coachTtsGetActiveAudio() === audio) {
+      coachTtsSetActiveAudio(null);
+    }
     URL.revokeObjectURL(objectUrl);
   }
 }
 
 export type PlayCoachTurnTtsOptions = {
   signal?: AbortSignal;
-  /** 화자(`coachId`)가 바뀔 때만 적용되는 무음(ms). 기본 1500 */
   pauseBetweenSpeakersMs?: number;
   onSegmentFocus?: (focusKey: string) => void;
   onSegmentBlur?: () => void;
-  /** 화자 전환 대기(쉼표) 구간 — UI "교신 중" 등 */
   onInterSpeakerBridge?: (active: boolean) => void;
-  /**
-   * 세그먼트 시작 전마다 호출. false면 루프·쉼 타이머를 중단하고 종료.
-   * (토글 OFF가 useEffect보다 빨리 반영돼야 할 때 ref 기반)
-   */
   shouldContinue?: () => boolean;
+  /** 있으면 채팅 스트림 말풍선 순서와 동일하게 재생 */
+  streamSegments?: CoachStreamSegment[] | null;
 };
 
 /** 턴을 구간별로 나눠 코치별 Neural 보이스로 순서대로 재생합니다. */
@@ -139,7 +132,10 @@ export async function playCoachTurnNeuralTts(
   primaryCoach: CoachPersonaId,
   options?: PlayCoachTurnTtsOptions
 ): Promise<void> {
-  const segs = coachTurnTtsSegments(turn, primaryCoach);
+  const segs =
+    options?.streamSegments && options.streamSegments.length > 0
+      ? coachStreamTtsSegments(options.streamSegments, primaryCoach)
+      : coachTurnTtsSegments(turn, primaryCoach);
   const pauseMs = options?.pauseBetweenSpeakersMs ?? 1500;
   const signal = options?.signal;
 

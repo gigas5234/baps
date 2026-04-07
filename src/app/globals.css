@@ -518,29 +518,40 @@
     0 0 12px rgba(45, 212, 191, 0.3) !important;
 }
 
-/* 코치 TTS 재생 중 — 말풍선 행 미세 좌우 흔들림 */
+/* 코치 TTS 재생 중 — 가로 흔들림 + 살짝 스케일(스크롤 영역에서도 보이도록) */
 @keyframes coach-tts-wobble {
   0%,
   100% {
-    transform: translateX(0);
+    transform: translateX(0) scale(1);
   }
   20% {
-    transform: translateX(-2.5px);
+    transform: translateX(-3px) scale(1.006);
   }
   40% {
-    transform: translateX(2px);
+    transform: translateX(2.5px) scale(1.003);
   }
   60% {
-    transform: translateX(-1.5px);
+    transform: translateX(-2px) scale(1.006);
   }
   80% {
-    transform: translateX(1.5px);
+    transform: translateX(2px) scale(1.003);
+  }
+}
+
+@keyframes coach-tts-speak-ring {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.04);
   }
 }
 
 .coach-tts-speaking-row {
-  animation: coach-tts-wobble 0.55s ease-in-out infinite;
-  will-change: transform;
+  animation: coach-tts-wobble 0.55s ease-in-out infinite,
+    coach-tts-speak-ring 0.75s ease-in-out infinite;
+  will-change: transform, filter;
 }
 
 @media (prefers-reduced-motion: reduce) {

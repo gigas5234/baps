@@ -44,6 +44,51 @@ const TAG_TO_PERSONA: Partial<Record<CoachDelimTag, CoachPersonaId>> = {
   ROI: "roi",
 };
 
+/** 스트림 태그 → 코치 ID (단톡 TTS·UI 공통) */
+export const COACH_DELIM_TAG_TO_PERSONA: Partial<
+  Record<CoachDelimTag, CoachPersonaId>
+> = TAG_TO_PERSONA;
+
+/** `KakaoDelimitedCoachStream` 그룹핑 — 연속 구간을 말풍선 단위로 묶음 */
+export function coachStreamVisualGroupKey(seg: CoachStreamSegment): string {
+  if (seg.tag === "INVITE") return `invite:${seg.text.trim().toUpperCase()}`;
+  if (seg.tag === "ANALYSIS") return "analysis";
+  if (seg.tag === "MISSION") return "mission";
+  if (seg.tag === "QUICK_CHIPS" || seg.tag === "DATA_CARD")
+    return `meta:${seg.tag}`;
+  const pid = TAG_TO_PERSONA[seg.tag];
+  return pid ?? seg.tag;
+}
+
+export function groupCoachStreamSegments(
+  segments: CoachStreamSegment[]
+): CoachStreamSegment[][] {
+  const groups: CoachStreamSegment[][] = [];
+  let cur: CoachStreamSegment[] = [];
+  let prev: string | null = null;
+
+  for (const seg of segments) {
+    const k = coachStreamVisualGroupKey(seg);
+    if (seg.tag === "QUICK_CHIPS" || seg.tag === "DATA_CARD") {
+      if (cur.length) {
+        groups.push(cur);
+        cur = [];
+        prev = null;
+      }
+      groups.push([seg]);
+      continue;
+    }
+    if (prev !== null && k !== prev) {
+      groups.push(cur);
+      cur = [];
+    }
+    cur.push(seg);
+    prev = k;
+  }
+  if (cur.length) groups.push(cur);
+  return groups;
+}
+
 const PERSONA_TO_DELIM: Record<CoachPersonaId, CoachDelimTag> = {
   diet: "DIET",
   nutrition: "NUTRITION",

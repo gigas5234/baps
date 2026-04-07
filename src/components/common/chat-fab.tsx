@@ -32,6 +32,7 @@ import {
   type DataCardPayload,
   type QuickChip,
 } from "@/lib/chat-coach";
+import { coachStreamSegmentForReplay } from "@/lib/coach-stream-tts";
 import {
   COACH_PERSONAS_UI,
   COACH_QUICK_CHIP_ACCENT,
@@ -52,12 +53,21 @@ import {
 } from "@/lib/chat-azure-stt";
 import { ChatTtsMonitorToggle } from "@/components/common/chat-tts-monitor";
 import { unlockCoachTtsAudio } from "@/lib/chat-audio-unlock";
-import {
-  playCoachNeuralTts,
-  playCoachTurnNeuralTts,
-  stopCoachNeuralTtsPlayback,
-} from "@/lib/coach-tts-client";
+import { stopCoachNeuralTtsPlayback } from "@/lib/coach-tts-playback";
 import { VoiceSessionHudFrame } from "@/components/common/voice-session-hud-frame";
+
+/** TTS 재생은 동적 청크 — 초기 번들·LCP 완화. `stop`은 `coach-tts-playback` 동기 모듈. */
+type CoachTtsModule = typeof import("@/lib/coach-tts-client");
+let coachTtsModPromise: Promise<CoachTtsModule> | null = null;
+
+function preloadCoachTtsModule(): void {
+  coachTtsModPromise ??= import("@/lib/coach-tts-client");
+}
+
+function loadCoachTtsModule(): Promise<CoachTtsModule> {
+  preloadCoachTtsModule();
+  return coachTtsModPromise!;
+}
 
 interface ChatMessage {
   id: string;
@@ -382,22 +392,38 @@ export function ChatFab({
       ttsSessionAbortRef.current = ac;
       setTtsBubbleFocus({ messageId, segmentKey: focusKey });
 
-      void playCoachNeuralTts(trimmed, voiceCoachId, {
-        signal: ac.signal,
-      }).finally(() => {
-        if (ttsSessionAbortRef.current === ac) {
-          ttsSessionAbortRef.current = null;
-        }
-        setTtsBubbleFocus(null);
-      });
+      void loadCoachTtsModule()
+        .then(({ playCoachNeuralTts }) =>
+          playCoachNeuralTts(trimmed, voiceCoachId, {
+            signal: ac.signal,
+          })
+        )
+        .finally(() => {
+          if (ttsSessionAbortRef.current === ac) {
+            ttsSessionAbortRef.current = null;
+          }
+          setTtsBubbleFocus(null);
+        });
     },
     [stopActiveCoachTts]
   );
 
   const handleCoachBubbleTtsReplay = useCallback(
-    (messageId: string, turn: CoachStrategicTurn, focusKey: string) => {
+    (
+      messageId: string,
+      turn: CoachStrategicTurn,
+      focusKey: string,
+      streamSegments?: CoachStreamSegment[]
+    ) => {
       if (!chatTtsEnabled) return;
-      const seg = coachTurnSegmentForReplay(turn, coachPersona, focusKey);
+      const seg =
+        streamSegments && streamSegments.length > 0
+          ? coachStreamSegmentForReplay(
+              streamSegments,
+              coachPersona,
+              focusKey
+            )
+          : coachTurnSegmentForReplay(turn, coachPersona, focusKey);
       if (!seg?.text) return;
       startManualSingleCoachTts(
         messageId,
@@ -425,7 +451,18 @@ export function ChatFab({
       if (!msg.is_ai || !msg.coachTurn) continue;
       const id = msg.id;
       const turn = msg.coachTurn;
-      m.set(id, (fk) => handleCoachBubbleTtsReplay(id, turn, fk));
+      const streamSegs =
+        (msg.streamDelimited?.segments?.length ?? 0) > 0
+          ? msg.streamDelimited!.segments
+          : msg.streamSegments;
+      m.set(id, (fk) =>
+        handleCoachBubbleTtsReplay(
+          id,
+          turn,
+          fk,
+          streamSegs && streamSegs.length > 0 ? streamSegs : undefined
+        )
+      );
     }
     return m;
   }, [messages, handleCoachBubbleTtsReplay]);
@@ -449,6 +486,7 @@ export function ChatFab({
     const next = !chatTtsEnabled;
     if (next) {
       unlockCoachTtsAudio();
+      preloadCoachTtsModule();
     } else {
       stopActiveCoachTts();
     }
@@ -810,6 +848,7 @@ export function ChatFab({
     /* Autoplay: 네트워크 대기 전 같은 제스처에서 오디오 맥락을 연다 */
     if (chatTtsEnabledRef.current) {
       unlockCoachTtsAudio();
+      preloadCoachTtsModule();
     }
 
     const prior = messagesRef.current;
@@ -951,21 +990,29 @@ export function ChatFab({
         stopCoachNeuralTtsPlayback();
         const ac = new AbortController();
         ttsSessionAbortRef.current = ac;
-        void playCoachTurnNeuralTts(coachTurn, coachPersona, {
-          signal: ac.signal,
-          pauseBetweenSpeakersMs: 1500,
-          shouldContinue: () => chatTtsEnabledRef.current,
-          onSegmentFocus: (segmentKey) =>
-            setTtsBubbleFocus({ messageId: aiMsgId, segmentKey }),
-          onSegmentBlur: () => setTtsBubbleFocus(null),
-          onInterSpeakerBridge: setTtsInterSpeakerBridge,
-        }).finally(() => {
-          if (ttsSessionAbortRef.current === ac) {
-            ttsSessionAbortRef.current = null;
-          }
-          setTtsBubbleFocus(null);
-          setTtsInterSpeakerBridge(false);
-        });
+        void loadCoachTtsModule()
+          .then(({ playCoachTurnNeuralTts }) =>
+            playCoachTurnNeuralTts(coachTurn, coachPersona, {
+              signal: ac.signal,
+              pauseBetweenSpeakersMs: 1500,
+              streamSegments:
+                streamSegments && streamSegments.length > 0
+                  ? streamSegments
+                  : null,
+              shouldContinue: () => chatTtsEnabledRef.current,
+              onSegmentFocus: (segmentKey) =>
+                setTtsBubbleFocus({ messageId: aiMsgId, segmentKey }),
+              onSegmentBlur: () => setTtsBubbleFocus(null),
+              onInterSpeakerBridge: setTtsInterSpeakerBridge,
+            })
+          )
+          .finally(() => {
+            if (ttsSessionAbortRef.current === ac) {
+              ttsSessionAbortRef.current = null;
+            }
+            setTtsBubbleFocus(null);
+            setTtsInterSpeakerBridge(false);
+          });
       }
       const chips = normalized.quick_chips ?? [];
       setQuickChips(chips);
@@ -1108,6 +1155,7 @@ export function ChatFab({
     stopActiveCoachTts();
     if (chatTtsEnabledRef.current) {
       unlockCoachTtsAudio();
+      preloadCoachTtsModule();
     }
     if (isLoading || bootLoading) return;
     if (voiceListening) {
@@ -1248,6 +1296,15 @@ export function ChatFab({
                           }
                           receivedAt={receivedAt}
                           leadPersonaId={coachPersona}
+                          ttsFocusSegment={
+                            ttsBubbleFocus?.messageId === msg.id
+                              ? ttsBubbleFocus.segmentKey
+                              : null
+                          }
+                          ttsTapReplayEnabled={chatTtsEnabled}
+                          onTtsReplaySegment={coachTurnTtsReplayHandlers.get(
+                            msg.id
+                          )}
                         />
                       ) : msg.coachTurn ? (
                         <KakaoStrategicTurnView
