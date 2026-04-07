@@ -1,7 +1,7 @@
 "use client";
 
 import type { KeyboardEvent, ReactNode } from "react";
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import {
   filterDelimitedSegmentsForInvites,
   type CoachDelimTag,
@@ -355,7 +355,7 @@ export function KakaoDelimitedCoachStream({
   );
 }
 
-export function KakaoOpeningCoachMessage({
+export const KakaoOpeningCoachMessage = memo(function KakaoOpeningCoachMessage({
   text,
   coachId,
   receivedAt,
@@ -389,9 +389,9 @@ export function KakaoOpeningCoachMessage({
       </CoachTypewriter>
     </SingleKakaoCoachRow>
   );
-}
+});
 
-export function KakaoStrategicTurnView({
+export const KakaoStrategicTurnView = memo(function KakaoStrategicTurnView({
   turn,
   receivedAt,
   ttsFocusSegment = null,
@@ -580,6 +580,6 @@ export function KakaoStrategicTurnView({
       </SingleKakaoCoachRow>
     </div>
   );
-}
+});
 
 export { formatInlineBold, COACH_TAG_TO_PERSONA };

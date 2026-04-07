@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -416,6 +417,33 @@ export function ChatFab({
     },
     [chatTtsEnabled, startManualSingleCoachTts]
   );
+
+  /** TTS 포커스만 바뀔 때 코치 말풍선 전체가 재렌더되지 않도록 핸들러 참조 고정 */
+  const coachTurnTtsReplayHandlers = useMemo(() => {
+    const m = new Map<string, (focusKey: string) => void>();
+    for (const msg of messages) {
+      if (!msg.is_ai || !msg.coachTurn) continue;
+      const id = msg.id;
+      const turn = msg.coachTurn;
+      m.set(id, (fk) => handleCoachBubbleTtsReplay(id, turn, fk));
+    }
+    return m;
+  }, [messages, handleCoachBubbleTtsReplay]);
+
+  const openingTtsReplayHandlers = useMemo(() => {
+    const m = new Map<string, () => void>();
+    for (const msg of messages) {
+      if (!msg.is_ai) continue;
+      const hasStream =
+        (msg.streamDelimited?.segments?.length ?? 0) > 0 ||
+        (msg.streamSegments?.length ?? 0) > 0;
+      if (hasStream || msg.coachTurn) continue;
+      const id = msg.id;
+      const text = msg.message;
+      m.set(id, () => handleOpeningBubbleTtsReplay(id, text, coachPersona));
+    }
+    return m;
+  }, [messages, coachPersona, handleOpeningBubbleTtsReplay]);
 
   const handleChatTtsToggle = useCallback(() => {
     const next = !chatTtsEnabled;
@@ -1232,13 +1260,9 @@ export function ChatFab({
                           }
                           primaryCoachId={coachPersona}
                           ttsTapReplayEnabled={chatTtsEnabled}
-                          onTtsReplaySegment={(focusKey) =>
-                            handleCoachBubbleTtsReplay(
-                              msg.id,
-                              msg.coachTurn!,
-                              focusKey
-                            )
-                          }
+                          onTtsReplaySegment={coachTurnTtsReplayHandlers.get(
+                            msg.id
+                          )}
                         />
                       ) : (
                         <KakaoOpeningCoachMessage
@@ -1248,12 +1272,7 @@ export function ChatFab({
                           ttsTapReplayEnabled={chatTtsEnabled}
                           onTtsReplay={
                             chatTtsEnabled
-                              ? () =>
-                                  handleOpeningBubbleTtsReplay(
-                                    msg.id,
-                                    msg.message,
-                                    coachPersona
-                                  )
+                              ? openingTtsReplayHandlers.get(msg.id)
                               : undefined
                           }
                         />
