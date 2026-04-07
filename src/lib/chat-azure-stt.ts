@@ -10,12 +10,18 @@ type SttCallbacks = {
   onError: (message: string) => void;
 };
 
+export type StartAzureChatSttOptions = {
+  /** 브라우저에서 미리 연 `getUserMedia` 스트림 (권한·모바일 제스처 대응) */
+  mediaStream?: MediaStream;
+};
+
 /**
  * 마이크 → Azure Speech 연속 인식 (ko-KR).
  * 구독 키는 사용하지 않고 /api/speech/token 의 단기 토큰만 사용합니다.
  */
 export async function startAzureChatStt(
-  callbacks: SttCallbacks
+  callbacks: SttCallbacks,
+  options?: StartAzureChatSttOptions
 ): Promise<AzureSttSession> {
   const res = await fetch("/api/speech/token");
   const raw: unknown = await res.json().catch(() => ({}));
@@ -51,7 +57,10 @@ export async function startAzureChatStt(
   speechConfig.speechRecognitionLanguage = "ko-KR";
   /** TTS는 별도 연동 시 참고: speechConfig.speechSynthesisVoiceName = "ko-KR-SunHiNeural" */
 
-  const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+  const audioConfig =
+    options?.mediaStream != null
+      ? SpeechSDK.AudioConfig.fromStreamInput(options.mediaStream)
+      : SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
   const recognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
 
   let committed = "";

@@ -41,6 +41,8 @@ import {
   startAzureChatStt,
   type AzureSttSession,
 } from "@/lib/chat-azure-stt";
+import { ChatTtsMonitorToggle } from "@/components/common/chat-tts-monitor";
+import { VoiceSessionHudFrame } from "@/components/common/voice-session-hud-frame";
 
 interface ChatMessage {
   id: string;
@@ -294,11 +296,15 @@ export function ChatFab({
   const [voicePressing, setVoicePressing] = useState(false);
   const [voiceGhostText, setVoiceGhostText] = useState("");
   const [voiceError, setVoiceError] = useState<string | null>(null);
-  const voiceHoldDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [voiceHudStream, setVoiceHudStream] = useState<MediaStream | null>(null);
   const suppressVoiceToggleClickRef = useRef(false);
-  /** true이면 길게 누르기(200ms↑) 구간에 들어간 상태 */
+  /** 손가락/스타일러스를 누른 동안 true (마이크 입력 구간) */
   const voiceEngagedRef = useRef(false);
+  const micAbortRef = useRef<AbortController | null>(null);
+  const voiceMicStreamRef = useRef<MediaStream | null>(null);
   const sttControllerRef = useRef<AzureSttSession | null>(null);
+  /** 코치 TTS 재생 허용(실제 음성 연동 전까지 UI·상태만). 초기 진입·기본값 OFF */
+  const [chatTtsEnabled, setChatTtsEnabled] = useState(false);
   const wasChatOpenRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   /** send 직후에도 최신 대화로 history를 만들기 위함 (칩/카드는 입력 없이 즉시 API) */
@@ -321,13 +327,15 @@ export function ChatFab({
       setVoiceGhostText("");
       setVoiceError(null);
       voiceEngagedRef.current = false;
+      micAbortRef.current?.abort();
+      micAbortRef.current = null;
       const stt = sttControllerRef.current;
       sttControllerRef.current = null;
       if (stt) void stt.stop().catch(() => {});
-      if (voiceHoldDelayRef.current) {
-        clearTimeout(voiceHoldDelayRef.current);
-        voiceHoldDelayRef.current = null;
-      }
+      const mic = voiceMicStreamRef.current;
+      voiceMicStreamRef.current = null;
+      mic?.getTracks().forEach((t) => t.stop());
+      setVoiceHudStream(null);
     }
   }, [isOpen]);
 
@@ -816,34 +824,69 @@ export function ChatFab({
     }
   };
 
-  const clearVoiceHoldDelay = () => {
-    if (voiceHoldDelayRef.current) {
-      clearTimeout(voiceHoldDelayRef.current);
-      voiceHoldDelayRef.current = null;
-    }
+  const stopVoiceMicTracks = () => {
+    const mic = voiceMicStreamRef.current;
+    voiceMicStreamRef.current = null;
+    mic?.getTracks().forEach((t) => t.stop());
+    setVoiceHudStream(null);
   };
 
   const onVoicePointerDown = () => {
     if (!voiceSessionOpen) return;
-    clearVoiceHoldDelay();
-    voiceHoldDelayRef.current = setTimeout(() => {
-      voiceHoldDelayRef.current = null;
-      voiceEngagedRef.current = true;
-      setVoicePressing(true);
-      setVoiceGhostText("");
-      setVoiceError(null);
-      void (async () => {
+
+    micAbortRef.current?.abort();
+    micAbortRef.current = new AbortController();
+    const { signal } = micAbortRef.current;
+
+    voiceEngagedRef.current = true;
+    setVoicePressing(true);
+    setVoiceGhostText("");
+    setVoiceError(null);
+
+    const md = navigator.mediaDevices;
+    if (!md?.getUserMedia) {
+      setVoiceError("이 환경에서는 마이크를 사용할 수 없어요.");
+      voiceEngagedRef.current = false;
+      setVoicePressing(false);
+      return;
+    }
+
+    const audioConstraints: MediaTrackConstraints = {
+      echoCancellation: true,
+      noiseSuppression: true,
+    };
+
+    const req = md.getUserMedia(
+      Object.assign(
+        { audio: audioConstraints },
+        { signal }
+      ) as MediaStreamConstraints & { signal: AbortSignal }
+    );
+
+    void req
+      .then(async (stream) => {
+        if (!voiceEngagedRef.current) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        voiceMicStreamRef.current = stream;
+        setVoiceHudStream(stream);
         try {
-          const ctrl = await startAzureChatStt({
-            onInterim: (t) => setVoiceGhostText(t),
-            onError: (m) => setVoiceError(m),
-          });
+          const ctrl = await startAzureChatStt(
+            {
+              onInterim: (t) => setVoiceGhostText(t),
+              onError: (m) => setVoiceError(m),
+            },
+            { mediaStream: stream }
+          );
           if (!voiceEngagedRef.current) {
             await ctrl.stop();
+            stopVoiceMicTracks();
             return;
           }
           sttControllerRef.current = ctrl;
         } catch (e) {
+          stopVoiceMicTracks();
           const msg =
             e instanceof Error ? e.message : "음성 인식을 시작하지 못했어요";
           setVoiceError(msg);
@@ -851,17 +894,40 @@ export function ChatFab({
           setVoicePressing(false);
           setVoiceGhostText("");
         }
-      })();
-    }, 200);
+      })
+      .catch((e: unknown) => {
+        if (signal.aborted) return;
+        if (e instanceof DOMException && e.name === "AbortError") return;
+        voiceEngagedRef.current = false;
+        setVoicePressing(false);
+        setVoiceGhostText("");
+        if (e instanceof DOMException) {
+          if (e.name === "NotAllowedError" || e.name === "SecurityError") {
+            setVoiceError(
+              "마이크 권한이 필요해요. 브라우저·OS 설정에서 이 사이트의 마이크를 허용해 주세요."
+            );
+            return;
+          }
+          if (e.name === "NotFoundError") {
+            setVoiceError("사용할 수 있는 마이크를 찾지 못했어요.");
+            return;
+          }
+        }
+        setVoiceError("마이크를 열 수 없어요.");
+      });
   };
 
   const onVoicePointerUpEnd = () => {
-    clearVoiceHoldDelay();
+    micAbortRef.current?.abort();
+    micAbortRef.current = null;
+
     const engaged = voiceEngagedRef.current;
     voiceEngagedRef.current = false;
 
     const ctrl = sttControllerRef.current;
     sttControllerRef.current = null;
+
+    const streamForCleanup = voiceMicStreamRef.current;
 
     if (engaged || ctrl) {
       suppressVoiceToggleClickRef.current = true;
@@ -878,10 +944,16 @@ export function ChatFab({
         } catch {
           setVoiceError("음성 인식을 마무리하지 못했어요");
         } finally {
+          streamForCleanup?.getTracks().forEach((t) => t.stop());
+          voiceMicStreamRef.current = null;
+          setVoiceHudStream(null);
           setVoiceGhostText("");
         }
       })();
     } else {
+      streamForCleanup?.getTracks().forEach((t) => t.stop());
+      voiceMicStreamRef.current = null;
+      setVoiceHudStream(null);
       setVoiceGhostText("");
     }
   };
@@ -897,10 +969,12 @@ export function ChatFab({
         setVoiceError(null);
       } else {
         voiceEngagedRef.current = false;
-        clearVoiceHoldDelay();
+        micAbortRef.current?.abort();
+        micAbortRef.current = null;
         const stt = sttControllerRef.current;
         sttControllerRef.current = null;
         if (stt) void stt.stop().catch(() => {});
+        stopVoiceMicTracks();
         setVoicePressing(false);
         setVoiceGhostText("");
         setVoiceError(null);
@@ -920,8 +994,12 @@ export function ChatFab({
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
             className="fixed inset-0 z-50 flex max-h-[100dvh] flex-col overflow-hidden bg-background text-foreground overscroll-none touch-pan-y"
           >
-            <div className="relative z-20 flex shrink-0 items-center justify-between border-b border-border bg-background px-4 py-3">
-              <div>
+            <VoiceSessionHudFrame
+              active={voicePressing}
+              mediaStream={voiceHudStream}
+            />
+            <div className="relative z-20 flex shrink-0 items-start justify-between gap-2 border-b border-border bg-background px-4 py-3">
+              <div className="min-w-0 flex-1">
                 <h2 className="text-base font-bold text-foreground">BAPS 분석실</h2>
                 <p className="mt-0.5 text-[10px] font-medium text-primary">
                   {coachMeta(coachPersona).emoji} {coachMeta(coachPersona).label}
@@ -929,20 +1007,41 @@ export function ChatFab({
                     ? ` · ${coachMeta(coachPersona).description}`
                     : ""}
                 </p>
-                <p className="text-[10px] text-muted-foreground">
+                <p
+                  className={cn(
+                    "mt-0.5 text-[10px] text-muted-foreground",
+                    chatTtsEnabled &&
+                      "font-data text-[11px] font-bold tabular-nums tracking-tight text-foreground/88"
+                  )}
+                >
                   오늘 {totalCal}kcal · 목표 {targetCal}kcal · 단백{" "}
                   {Math.round(macros.proteinG)}g ·{" "}
                   {formatKoreanChatTime(new Date())}
                 </p>
+                {chatTtsEnabled && (isLoading || bootLoading) ? (
+                  <p
+                    className="baps-chat-holo-scan mt-1 font-mono text-[9px] font-semibold uppercase tracking-[0.18em] text-teal-600/80 dark:text-teal-300/75"
+                    aria-hidden
+                  >
+                    호르몬 분석 중…
+                  </p>
+                ) : null}
               </div>
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                aria-label="닫기"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex shrink-0 items-start gap-1 pt-0.5">
+                <ChatTtsMonitorToggle
+                  enabled={chatTtsEnabled}
+                  onToggle={() => setChatTtsEnabled((v) => !v)}
+                  coachActive={isLoading || bootLoading}
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsOpen(false)}
+                  className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  aria-label="닫기"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             <div className="relative min-h-0 flex-1">
@@ -1066,6 +1165,15 @@ export function ChatFab({
                       <p className="max-w-[min(100%,20rem)] text-[1.05rem] font-semibold leading-snug tracking-tight text-foreground/88 sm:text-lg">
                         {listenerPresenceLine(listenerDisplayName)}
                       </p>
+                      {!voicePressing ? (
+                        <p className="mt-3 max-w-[min(100%,18rem)] text-[11px] font-medium leading-relaxed text-muted-foreground">
+                          아래{" "}
+                          <span className="font-semibold text-teal-700 dark:text-teal-300">
+                            파동 버튼을 누른 채로
+                          </span>{" "}
+                          말하면 마이크 권한을 묻고 인식이 시작돼요.
+                        </p>
+                      ) : null}
                       {voicePressing ? (
                         <div
                           className="mt-4 flex flex-col items-center gap-1.5"
