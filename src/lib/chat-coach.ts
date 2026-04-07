@@ -89,6 +89,53 @@ export type CoachBootstrapReply = {
   quick_chips: QuickChip[];
 };
 
+const stripMdForSpeech = (s: string) =>
+  s
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .trim();
+
+/** 화면(`KakaoStrategicTurnView`)과 동일 순서: 분석 → 단톡(퀵)·또는 로스트 → 미션 */
+export function activeCoachQuips(turn: CoachStrategicTurn): CoachQuip[] {
+  return turn.coach_quips?.filter((q) => q.zinger?.trim()) ?? [];
+}
+
+/** TTS 구간 — `focusKey`는 말풍선 포커스와 1:1 (`analysis` | `quip:i` | `roast` | `mission`) */
+export type CoachTurnTtsSegment = {
+  text: string;
+  coachId: CoachPersonaId;
+  focusKey: string;
+};
+
+export function coachTurnTtsSegments(
+  turn: CoachStrategicTurn,
+  primaryCoach: CoachPersonaId
+): CoachTurnTtsSegment[] {
+  const out: CoachTurnTtsSegment[] = [];
+  const push = (raw: string, coachId: CoachPersonaId, focusKey: string) => {
+    const t = stripMdForSpeech(raw);
+    if (t) out.push({ text: t, coachId, focusKey });
+  };
+  if (turn.analysis?.trim()) push(turn.analysis, primaryCoach, "analysis");
+
+  const quips = activeCoachQuips(turn);
+  if (quips.length > 0) {
+    quips.forEach((q, i) => push(q.zinger, q.persona_id, `quip:${i}`));
+  } else if (turn.roast?.trim()) {
+    push(turn.roast, primaryCoach, "roast");
+  }
+
+  if (turn.mission?.trim()) push(turn.mission, primaryCoach, "mission");
+  return out;
+}
+
+/** 한 덩어리로 이어 붙인 읽기 텍스트 (보이스 구분 없이 미리보기용 등) */
+export function coachTurnSpeakableText(turn: CoachStrategicTurn): string {
+  return coachTurnTtsSegments(turn, DEFAULT_COACH_PERSONA_ID)
+    .map((s) => s.text)
+    .join(". ");
+}
+
 /**
  * 전략적 감시 코칭 — Flash-Lite 구조화 출력용.
  */

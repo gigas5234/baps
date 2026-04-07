@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   MessageCircle,
@@ -42,6 +42,10 @@ import {
   type AzureSttSession,
 } from "@/lib/chat-azure-stt";
 import { ChatTtsMonitorToggle } from "@/components/common/chat-tts-monitor";
+import {
+  playCoachTurnNeuralTts,
+  stopCoachNeuralTtsPlayback,
+} from "@/lib/coach-tts-client";
 import { VoiceSessionHudFrame } from "@/components/common/voice-session-hud-frame";
 
 interface ChatMessage {
@@ -65,14 +69,14 @@ interface ChatFabProps {
   totalCal: number;
   targetCal: number;
   macros: MacroTotals;
-  /** 음성 세션 안내 문구 (예: 홍길동 → "홍길동님, 듣고 있어요") */
+  /** 음성 세션 안내 문구 (예: 홍길동 → "홍길동님, 듣고있어요") */
   listenerDisplayName?: string | null;
 }
 
 function listenerPresenceLine(name?: string | null): string {
   const n = name?.trim();
-  if (!n) return "듣고 있어요";
-  return `${n}님, 듣고 있어요`;
+  if (!n) return "듣고있어요";
+  return `${n}님, 듣고있어요`;
 }
 
 /** 라디오 주파수 / 심박 느낌의 파동 아이콘 (마이크 대체) */
@@ -294,7 +298,6 @@ export function ChatFab({
   /** 음성: 오버레이 세션 · 탭으로 수신 시작 · 무음 2초면 자동 종료(VAD) */
   const [voiceSessionOpen, setVoiceSessionOpen] = useState(false);
   const [voiceListening, setVoiceListening] = useState(false);
-  const [voiceAnalyzing, setVoiceAnalyzing] = useState(false);
   const [voiceGhostText, setVoiceGhostText] = useState("");
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [voiceHudStream, setVoiceHudStream] = useState<MediaStream | null>(null);
@@ -303,8 +306,14 @@ export function ChatFab({
   const voiceStartInFlightRef = useRef(false);
   const voiceMicStreamRef = useRef<MediaStream | null>(null);
   const sttControllerRef = useRef<AzureSttSession | null>(null);
-  /** 코치 TTS 재생 허용(실제 음성 연동 전까지 UI·상태만). 초기 진입·기본값 OFF */
+  /** 코치 TTS — 토글 ON이면 응답 수신 후 Azure Neural 보이스 재생 */
   const [chatTtsEnabled, setChatTtsEnabled] = useState(false);
+  const chatTtsEnabledRef = useRef(false);
+  const ttsSessionAbortRef = useRef<AbortController | null>(null);
+  const [ttsBubbleFocus, setTtsBubbleFocus] = useState<{
+    messageId: string;
+    segmentKey: string;
+  } | null>(null);
   const wasChatOpenRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   /** send 직후에도 최신 대화로 history를 만들기 위함 (칩/카드는 입력 없이 즉시 API) */
@@ -319,12 +328,26 @@ export function ChatFab({
   }, [messages]);
 
   useEffect(() => {
+    chatTtsEnabledRef.current = chatTtsEnabled;
+  }, [chatTtsEnabled]);
+
+  const stopActiveCoachTts = useCallback(() => {
+    ttsSessionAbortRef.current?.abort();
+    ttsSessionAbortRef.current = null;
+    stopCoachNeuralTtsPlayback();
+    setTtsBubbleFocus(null);
+  }, []);
+
+  useEffect(() => {
+    if (!chatTtsEnabled) stopActiveCoachTts();
+  }, [chatTtsEnabled, stopActiveCoachTts]);
+
+  useEffect(() => {
     if (!isOpen) {
       openingCoachSynced.current = null;
       quickChipsBootstrapKeyRef.current = "";
       setVoiceSessionOpen(false);
       setVoiceListening(false);
-      setVoiceAnalyzing(false);
       setVoiceGhostText("");
       setVoiceError(null);
       listeningDesiredRef.current = false;
@@ -788,8 +811,9 @@ export function ChatFab({
         coach_quips: normalized.coach_quips,
       };
 
+      const aiMsgId = `ai-${Date.now()}`;
       const aiBubble: ChatMessage = {
-        id: `ai-${Date.now()}`,
+        id: aiMsgId,
         is_ai: true,
         message: encodeCoachTurnForHistory(coachTurn),
         coachTurn,
@@ -800,6 +824,24 @@ export function ChatFab({
       const t = [...messagesRef.current, aiBubble];
       messagesRef.current = t;
       setMessages(t);
+      if (chatTtsEnabledRef.current) {
+        ttsSessionAbortRef.current?.abort();
+        stopCoachNeuralTtsPlayback();
+        const ac = new AbortController();
+        ttsSessionAbortRef.current = ac;
+        void playCoachTurnNeuralTts(coachTurn, coachPersona, {
+          signal: ac.signal,
+          pauseBetweenSpeakersMs: 1500,
+          onSegmentFocus: (segmentKey) =>
+            setTtsBubbleFocus({ messageId: aiMsgId, segmentKey }),
+          onSegmentBlur: () => setTtsBubbleFocus(null),
+        }).finally(() => {
+          if (ttsSessionAbortRef.current === ac) {
+            ttsSessionAbortRef.current = null;
+          }
+          setTtsBubbleFocus(null);
+        });
+      }
       const chips = normalized.quick_chips ?? [];
       setQuickChips(chips);
       quickChipsBootstrapKeyRef.current = `${selectedDate}|${coachPersona}`;
@@ -830,9 +872,7 @@ export function ChatFab({
     setVoiceHudStream(null);
   };
 
-  const finalizeVoiceSession = async (
-    reason: "vad" | "manual" | "panel_close"
-  ) => {
+  const finalizeVoiceSession = async (reason: "vad" | "manual") => {
     if (voiceFinalizingRef.current) return;
     voiceFinalizingRef.current = true;
     listeningDesiredRef.current = false;
@@ -844,11 +884,11 @@ export function ChatFab({
     setVoiceListening(false);
     setVoiceGhostText("");
 
+    let transcript = "";
     try {
       if (ctrl) {
         await ctrl.stop();
-        const text = ctrl.getLatestText().trim();
-        if (text) setInput(text);
+        transcript = ctrl.getLatestText().trim();
       }
     } catch {
       setVoiceError("음성 인식을 마무리하지 못했어요");
@@ -856,20 +896,20 @@ export function ChatFab({
       stream?.getTracks().forEach((t) => t.stop());
       voiceMicStreamRef.current = null;
       setVoiceHudStream(null);
-      if (reason === "vad") {
-        setVoiceAnalyzing(true);
-        window.setTimeout(() => setVoiceAnalyzing(false), 1200);
-      } else {
-        setVoiceAnalyzing(false);
-      }
+      setVoiceSessionOpen(false);
       voiceFinalizingRef.current = false;
+    }
+
+    if (reason === "vad" && transcript) {
+      void sendWithText(transcript, "input");
+    } else if (transcript && reason === "manual") {
+      setInput(transcript);
     }
   };
 
   const startVoiceListening = async () => {
     if (
       voiceListening ||
-      voiceAnalyzing ||
       voiceStartInFlightRef.current ||
       isLoading ||
       bootLoading
@@ -917,6 +957,7 @@ export function ChatFab({
       stopVoiceMicTracks();
       setVoiceListening(false);
       listeningDesiredRef.current = false;
+      setVoiceSessionOpen(false);
       if (e instanceof DOMException) {
         if (e.name === "NotAllowedError" || e.name === "SecurityError") {
           setVoiceError(
@@ -939,7 +980,8 @@ export function ChatFab({
   };
 
   const handleVoiceWaveClick = () => {
-    if (voiceAnalyzing || isLoading || bootLoading) return;
+    stopActiveCoachTts();
+    if (isLoading || bootLoading) return;
     if (voiceListening) {
       void finalizeVoiceSession("manual");
       return;
@@ -951,20 +993,8 @@ export function ChatFab({
     void startVoiceListening();
   };
 
-  const closeVoiceSessionPanel = () => {
-    listeningDesiredRef.current = false;
-    void finalizeVoiceSession("panel_close");
-    setVoiceSessionOpen(false);
-    setVoiceError(null);
-  };
-
-  const voiceHudMode = !voiceSessionOpen
-    ? "hidden"
-    : voiceAnalyzing
-      ? "analyzing"
-      : voiceListening
-        ? "listening"
-        : "hidden";
+  const voiceHudMode =
+    voiceSessionOpen && voiceListening ? "listening" : "hidden";
 
   return (
     <>
@@ -1099,6 +1129,12 @@ export function ChatFab({
                         <KakaoStrategicTurnView
                           turn={msg.coachTurn}
                           receivedAt={receivedAt}
+                          ttsFocusSegment={
+                            ttsBubbleFocus?.messageId === msg.id
+                              ? ttsBubbleFocus.segmentKey
+                              : null
+                          }
+                          primaryCoachId={coachPersona}
                         />
                       ) : (
                         <KakaoOpeningCoachMessage
@@ -1138,68 +1174,11 @@ export function ChatFab({
                     className="pointer-events-none absolute inset-0 z-10 flex flex-col"
                     aria-hidden
                   >
-                    <div className="absolute inset-0 bg-background/60 backdrop-blur-[1px] dark:bg-background/52" />
-                    <div
-                      className={cn(
-                        "absolute inset-0 opacity-[0.92]",
-                        "bg-[linear-gradient(to_right,rgb(0_0_0/_0.038)_1px,transparent_1px),linear-gradient(to_bottom,rgb(0_0_0/_0.038)_1px,transparent_1px)]",
-                        "[background-size:1.375rem_1.375rem]",
-                        "dark:bg-[linear-gradient(to_right,rgb(255_255_255/_0.06)_1px,transparent_1px),linear-gradient(to_bottom,rgb(255_255_255/_0.06)_1px,transparent_1px)]"
-                      )}
-                    />
+                    <div className="absolute inset-0 bg-background/55 backdrop-blur-[2px] dark:bg-background/48" />
                     <div className="relative flex flex-1 flex-col items-center justify-center px-6 pb-28 pt-12 text-center">
-                      {voiceAnalyzing ? (
-                        <p className="baps-chat-holo-scan mt-4 max-w-[min(100%,20rem)] font-mono text-[11px] font-bold uppercase tracking-[0.28em] text-teal-600 dark:text-teal-300">
-                          [ analyzing data… ]
-                        </p>
-                      ) : (
-                        <p className="max-w-[min(100%,20rem)] text-[1.05rem] font-semibold leading-snug tracking-tight text-foreground/88 sm:text-lg">
-                          {listenerPresenceLine(listenerDisplayName)}
-                        </p>
-                      )}
-                      {!voiceListening && !voiceAnalyzing ? (
-                        <p className="mt-3 max-w-[min(100%,18rem)] text-[11px] font-medium leading-relaxed text-muted-foreground">
-                          아래{" "}
-                          <span className="font-semibold text-teal-700 dark:text-teal-300">
-                            파동 버튼
-                          </span>
-                          을 누르면 감시가 시작돼요. 말을 멈추고{" "}
-                          <span className="font-semibold text-foreground/80">
-                            약 2초 무음
-                          </span>
-                          이 지나면 자동으로 끝나요. 녹음 중 다시 누르면 바로
-                          멈춥니다.
-                        </p>
-                      ) : null}
-                      {voiceListening ? (
-                        <div
-                          className="mt-4 flex flex-col items-center gap-1.5"
-                          role="status"
-                          aria-live="polite"
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <span className="relative flex h-2 w-2">
-                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal-400/90 opacity-70 dark:bg-teal-300/80" />
-                              <span className="relative inline-flex h-2 w-2 rounded-full bg-teal-500 dark:bg-teal-400" />
-                            </span>
-                            <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-teal-700/90 dark:text-teal-300/95">
-                              데이터 스캔 중
-                            </span>
-                          </div>
-                          <div className="h-0.5 w-36 overflow-hidden rounded-full bg-teal-500/15 dark:bg-teal-400/20">
-                            <div className="h-full w-2/3 rounded-full bg-gradient-to-r from-transparent via-teal-400/85 to-transparent dark:via-teal-300/90 baps-voice-scan-line" />
-                          </div>
-                        </div>
-                      ) : null}
-                      {!voiceListening && !voiceAnalyzing ? (
-                        <button
-                          type="button"
-                          onClick={closeVoiceSessionPanel}
-                          className="pointer-events-auto mt-4 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground underline decoration-muted-foreground/50 underline-offset-2 transition-colors hover:text-foreground"
-                        >
-                          음성 패널 닫기
-                        </button>
-                      ) : null}
+                      <p className="max-w-[min(100%,20rem)] text-[1.05rem] font-semibold leading-snug tracking-tight text-foreground/88 sm:text-lg">
+                        {listenerPresenceLine(listenerDisplayName)}
+                      </p>
                     </div>
                   </motion.div>
                 ) : null}

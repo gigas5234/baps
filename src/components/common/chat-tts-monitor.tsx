@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { AlertTriangle, Volume2, VolumeX } from "lucide-react";
+import { Volume2, VolumeX } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ChatTtsMonitorToggleProps = {
@@ -66,8 +66,7 @@ function SonicEqBars({ active }: { active: boolean }) {
 }
 
 /**
- * BAPS 소닉 모니터링: 스피커 음소거 / 활성(주파수 목업) 토글.
- * STT(마이크)와 독립 — 실제 TTS 재생은 `enabled`로 이후 분기.
+ * BAPS 소닉 모니터: 무음 — 무채색 스피커 + 일직선 / ON — 민트 스피커 + EQ 파형만.
  */
 export function ChatTtsMonitorToggle({
   enabled,
@@ -83,7 +82,7 @@ export function ChatTtsMonitorToggle({
       aria-pressed={enabled}
       aria-label={enabled ? "코치 음성 끄기" : "코치 음성 켜기"}
       className={cn(
-        "relative flex max-w-[11.5rem] min-w-0 flex-col gap-1 overflow-hidden rounded-xl px-2.5 py-2 text-left",
+        "relative flex items-center gap-1.5 overflow-hidden rounded-xl px-2 py-1.5",
         "transition-[box-shadow,border-color,backdrop-filter] duration-300 ease-out",
         "touch-manipulation active:scale-[0.98]",
         !enabled &&
@@ -101,66 +100,28 @@ export function ChatTtsMonitorToggle({
           )
       )}
     >
-      <div className="flex items-center gap-1.5">
-        {!enabled ? (
-          <>
-            <AlertTriangle
-              className="h-3.5 w-3.5 shrink-0 text-amber-400"
-              strokeWidth={2.2}
-              aria-hidden
-            />
-            <VolumeX
-              className="h-4 w-4 shrink-0 text-slate-500 dark:text-slate-400"
-              strokeWidth={2}
-              aria-hidden
-            />
-            {/* 음소거: 스피커 옆 일직선 */}
-            <span
-              className="h-0.5 w-5 shrink-0 rounded-full bg-slate-500/90 dark:bg-slate-400/85"
-              aria-hidden
-            />
-          </>
-        ) : (
-          <>
-            <Volume2
-              className="h-4 w-4 shrink-0 text-teal-500 drop-shadow-[0_0_8px_rgba(20,184,166,0.55)] dark:text-teal-300"
-              strokeWidth={2}
-              aria-hidden
-            />
-            <SonicEqBars active={barsActive} />
-          </>
-        )}
-      </div>
-      <div
-        className={cn(
-          "flex items-center gap-1 text-[10px] font-bold leading-none tracking-tight",
-          !enabled &&
-            "text-amber-400 [text-shadow:0_0_12px_rgba(251,191,36,0.45)] dark:text-amber-300 dark:[text-shadow:0_0_14px_rgba(251,191,36,0.35)]",
-          enabled &&
-            "text-teal-600 [text-shadow:0_0_12px_rgba(13,148,136,0.45)] dark:text-teal-300 dark:[text-shadow:0_0_14px_rgba(45,212,191,0.35)]"
-        )}
-      >
-        {!enabled ? (
-          <>
-            <span aria-hidden>🔇</span>
-            <span>소리 끔</span>
-            <span className="ml-0.5 font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-amber-500/85 dark:text-amber-400/80">
-              silent
-            </span>
-          </>
-        ) : (
-          <>
-            <span aria-hidden>🎙️</span>
-            <span className="font-mono tracking-tight">보이스 ON</span>
-            <span
-              className="ml-0.5 font-mono text-[10px] tracking-tight text-teal-800/95 dark:text-teal-100/95"
-              aria-hidden
-            >
-              :-]
-            </span>
-          </>
-        )}
-      </div>
+      {!enabled ? (
+        <>
+          <VolumeX
+            className="h-4 w-4 shrink-0 text-slate-500 dark:text-slate-400"
+            strokeWidth={2}
+            aria-hidden
+          />
+          <span
+            className="h-0.5 w-4 shrink-0 rounded-full bg-slate-500/90 dark:bg-slate-400/85"
+            aria-hidden
+          />
+        </>
+      ) : (
+        <>
+          <Volume2
+            className="h-4 w-4 shrink-0 text-teal-500 drop-shadow-[0_0_8px_rgba(20,184,166,0.55)] dark:text-teal-300"
+            strokeWidth={2}
+            aria-hidden
+          />
+          <SonicEqBars active={barsActive} />
+        </>
+      )}
     </button>
   );
 }

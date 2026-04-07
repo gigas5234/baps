@@ -147,6 +147,34 @@ export function coachMeta(id: CoachPersonaId): CoachPersonaMeta {
   );
 }
 
+/** Azure Speech ko-KR Neural — 코치 페르소나별 보이스·말 속도(SSML prosody rate) */
+export type CoachNeuralTtsConfig = {
+  voiceName: string;
+  /**
+   * SSML `<prosody rate="…">` — `medium`, `+10%`, `-15%` 등
+   * @see https://learn.microsoft.com/azure/ai-services/speech-service/speech-synthesis-markup-voice
+   */
+  prosodyRate: string;
+};
+
+export const COACH_NEURAL_TTS: Record<CoachPersonaId, CoachNeuralTtsConfig> =
+  {
+    /** 다이어트(감시) — 단호·정직·남성 · 약간 빠르게 */
+    diet: { voiceName: "ko-KR-BongJinNeural", prosodyRate: "+12%" },
+    /** 영양(분석) — 차분·논리·여성 · 표준 */
+    nutrition: { voiceName: "ko-KR-SunHiNeural", prosodyRate: "medium" },
+    /** 운동(격려) — 에너지·밝은 남성 */
+    exercise: { voiceName: "ko-KR-GookMinNeural", prosodyRate: "+8%" },
+    /** 멘탈(위로) — 부드럽고 따뜻한 여성 · 약간 느리게 */
+    mental: { voiceName: "ko-KR-YuJinNeural", prosodyRate: "-12%" },
+    /** 가성비(현실) — 신뢰·이성·남성 · 차분한 관제 톤 */
+    roi: { voiceName: "ko-KR-InJoonNeural", prosodyRate: "-6%" },
+  };
+
+export function coachNeuralTts(id: CoachPersonaId): CoachNeuralTtsConfig {
+  return COACH_NEURAL_TTS[id] ?? COACH_NEURAL_TTS.diet;
+}
+
 /** 카톡형 원형 아바타 배경 (Clinical: 인디고/바이올렛 링) */
 export const COACH_AVATAR_SURFACE: Record<CoachPersonaId, string> = {
   diet:
@@ -158,4 +186,50 @@ export const COACH_AVATAR_SURFACE: Record<CoachPersonaId, string> = {
   mental:
     "bg-gradient-to-br from-violet-600 to-indigo-900 ring-2 ring-purple-400/40 shadow-md shadow-black/20",
   roi: "bg-gradient-to-br from-indigo-600 to-blue-900 ring-2 ring-indigo-300/45 shadow-md shadow-black/20",
+};
+
+/** TTS 재생 중 말풍선·이모지에 얹는 네온(코치 톤에 맞춘 색) */
+export type CoachTtsVisualAccent = {
+  bubble: string;
+  emoji: string;
+};
+
+export const COACH_TTS_VISUAL: Record<CoachPersonaId, CoachTtsVisualAccent> = {
+  diet: {
+    bubble:
+      "z-[1] ring-2 ring-rose-400/80 shadow-[0_0_24px_rgba(244,63,94,0.42),inset_0_0_14px_rgba(244,63,94,0.12)] dark:shadow-[0_0_26px_rgba(251,113,133,0.38)]",
+    emoji: "drop-shadow-[0_0_10px_rgba(244,63,94,0.95)] saturate-[1.3] contrast-[1.05]",
+  },
+  nutrition: {
+    bubble:
+      "z-[1] ring-2 ring-emerald-400/75 shadow-[0_0_24px_rgba(16,185,129,0.38),inset_0_0_12px_rgba(16,185,129,0.1)] dark:shadow-[0_0_26px_rgba(52,211,153,0.36)]",
+    emoji: "drop-shadow-[0_0_10px_rgba(16,185,129,0.9)] saturate-[1.25]",
+  },
+  exercise: {
+    bubble:
+      "z-[1] ring-2 ring-amber-400/85 shadow-[0_0_24px_rgba(245,158,11,0.45),inset_0_0_12px_rgba(245,158,11,0.12)] dark:shadow-[0_0_26px_rgba(251,191,36,0.4)]",
+    emoji: "drop-shadow-[0_0_10px_rgba(245,158,11,0.95)] saturate-[1.35] brightness-[1.03]",
+  },
+  mental: {
+    bubble:
+      "z-[1] ring-2 ring-violet-400/78 shadow-[0_0_24px_rgba(139,92,246,0.4),inset_0_0_12px_rgba(139,92,246,0.11)] dark:shadow-[0_0_26px_rgba(167,139,250,0.38)]",
+    emoji: "drop-shadow-[0_0_10px_rgba(139,92,246,0.92)] saturate-[1.2]",
+  },
+  roi: {
+    bubble:
+      "z-[1] ring-2 ring-indigo-400/78 shadow-[0_0_24px_rgba(99,102,241,0.4),inset_0_0_12px_rgba(99,102,241,0.11)] dark:shadow-[0_0_26px_rgba(129,140,248,0.38)]",
+    emoji: "drop-shadow-[0_0_10px_rgba(99,102,241,0.92)] saturate-[1.15]",
+  },
+};
+
+export const TTS_ANALYSIS_VISUAL: CoachTtsVisualAccent = {
+  bubble:
+    "z-[1] ring-2 ring-indigo-400/75 shadow-[0_0_22px_rgba(99,102,241,0.38),inset_0_0_12px_rgba(99,102,241,0.1)]",
+  emoji: "drop-shadow-[0_0_9px_rgba(129,140,248,0.88)] saturate-[1.15]",
+};
+
+export const TTS_MISSION_VISUAL: CoachTtsVisualAccent = {
+  bubble:
+    "z-[1] ring-2 ring-amber-400/90 shadow-[0_0_26px_rgba(245,158,11,0.48),inset_0_0_14px_rgba(245,158,11,0.14)] dark:ring-amber-300/70",
+  emoji: "drop-shadow-[0_0_11px_rgba(245,158,11,0.95)] saturate-[1.35]",
 };

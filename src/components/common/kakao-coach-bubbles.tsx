@@ -11,13 +11,20 @@ import { CoachTypewriter, countCoachGraphemes } from "@/components/common/coach-
 import { formatKoreanChatTime } from "@/lib/coach-chat-time";
 import { interventionCodename } from "@/lib/coach-intervention-triggers";
 import {
+  activeCoachQuips,
+  type CoachStrategicTurn,
+} from "@/lib/chat-coach";
+import {
   coachMeta,
   COACH_AVATAR_SURFACE,
+  COACH_TTS_VISUAL,
   DEFAULT_COACH_PERSONA_ID,
+  TTS_ANALYSIS_VISUAL,
+  TTS_MISSION_VISUAL,
   type CoachPersonaId,
+  type CoachTtsVisualAccent,
 } from "@/lib/coach-personas";
 import { cn } from "@/lib/utils";
-import type { CoachStrategicTurn } from "@/lib/chat-coach";
 
 const TYPE_MS = 34;
 const GROUP_GAP_MS = 300;
@@ -132,6 +139,8 @@ export function SingleKakaoCoachRow({
   avatarClass,
   timeLabel,
   bubbleVariant = "default",
+  ttsActive = false,
+  speakingAccent,
   children,
 }: {
   displayName: string;
@@ -139,14 +148,23 @@ export function SingleKakaoCoachRow({
   avatarClass: string;
   timeLabel: string;
   bubbleVariant?: "default" | "mission";
+  /** TTS가 이 말풍선을 읽는 중 — 네온·미세 흔들림 */
+  ttsActive?: boolean;
+  speakingAccent?: CoachTtsVisualAccent;
   children: ReactNode;
 }) {
   return (
-    <div className="flex max-w-[min(100%,20.5rem)] items-start gap-1.5">
+    <div
+      className={cn(
+        "flex max-w-[min(100%,20.5rem)] items-start gap-1.5",
+        ttsActive && "coach-tts-speaking-row"
+      )}
+    >
       <div
         className={cn(
-          "flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-full text-[15px]",
-          avatarClass
+          "flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-full text-[15px] transition-[filter,transform] duration-200",
+          avatarClass,
+          ttsActive && speakingAccent?.emoji
         )}
         aria-hidden
       >
@@ -156,7 +174,11 @@ export function SingleKakaoCoachRow({
         <p className="mb-0.5 max-w-[16.5rem] truncate pl-0.5 text-[11px] font-medium text-muted-foreground">
           {displayName}
         </p>
-        <IncomingBubble showTail bubbleVariant={bubbleVariant}>
+        <IncomingBubble
+          showTail
+          bubbleVariant={bubbleVariant}
+          speakingBubbleClass={ttsActive ? speakingAccent?.bubble : undefined}
+        >
           {children}
         </IncomingBubble>
       </div>
@@ -172,17 +194,19 @@ function IncomingBubble({
   showTail,
   isPending,
   bubbleVariant = "default",
+  speakingBubbleClass,
 }: {
   children: ReactNode;
   showTail: boolean;
   isPending?: boolean;
   bubbleVariant?: "default" | "mission";
+  speakingBubbleClass?: string;
 }) {
   const isMission = bubbleVariant === "mission";
   return (
     <div
       className={cn(
-        "relative max-w-[min(100%,18rem)] rounded-[14px] border px-3 py-2 text-[13px] leading-snug shadow-sm",
+        "relative max-w-[min(100%,18rem)] rounded-[14px] border px-3 py-2 text-[13px] leading-snug shadow-sm transition-[box-shadow,ring-color] duration-200",
         isMission
           ? cn(
               "border-2 border-amber-500/55 bg-amber-50 text-foreground",
@@ -193,6 +217,7 @@ function IncomingBubble({
               "dark:border-white/12 dark:bg-zinc-100 dark:text-zinc-900"
             ),
         isPending && "border-dashed opacity-95",
+        speakingBubbleClass,
         showTail &&
           (isMission
             ? "before:pointer-events-none before:absolute before:left-[-7px] before:top-[11px] before:h-0 before:w-0 before:border-y-[6px] before:border-r-[8px] before:border-y-transparent before:border-r-amber-50 dark:before:border-r-amber-950/95"
@@ -333,13 +358,18 @@ export function KakaoOpeningCoachMessage({
 export function KakaoStrategicTurnView({
   turn,
   receivedAt,
+  ttsFocusSegment = null,
+  primaryCoachId = DEFAULT_COACH_PERSONA_ID,
 }: {
   turn: CoachStrategicTurn;
   receivedAt: Date;
+  /** 이 메시지 안에서 TTS가 읽는 말풍선 (`analysis` | `quip:0` | …) */
+  ttsFocusSegment?: string | null;
+  /** 로스트 단독 행·분석·미션 보이스 기준 코치 */
+  primaryCoachId?: CoachPersonaId;
 }) {
   const timeLabel = formatKoreanChatTime(receivedAt);
-  const quips =
-    turn.coach_quips?.filter((q) => q.zinger?.trim()) ?? [];
+  const quips = activeCoachQuips(turn);
   const showQuipGroup = quips.length > 0;
   const hasRoast = Boolean(!showQuipGroup && turn.roast?.trim());
 
@@ -384,6 +414,8 @@ export function KakaoStrategicTurnView({
         emoji="📋"
         avatarClass="bg-gradient-to-br from-slate-600 to-zinc-800 ring-2 ring-indigo-500/40 shadow-md shadow-black/20"
         timeLabel={timeLabel}
+        ttsActive={ttsFocusSegment === "analysis"}
+        speakingAccent={TTS_ANALYSIS_VISUAL}
       >
         <CoachTypewriter
           text={turn.analysis}
@@ -404,6 +436,7 @@ export function KakaoStrategicTurnView({
           {quips.map((q, idx) => {
             const m = coachMeta(q.persona_id);
             const start = quipStarts[idx] ?? 0;
+            const qKey = `quip:${idx}`;
             return (
               <SingleKakaoCoachRow
                 key={`${q.persona_id}-${idx}`}
@@ -411,6 +444,8 @@ export function KakaoStrategicTurnView({
                 emoji={m.emoji}
                 avatarClass={COACH_AVATAR_SURFACE[q.persona_id]}
                 timeLabel={timeLabel}
+                ttsActive={ttsFocusSegment === qKey}
+                speakingAccent={COACH_TTS_VISUAL[q.persona_id]}
               >
                 <CoachTypewriter
                   text={q.zinger}
@@ -430,10 +465,12 @@ export function KakaoStrategicTurnView({
         </>
       ) : hasRoast ? (
         <SingleKakaoCoachRow
-          displayName={`${coachMeta("diet").label} 코치`}
-          emoji={coachMeta("diet").emoji}
-          avatarClass={COACH_AVATAR_SURFACE.diet}
+          displayName={`${coachMeta(primaryCoachId).label} 코치`}
+          emoji={coachMeta(primaryCoachId).emoji}
+          avatarClass={COACH_AVATAR_SURFACE[primaryCoachId]}
           timeLabel={timeLabel}
+          ttsActive={ttsFocusSegment === "roast"}
+          speakingAccent={COACH_TTS_VISUAL[primaryCoachId]}
         >
           <CoachTypewriter
             text={turn.roast!.trim()}
@@ -456,6 +493,8 @@ export function KakaoStrategicTurnView({
         avatarClass="bg-gradient-to-br from-teal-700 to-teal-950 ring-2 ring-violet-500/35 shadow-md shadow-black/20"
         timeLabel={timeLabel}
         bubbleVariant="mission"
+        ttsActive={ttsFocusSegment === "mission"}
+        speakingAccent={TTS_MISSION_VISUAL}
       >
         <CoachTypewriter
           text={turn.mission}
