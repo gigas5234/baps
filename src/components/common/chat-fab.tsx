@@ -354,12 +354,15 @@ export function ChatFab({
   }, [chatTtsEnabled, stopActiveCoachTts]);
 
   const handleChatTtsToggle = useCallback(() => {
-    if (chatTtsEnabled) {
-      stopActiveCoachTts();
-    } else {
+    const next = !chatTtsEnabled;
+    if (next) {
       unlockCoachTtsAudio();
+    } else {
+      stopActiveCoachTts();
     }
-    setChatTtsEnabled((v) => !v);
+    /* 토글 직후 첫 전송이 useEffect(ref)보다 먼저 돌면 TTS·언락이 통째로 스킵됨 — 동기 반영 */
+    chatTtsEnabledRef.current = next;
+    setChatTtsEnabled(next);
   }, [chatTtsEnabled, stopActiveCoachTts]);
 
   useEffect(() => {
@@ -1066,14 +1069,6 @@ export function ChatFab({
                   {Math.round(macros.proteinG)}g ·{" "}
                   {formatKoreanChatTime(new Date())}
                 </p>
-                {chatTtsEnabled && (isLoading || bootLoading) ? (
-                  <p
-                    className="baps-chat-holo-scan mt-1 font-mono text-[9px] font-semibold uppercase tracking-[0.18em] text-teal-600/80 dark:text-teal-300/75"
-                    aria-hidden
-                  >
-                    호르몬 분석 중…
-                  </p>
-                ) : null}
                 {chatTtsEnabled && ttsInterSpeakerBridge ? (
                   <p
                     className="mt-1 font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-teal-600/85 animate-pulse dark:text-teal-300/80"

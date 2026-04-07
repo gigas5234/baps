@@ -19,14 +19,19 @@ function escapeForSsml(s: string): string {
 }
 
 function ttsEndpoint(): string | null {
-  const endpoint = process.env.AZURE_SPEECH_ENDPOINT?.trim();
   const region = process.env.AZURE_SPEECH_REGION?.trim();
+  /**
+   * 토큰 발급용 `AZURE_SPEECH_ENDPOINT`(…/sts/v1.0/issueToken)과 달리,
+   * TTS REST는 `<region>.tts.speech.microsoft.com` 전용 호스트가 정석이다.
+   * 커스텀 도메인만 넣은 채 `/cognitiveservices/v1`를 붙이면 404·실패하는 경우가 많다.
+   */
+  if (region) {
+    return `https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`;
+  }
+  const endpoint = process.env.AZURE_SPEECH_ENDPOINT?.trim();
   if (endpoint) {
     const base = endpoint.replace(/\/$/, "");
     return `${base}/cognitiveservices/v1`;
-  }
-  if (region) {
-    return `https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`;
   }
   return null;
 }

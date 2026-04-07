@@ -177,6 +177,9 @@ export async function playCoachTurnNeuralTts(
       options?.onInterSpeakerBridge?.(false);
       options?.onSegmentBlur?.();
       if (isAbortError(e)) return;
+      if (process.env.NODE_ENV === "development" && e instanceof Error) {
+        console.warn("[BAPS TTS]", e.message);
+      }
       return;
     }
   }

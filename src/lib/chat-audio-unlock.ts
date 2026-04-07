@@ -10,8 +10,6 @@
  * - Azure 500 시 텍스트 UI 정상
  */
 
-let unlocked = false;
-
 const SILENT_WAV_DATA_URI =
   "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 
@@ -29,7 +27,6 @@ function tryWebAudioFallback(): void {
     void ctx.resume().then(() => {
       src.start(0);
       src.stop(ctx.currentTime + 0.03);
-      unlocked = true;
       window.setTimeout(() => {
         void ctx.close().catch(() => {});
       }, 120);
@@ -42,9 +39,12 @@ function tryWebAudioFallback(): void {
 /**
  * Autoplay wall 완화: **같은 사용자 제스처에서** `await` 하기 전에 호출.
  * (전송·TTS ON·음성 버튼 탭 등)
+ *
+ * 과거에는 첫 성공 후 `return`으로 막았는데, 일부 환경에서 실패 후 재시도가 막히거나
+ * 타이밍이 꼬여 "아예 안 들림"으로 이어질 수 있어 **매 호출마다 저비용 재시도**한다.
  */
 export function unlockCoachTtsAudio(): void {
-  if (typeof window === "undefined" || unlocked) return;
+  if (typeof window === "undefined") return;
 
   try {
     const a = new Audio(SILENT_WAV_DATA_URI);
@@ -55,7 +55,6 @@ export function unlockCoachTtsAudio(): void {
         a.pause();
         a.removeAttribute("src");
         a.load();
-        unlocked = true;
       })
       .catch(() => {
         tryWebAudioFallback();
