@@ -37,7 +37,7 @@ export const COACH_PERSONAS_UI: CoachPersonaMeta[] = [
   },
   {
     id: "exercise",
-    emoji: "👟",
+    emoji: "🏃‍♂️",
     label: "운동",
     description: "활동 환산",
   },
@@ -49,7 +49,7 @@ export const COACH_PERSONAS_UI: CoachPersonaMeta[] = [
   },
   {
     id: "roi",
-    emoji: "📉",
+    emoji: "📊",
     label: "가성비",
     description: "kcal 예산",
   },
@@ -145,6 +145,57 @@ export function coachMeta(id: CoachPersonaId): CoachPersonaMeta {
   return (
     COACH_PERSONAS_UI.find((c) => c.id === id) ?? COACH_PERSONAS_UI[0]
   );
+}
+
+/** 채팅 아트리움(첫 진입) — 코치 탭 시 가운데 설명용 */
+export const COACH_ATRIUM_BLURB: Record<
+  CoachPersonaId,
+  { label: string; tagline: string; quoteTpl: string }
+> = {
+  diet: {
+    label: "다이어트 코치",
+    tagline: "실시간 칼로리 감시",
+    quoteTpl:
+      "{name}님의 숟가락 속도까지 체크합니다. 숨길 생각 마세요. 데이터는 다 보고 있습니다.",
+  },
+  nutrition: {
+    label: "영양 코치",
+    tagline: "영양소 밸런스 정밀 분석",
+    quoteTpl:
+      "몸은 정직한 화학 실험실입니다. 쓰레기를 넣고 금이 나오길 바라는 건 도둑놈 심보죠.",
+  },
+  exercise: {
+    label: "운동 코치",
+    tagline: "활동량 압박 및 부스터",
+    quoteTpl:
+      "근육은 배신하지만, {name}님은 매일 근육을 배신하네요. 오늘 흘린 땀이 0g입니까?",
+  },
+  mental: {
+    label: "멘탈 코치",
+    tagline: "가짜 배고픔 및 심리 케어",
+    quoteTpl:
+      "지금 배가 고픈 건가요, 아니면 마음이 허한 건가요? 감정에 속아 입을 벌리지 마세요.",
+  },
+  roi: {
+    label: "가성비 코치",
+    tagline: "운동 환산 및 현실 자각",
+    quoteTpl:
+      "그 간식 하나 태우려면 버피 200개입니다. {name}님의 1시간을 겨우 과자 한 봉지와 바꿀 건가요?",
+  },
+};
+
+export function personalizeAtriumQuote(
+  tpl: string,
+  displayName: string
+): string {
+  const n = displayName.trim() || "회원";
+  return tpl.replace(/\{name\}/g, n);
+}
+
+/** 아트리움 환영 문단(이름 포함) */
+export function buildChatAtriumWelcome(displayName: string): string {
+  const n = displayName.trim() || "회원";
+  return `반가워요, ${n}님. 오늘도 '내일부터'라는 마법의 주문을 외우고 오신 건 아니죠?\n\n지금 아래의 다섯 코치 중 한 명을 깨워보세요.\n오늘 ${n}님이 무엇을 하셨는지, 냉정하게 분석해 드릴게요.`;
 }
 
 /**

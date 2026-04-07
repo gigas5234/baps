@@ -37,11 +37,15 @@ import {
   CoachStreamTtsSentencePipeline,
   type StreamTtsChunk,
 } from "@/lib/coach-stream-tts-pipeline";
+import { CoachTypewriter } from "@/components/common/coach-typewriter";
 import {
+  COACH_ATRIUM_BLURB,
   COACH_PERSONAS_UI,
   COACH_QUICK_CHIP_ACCENT,
   DEFAULT_COACH_PERSONA_ID,
+  buildChatAtriumWelcome,
   coachMeta,
+  personalizeAtriumQuote,
   type CoachPersonaId,
 } from "@/lib/coach-personas";
 import {
@@ -184,6 +188,55 @@ function CoachDataCardView({
   );
 }
 
+/** 아트리움: 코치 탭 → 소개 / 같은 코치 재탭 → 대화 진입 */
+function AtriumCoachTapDeck({
+  coachPersona,
+  disabled,
+  onCoachTap,
+}: {
+  coachPersona: CoachPersonaId;
+  disabled: boolean;
+  onCoachTap: (id: CoachPersonaId) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-col gap-1.5">
+        {COACH_PERSONAS_UI.map((c) => {
+          const selected = coachPersona === c.id;
+          const blurb = COACH_ATRIUM_BLURB[c.id];
+          return (
+            <button
+              key={c.id}
+              type="button"
+              disabled={disabled}
+              onClick={() => onCoachTap(c.id)}
+              className={cn(
+                "rounded-xl border px-3 py-2.5 text-left transition-colors",
+                "text-[11px] font-semibold leading-snug",
+                selected
+                  ? "border-primary bg-primary/12 shadow-sm ring-1 ring-primary/25"
+                  : "border-border bg-muted/30 hover:bg-muted/55 dark:border-white/12",
+                disabled && "pointer-events-none opacity-45"
+              )}
+            >
+              <span className="text-[15px] leading-none" aria-hidden>
+                {c.emoji}
+              </span>{" "}
+              <span>{blurb.label}</span>
+              <span className="mt-0.5 block text-[10px] font-normal text-muted-foreground">
+                {blurb.tagline}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-center text-[10px] text-muted-foreground">
+        코치를 눌러 소개를 보고, 같은 코치를 한 번 더 누르면 대화가 시작됩니다.
+      </p>
+    </div>
+  );
+}
+
 function CoachPersonaPicker({
   value,
   onChange,
@@ -317,7 +370,9 @@ export function ChatFab({
   );
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [bootLoading, setBootLoading] = useState(false);
+  /** null = 환영 문구, 값 = 해당 코치 소개(가운데 패널) */
+  const [atriumFocusCoachId, setAtriumFocusCoachId] =
+    useState<CoachPersonaId | null>(null);
   /** 코치 교대·빠른 요청 영역 접기 (대화 가리지 않도록) */
   const [accessoryExpanded, setAccessoryExpanded] = useState(true);
   /** 사용자가 교대 칩을 접어 둔 경우 — 패널을 다시 열어도 강제 펼침하지 않음 */
@@ -368,6 +423,11 @@ export function ChatFab({
   const streamTtsFinalizedRef = useRef(false);
   const streamTtsHadOutputRef = useRef(false);
   const streamTtsLastCoachRef = useRef<CoachPersonaId | null>(null);
+  /** STT → 부트스트랩(웜업) → TTS 프리로드 순 백그라운드 준비 */
+  const sessionReadinessRef = useRef<Promise<void>>(Promise.resolve());
+  const atriumCommitPromiseRef = useRef<Promise<void> | null>(null);
+
+  const inAtrium = isOpen && messages.length === 0;
 
   const kickStreamTtsDrain = () => {
     if (streamTtsDrainingRef.current) return;
@@ -612,6 +672,9 @@ export function ChatFab({
       lastManualTtsReplayKeyRef.current = "";
       openingCoachSynced.current = null;
       quickChipsBootstrapKeyRef.current = "";
+      sessionReadinessRef.current = Promise.resolve();
+      atriumCommitPromiseRef.current = null;
+      setAtriumFocusCoachId(null);
       setVoiceSessionOpen(false);
       setVoiceListening(false);
       setVoiceGhostText("");
@@ -697,7 +760,32 @@ export function ChatFab({
       }
     });
     return () => window.cancelAnimationFrame(id);
-  }, [messages, bootLoading, isLoading, isOpen]);
+  }, [messages, isLoading, isOpen]);
+
+  /** STT 모듈 → 부트스트랩(서버·LLM 웜업) → TTS 프리로드 — UI 로딩 없음 */
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    sessionReadinessRef.current = (async () => {
+      try {
+        await import("@/lib/chat-azure-stt");
+        if (cancelled) return;
+        await postCoachChat({
+          bootstrap: true,
+          coach_id: DEFAULT_COACH_PERSONA_ID,
+          date: selectedDate,
+          local_hour: new Date().getHours(),
+        });
+        if (cancelled) return;
+        preloadCoachTtsModule();
+      } catch {
+        /* 본문 전송·아트리움 커밋 시 재시도 */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, selectedDate]);
 
   useEffect(() => {
     if (wasChatOpenRef.current && !isOpen) {
@@ -727,129 +815,7 @@ export function ChatFab({
     wasChatOpenRef.current = isOpen;
   }, [isOpen]);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    if (messages.length > 0) return;
-
-    let cancelled = false;
-    setBootLoading(true);
-
-    (async () => {
-      try {
-        const outcome = await postCoachChat({
-          bootstrap: true,
-          coach_id: coachPersona,
-          date: selectedDate,
-          local_hour: new Date().getHours(),
-        });
-        /* 패널 닫힘·deps 재실행 시 이후 setState 금지 */
-        if (cancelled) return;
-
-        const { ok, status, data } = outcome;
-        const d = data as Record<string, unknown>;
-
-        if (status === 401) {
-          const first: ChatMessage[] = [
-            {
-              id: `ai-open-${Date.now()}`,
-              is_ai: true,
-              message:
-                typeof d.error === "string"
-                  ? d.error
-                  : "로그인 후 이용할 수 있어요.",
-              data_card: null,
-              createdAt: Date.now(),
-            },
-          ];
-          messagesRef.current = first;
-          setMessages(first);
-          setQuickChips([]);
-          openingCoachSynced.current = coachPersona;
-        } else if (ok) {
-          const opening =
-            typeof d.opening === "string"
-              ? d.opening
-              : "데이터는 준비됐어. 뭐부터 물어볼래?";
-          const chips: QuickChip[] = Array.isArray(d.quick_chips)
-            ? (d.quick_chips as QuickChip[]).slice(0, 3)
-            : [];
-
-          const first: ChatMessage[] = [
-            {
-              id: `ai-open-${Date.now()}`,
-              is_ai: true,
-              message: opening,
-              data_card: null,
-              createdAt: Date.now(),
-            },
-          ];
-          messagesRef.current = first;
-          setMessages(first);
-          setQuickChips(chips);
-          openingCoachSynced.current = coachPersona;
-        } else {
-          const msg =
-            typeof d.error === "string"
-              ? d.error
-              : "코치를 불러오지 못했어요.";
-          const first: ChatMessage[] = [
-            {
-              id: `ai-open-${Date.now()}`,
-              is_ai: true,
-              message: msg,
-              data_card: null,
-              createdAt: Date.now(),
-            },
-          ];
-          messagesRef.current = first;
-          setMessages(first);
-          setQuickChips([]);
-          openingCoachSynced.current = coachPersona;
-        }
-      } catch {
-        if (!cancelled) {
-          const fail: ChatMessage[] = [
-            {
-              id: `ai-fail-${Date.now()}`,
-              is_ai: true,
-              message:
-                "연결이 꽤 느리네. 한번 더 열어보거나, 입력으로 바로 물어봐.",
-              data_card: null,
-              createdAt: Date.now(),
-            },
-          ];
-          messagesRef.current = fail;
-          setMessages(fail);
-          setQuickChips([
-            {
-              label: "오늘 식단 평가",
-              prompt: "오늘 식단을 팩트로 짧게 평가해줘.",
-            },
-            {
-              label: "남은 칼로리",
-              prompt: "남은 칼로리를 숫자로 말해줘.",
-            },
-            {
-              label: "저녁 추천",
-              prompt: "저녁에 뭐 먹으면 좋을지 추천해줘.",
-            },
-          ]);
-        }
-      } finally {
-        if (!cancelled) {
-          setBootLoading(false);
-          quickChipsBootstrapKeyRef.current = `${selectedDate}|${coachPersona}`;
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isOpen, messages.length, coachPersona, selectedDate]);
-
-  /** 코치·날짜가 바뀌면 부트스트랩으로 빠른 요청 동기화. 대화가 여러 턴이어도 칩만 갱신한다.
-   * bootLoading 은 오프닝 1통만 있을 때만 전체 패널형 로딩(입력 비활성)을 쓴다. */
+  /** 코치·날짜가 바뀌면 부트스트랩으로 빠른 요청 동기화. 대화가 여러 턴이어도 칩만 갱신한다. */
   useEffect(() => {
     if (!isOpen || isLoading) return;
     const m = messagesRef.current;
@@ -864,7 +830,6 @@ export function ChatFab({
     let cancelled = false;
     if (onlyOpening) {
       setQuickChips([]);
-      setBootLoading(true);
     }
 
     const fallbackChips = (): QuickChip[] => [
@@ -976,10 +941,6 @@ export function ChatFab({
             openingCoachSynced.current = coachPersona;
           }
         }
-      } finally {
-        if (!cancelled && onlyOpening) {
-          setBootLoading(false);
-        }
       }
     })();
 
@@ -995,6 +956,114 @@ export function ChatFab({
     targetCal,
   ]);
 
+  const commitAtriumOpeningAndSeedThread = useCallback(async () => {
+    if (messagesRef.current.length > 0) return;
+    if (atriumCommitPromiseRef.current) {
+      await atriumCommitPromiseRef.current;
+      return;
+    }
+    const p = (async () => {
+      await sessionReadinessRef.current.catch(() => {});
+      const outcome = await postCoachChat({
+        bootstrap: true,
+        coach_id: coachPersona,
+        date: selectedDate,
+        local_hour: new Date().getHours(),
+      });
+      const { ok, status, data } = outcome;
+      const d = data as Record<string, unknown>;
+
+      let opening: string;
+      let chips: QuickChip[] = [];
+
+      if (status === 401) {
+        opening =
+          typeof d.error === "string"
+            ? d.error
+            : "로그인 후 이용할 수 있어요.";
+      } else if (!ok) {
+        opening =
+          typeof d.error === "string"
+            ? d.error
+            : "코치를 불러오지 못했어요.";
+      } else {
+        opening =
+          typeof d.opening === "string"
+            ? d.opening
+            : "데이터는 준비됐어. 뭐부터 물어볼래?";
+        chips = Array.isArray(d.quick_chips)
+          ? (d.quick_chips as QuickChip[]).slice(0, 3)
+          : [];
+      }
+
+      const first: ChatMessage[] = [
+        {
+          id: `ai-open-${Date.now()}`,
+          is_ai: true,
+          message: opening,
+          data_card: null,
+          createdAt: Date.now(),
+        },
+      ];
+      messagesRef.current = first;
+      setMessages(first);
+      setQuickChips(chips);
+      quickChipsBootstrapKeyRef.current = `${selectedDate}|${coachPersona}`;
+      openingCoachSynced.current = coachPersona;
+      setAtriumFocusCoachId(null);
+    })().catch(() => {
+      const fail: ChatMessage[] = [
+        {
+          id: `ai-fail-${Date.now()}`,
+          is_ai: true,
+          message:
+            "연결이 꽤 느리네. 한번 더 열어보거나, 입력으로 바로 물어봐.",
+          data_card: null,
+          createdAt: Date.now(),
+        },
+      ];
+      messagesRef.current = fail;
+      setMessages(fail);
+      setQuickChips([
+        {
+          label: "오늘 식단 평가",
+          prompt: "오늘 식단을 팩트로 짧게 평가해줘.",
+        },
+        {
+          label: "남은 칼로리",
+          prompt: "남은 칼로리를 숫자로 말해줘.",
+        },
+        {
+          label: "저녁 추천",
+          prompt: "저녁에 뭐 먹으면 좋을지 추천해줘.",
+        },
+      ]);
+      quickChipsBootstrapKeyRef.current = `${selectedDate}|${coachPersona}`;
+      setAtriumFocusCoachId(null);
+    });
+    atriumCommitPromiseRef.current = p;
+    try {
+      await p;
+    } finally {
+      atriumCommitPromiseRef.current = null;
+    }
+  }, [coachPersona, selectedDate]);
+
+  const handleAtriumCoachTap = useCallback(
+    (id: CoachPersonaId) => {
+      if (messagesRef.current.length > 0) {
+        setCoachPersona(id);
+        return;
+      }
+      if (atriumFocusCoachId === id) {
+        void commitAtriumOpeningAndSeedThread();
+        return;
+      }
+      setCoachPersona(id);
+      setAtriumFocusCoachId(id);
+    },
+    [atriumFocusCoachId, commitAtriumOpeningAndSeedThread]
+  );
 
   /**
    * @param source chip | card — 입력창을 거치지 않고 곧바로 API만 호출. 보내기 버튼은 직접 입력용.
@@ -1004,7 +1073,12 @@ export function ChatFab({
     source: "input" | "chip" | "card" = "input"
   ) => {
     const text = raw.trim();
-    if (!text || isLoading || bootLoading) return;
+    if (!text || isLoading) return;
+
+    if (messagesRef.current.length === 0) {
+      await sessionReadinessRef.current.catch(() => {});
+      await commitAtriumOpeningAndSeedThread();
+    }
 
     stickToBottomRef.current = true;
     setShowJumpToLatest(false);
@@ -1289,8 +1363,7 @@ export function ChatFab({
     if (
       voiceListening ||
       voiceStartInFlightRef.current ||
-      isLoading ||
-      bootLoading
+      isLoading
     ) {
       return;
     }
@@ -1363,7 +1436,7 @@ export function ChatFab({
       unlockCoachTtsAudio();
       preloadCoachTtsModule();
     }
-    if (isLoading || bootLoading) return;
+    if (isLoading) return;
     if (voiceListening) {
       void finalizeVoiceSession("manual");
       return;
@@ -1424,7 +1497,7 @@ export function ChatFab({
                 <ChatTtsMonitorToggle
                   enabled={chatTtsEnabled}
                   onToggle={handleChatTtsToggle}
-                  coachActive={isLoading || bootLoading}
+                  coachActive={isLoading}
                   interSpeakerBridge={ttsInterSpeakerBridge}
                   ttsSegmentActive={ttsBubbleFocus !== null}
                 />
@@ -1445,25 +1518,50 @@ export function ChatFab({
                 onScroll={updateStickToBottomFromScroll}
                 className="h-full min-h-0 space-y-3 overflow-y-auto overscroll-y-contain bg-background p-4 touch-pan-y"
               >
-              {bootLoading && messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center gap-2 px-3 pt-16 text-sm text-muted-foreground">
-                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                  <span>코치가 데이터 보고 입 열 준비 중…</span>
+              {inAtrium ? (
+                <div className="flex min-h-[min(52vh,28rem)] flex-col items-center justify-center px-4 py-6">
+                  <div className="w-full max-w-md text-center">
+                    {atriumFocusCoachId === null ? (
+                      <p className="whitespace-pre-line text-[13px] font-medium leading-relaxed text-foreground/95">
+                        {buildChatAtriumWelcome(listenerDisplayName ?? "")}
+                      </p>
+                    ) : (
+                      <div className="space-y-3 text-left">
+                        <p className="text-center text-3xl" aria-hidden>
+                          {coachMeta(atriumFocusCoachId).emoji}
+                        </p>
+                        <div>
+                          <p className="text-center text-[13px] font-bold text-foreground">
+                            {COACH_ATRIUM_BLURB[atriumFocusCoachId].label}
+                          </p>
+                          <p className="mt-1 text-center text-[11px] font-medium text-muted-foreground">
+                            {COACH_ATRIUM_BLURB[atriumFocusCoachId].tagline}
+                          </p>
+                        </div>
+                        <div className="rounded-xl border border-border/80 bg-muted/25 px-3 py-2.5 dark:border-white/10 dark:bg-muted/15">
+                          <CoachTypewriter
+                            text={personalizeAtriumQuote(
+                              COACH_ATRIUM_BLURB[atriumFocusCoachId].quoteTpl,
+                              listenerDisplayName ?? ""
+                            )}
+                            enabled
+                            msPerGrapheme={28}
+                          >
+                            {(vis) => (
+                              <p className="text-[12px] leading-relaxed text-foreground/90">
+                                「{vis}」
+                              </p>
+                            )}
+                          </CoachTypewriter>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : null}
 
-              {bootLoading && messages.length > 0 ? (
-                <div
-                  className="flex items-center gap-2 rounded-lg border border-dashed border-primary/30 bg-primary/5 px-3 py-2 text-[12px] text-muted-foreground dark:bg-primary/10"
-                  role="status"
-                  aria-live="polite"
-                >
-                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
-                  <span>코치 교대 중 · 빠른 요청 갱신 중…</span>
-                </div>
-              ) : null}
-
-              {messages.map((msg) => {
+              {!inAtrium
+                ? messages.map((msg) => {
                 const ts = msg.createdAt ?? Date.now();
                 const receivedAt = new Date(ts);
                 const hasStream =
@@ -1554,9 +1652,10 @@ export function ChatFab({
                     </div>
                   </div>
                 );
-              })}
+              })
+                : null}
 
-              {isLoading ? (
+              {!inAtrium && isLoading ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
                   <span>팩트 장전 중…</span>
@@ -1644,17 +1743,27 @@ export function ChatFab({
               </button>
               {accessoryExpanded ? (
                 <div className="space-y-2.5 p-3">
-              <CoachPersonaPicker
-                value={coachPersona}
-                onChange={setCoachPersona}
-                disabled={isLoading || bootLoading}
-              />
-              <QuickChipRow
-                chips={quickChips}
-                coachId={coachPersona}
-                disabled={isLoading || bootLoading}
-                onPick={(prompt) => void sendWithText(prompt, "chip")}
-              />
+                  {inAtrium ? (
+                    <AtriumCoachTapDeck
+                      coachPersona={coachPersona}
+                      disabled={isLoading}
+                      onCoachTap={handleAtriumCoachTap}
+                    />
+                  ) : (
+                    <CoachPersonaPicker
+                      value={coachPersona}
+                      onChange={setCoachPersona}
+                      disabled={isLoading}
+                    />
+                  )}
+                  {!inAtrium ? (
+                    <QuickChipRow
+                      chips={quickChips}
+                      coachId={coachPersona}
+                      disabled={isLoading}
+                      onPick={(prompt) => void sendWithText(prompt, "chip")}
+                    />
+                  ) : null}
                 </div>
               ) : null}
               <div className="flex items-center gap-2 px-3 pb-3 pt-1">
@@ -1677,12 +1786,12 @@ export function ChatFab({
                     voiceListening &&
                       "text-foreground/45 caret-transparent selection:bg-transparent dark:text-white/40"
                   )}
-                  disabled={isLoading || bootLoading}
+                  disabled={isLoading}
                 />
                 <button
                   type="button"
                   onClick={handleVoiceWaveClick}
-                  disabled={isLoading || bootLoading}
+                  disabled={isLoading}
                   aria-pressed={voiceSessionOpen || voiceListening}
                   aria-label={
                     voiceListening
@@ -1713,7 +1822,7 @@ export function ChatFab({
                 <button
                   type="button"
                   onClick={() => void sendWithText(input, "input")}
-                  disabled={!input.trim() || isLoading || bootLoading}
+                  disabled={!input.trim() || isLoading}
                   className="rounded-2xl bg-primary p-2.5 text-primary-foreground shadow-lg shadow-primary/45 ring-1 ring-primary/25 disabled:opacity-40 active:scale-95 transition-transform"
                   aria-label="보고 전송"
                 >
