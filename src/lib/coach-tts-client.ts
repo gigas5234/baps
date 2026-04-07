@@ -124,6 +124,13 @@ export type PlayCoachTurnTtsOptions = {
   pauseBetweenSpeakersMs?: number;
   onSegmentFocus?: (focusKey: string) => void;
   onSegmentBlur?: () => void;
+  /** 화자 전환 대기(쉼표) 구간 — UI "교신 중" 등 */
+  onInterSpeakerBridge?: (active: boolean) => void;
+  /**
+   * 세그먼트 시작 전마다 호출. false면 루프·쉼 타이머를 중단하고 종료.
+   * (토글 OFF가 useEffect보다 빨리 반영돼야 할 때 ref 기반)
+   */
+  shouldContinue?: () => boolean;
 };
 
 /** 턴을 구간별로 나눠 코치별 Neural 보이스로 순서대로 재생합니다. */
@@ -139,21 +146,35 @@ export async function playCoachTurnNeuralTts(
   for (let i = 0; i < segs.length; i++) {
     const seg = segs[i]!;
     if (signal?.aborted) return;
+    if (options?.shouldContinue && !options.shouldContinue()) {
+      options?.onInterSpeakerBridge?.(false);
+      options?.onSegmentBlur?.();
+      return;
+    }
 
     if (i > 0 && seg.coachId !== segs[i - 1]!.coachId) {
       options?.onSegmentBlur?.();
+      options?.onInterSpeakerBridge?.(true);
       try {
         await sleep(pauseMs, signal);
       } catch (e) {
+        options?.onInterSpeakerBridge?.(false);
         if (isAbortError(e)) return;
         throw e;
       }
+      options?.onInterSpeakerBridge?.(false);
+    }
+
+    if (options?.shouldContinue && !options.shouldContinue()) {
+      options?.onSegmentBlur?.();
+      return;
     }
 
     options?.onSegmentFocus?.(seg.focusKey);
     try {
       await playCoachNeuralTts(seg.text, seg.coachId, { signal });
     } catch (e) {
+      options?.onInterSpeakerBridge?.(false);
       options?.onSegmentBlur?.();
       if (isAbortError(e)) return;
       return;

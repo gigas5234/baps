@@ -10,6 +10,8 @@ type ChatTtsMonitorToggleProps = {
   onToggle: () => void;
   /** 코치가 응답 생성·스트림 중일 때만 막대 애니메이션 */
   coachActive: boolean;
+  /** 다음 화자 연결 1.5초 대기 등 — EQ를 잠시 켜 “교신 중” 느낌 */
+  interSpeakerBridge?: boolean;
 };
 
 function SonicEqBars({ active }: { active: boolean }) {
@@ -72,8 +74,9 @@ export function ChatTtsMonitorToggle({
   enabled,
   onToggle,
   coachActive,
+  interSpeakerBridge = false,
 }: ChatTtsMonitorToggleProps) {
-  const barsActive = enabled && coachActive;
+  const barsActive = enabled && (coachActive || interSpeakerBridge);
 
   return (
     <button

@@ -157,6 +157,7 @@ export type CoachNeuralTtsConfig = {
   prosodyRate: string;
 };
 
+/** 코치별 Neural 보이스(SSML prosody). 체감 음량 차는 `volume`(예: +1.5dB) 튜닝 후보. */
 export const COACH_NEURAL_TTS: Record<CoachPersonaId, CoachNeuralTtsConfig> =
   {
     /** 다이어트(감시) — 단호·정직·남성 · 약간 빠르게 */

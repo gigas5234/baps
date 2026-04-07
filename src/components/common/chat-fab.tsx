@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   MessageCircle,
@@ -42,6 +48,7 @@ import {
   type AzureSttSession,
 } from "@/lib/chat-azure-stt";
 import { ChatTtsMonitorToggle } from "@/components/common/chat-tts-monitor";
+import { unlockCoachTtsAudio } from "@/lib/chat-audio-unlock";
 import {
   playCoachTurnNeuralTts,
   stopCoachNeuralTtsPlayback,
@@ -314,6 +321,8 @@ export function ChatFab({
     messageId: string;
     segmentKey: string;
   } | null>(null);
+  /** 코치(`coachId`) 바뀔 때 1.5초 쉼·타이머 구간 — abort 시 즉시 해제 */
+  const [ttsInterSpeakerBridge, setTtsInterSpeakerBridge] = useState(false);
   const wasChatOpenRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   /** send 직후에도 최신 대화로 history를 만들기 위함 (칩/카드는 입력 없이 즉시 API) */
@@ -336,10 +345,21 @@ export function ChatFab({
     ttsSessionAbortRef.current = null;
     stopCoachNeuralTtsPlayback();
     setTtsBubbleFocus(null);
+    setTtsInterSpeakerBridge(false);
   }, []);
 
-  useEffect(() => {
+  /** 토글 OFF 등 상태 반영을 paint 전에 처리 — 세그먼트 루프·sleep 즉시 끊김 보조 */
+  useLayoutEffect(() => {
     if (!chatTtsEnabled) stopActiveCoachTts();
+  }, [chatTtsEnabled, stopActiveCoachTts]);
+
+  const handleChatTtsToggle = useCallback(() => {
+    if (chatTtsEnabled) {
+      stopActiveCoachTts();
+    } else {
+      unlockCoachTtsAudio();
+    }
+    setChatTtsEnabled((v) => !v);
   }, [chatTtsEnabled, stopActiveCoachTts]);
 
   useEffect(() => {
@@ -691,6 +711,11 @@ export function ChatFab({
     const text = raw.trim();
     if (!text || isLoading || bootLoading) return;
 
+    /* Autoplay: 네트워크 대기 전 같은 제스처에서 오디오 맥락을 연다 */
+    if (chatTtsEnabledRef.current) {
+      unlockCoachTtsAudio();
+    }
+
     const prior = messagesRef.current;
     const userMsg: ChatMessage = {
       id: `u-${Date.now()}-${source}`,
@@ -833,14 +858,17 @@ export function ChatFab({
         void playCoachTurnNeuralTts(coachTurn, coachPersona, {
           signal: ac.signal,
           pauseBetweenSpeakersMs: 1500,
+          shouldContinue: () => chatTtsEnabledRef.current,
           onSegmentFocus: (segmentKey) =>
             setTtsBubbleFocus({ messageId: aiMsgId, segmentKey }),
           onSegmentBlur: () => setTtsBubbleFocus(null),
+          onInterSpeakerBridge: setTtsInterSpeakerBridge,
         }).finally(() => {
           if (ttsSessionAbortRef.current === ac) {
             ttsSessionAbortRef.current = null;
           }
           setTtsBubbleFocus(null);
+          setTtsInterSpeakerBridge(false);
         });
       }
       const chips = normalized.quick_chips ?? [];
@@ -982,6 +1010,9 @@ export function ChatFab({
 
   const handleVoiceWaveClick = () => {
     stopActiveCoachTts();
+    if (chatTtsEnabledRef.current) {
+      unlockCoachTtsAudio();
+    }
     if (isLoading || bootLoading) return;
     if (voiceListening) {
       void finalizeVoiceSession("manual");
@@ -1043,12 +1074,22 @@ export function ChatFab({
                     호르몬 분석 중…
                   </p>
                 ) : null}
+                {chatTtsEnabled && ttsInterSpeakerBridge ? (
+                  <p
+                    className="mt-1 font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-teal-600/85 animate-pulse dark:text-teal-300/80"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    다음 코치 교신 중…
+                  </p>
+                ) : null}
               </div>
               <div className="flex shrink-0 items-start gap-1 pt-0.5">
                 <ChatTtsMonitorToggle
                   enabled={chatTtsEnabled}
-                  onToggle={() => setChatTtsEnabled((v) => !v)}
+                  onToggle={handleChatTtsToggle}
                   coachActive={isLoading || bootLoading}
+                  interSpeakerBridge={ttsInterSpeakerBridge}
                 />
                 <button
                   type="button"
