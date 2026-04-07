@@ -18,7 +18,7 @@ import {
   type DraggableSyntheticListeners,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { UtensilsCrossed, X } from "lucide-react";
+import { ChevronDown, UtensilsCrossed, X } from "lucide-react";
 import type { Meal } from "@/types/database";
 import { cn } from "@/lib/utils";
 import { foodEmojiForName } from "@/lib/food-emoji";
@@ -29,6 +29,7 @@ import {
   mealSlotDropReassuranceLabel,
   type MealSlot,
 } from "@/lib/meal-slots";
+import { formatMacroGrams, formatMealItemKcal } from "@/lib/meal-macros";
 import { traysIntoBuckets, sumTrayCal, slotForTray } from "@/lib/meal-tray";
 
 interface MealTimelineProps {
@@ -307,6 +308,10 @@ export function MealTimeline({
   );
 
   const buckets = useMemo(() => traysIntoBuckets(meals), [meals]);
+  /** 다품 트레이에서 음식 목록 펼침 — meal_group_id 기준 */
+  const [trayFoodDetailOpen, setTrayFoodDetailOpen] = useState<
+    Record<string, boolean>
+  >({});
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeFromSlot, setActiveFromSlot] = useState<MealSlot | null>(
     null
@@ -403,7 +408,7 @@ export function MealTimeline({
             "dark:border-primary/35 dark:bg-primary/15"
           )}
         >
-          탄 {carbsG}g
+          탄 {formatMacroGrams(carbsG)}g
         </span>
         <span
           className={cn(
@@ -411,7 +416,7 @@ export function MealTimeline({
             "dark:border-scanner/40 dark:bg-scanner/15"
           )}
         >
-          단 {proteinG}g
+          단 {formatMacroGrams(proteinG)}g
         </span>
         <span
           className={cn(
@@ -419,7 +424,7 @@ export function MealTimeline({
             "dark:border-amber-400/40 dark:bg-amber-400/12 dark:text-amber-200"
           )}
         >
-          지 {fatG}g
+          지 {formatMacroGrams(fatG)}g
         </span>
       </div>
     );
@@ -528,13 +533,59 @@ export function MealTimeline({
             {multi ? (
               <>
                 {macroPills}
-                <ul className="mt-1.5 space-y-0.5 text-[11px] text-muted-foreground">
-                  {tray.map((m) => (
-                    <li key={m.id} className="tabular-nums">
-                      • {m.food_name} ({m.cal}kcal)
-                    </li>
-                  ))}
-                </ul>
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setTrayFoodDetailOpen((prev) => ({
+                      ...prev,
+                      [groupId]: !prev[groupId],
+                    }));
+                  }}
+                  className={cn(
+                    "mt-1.5 flex w-full min-w-0 items-center justify-between gap-2 rounded-lg px-1 py-1.5 text-left",
+                    "text-[11px] font-semibold text-primary transition-colors",
+                    "hover:bg-primary/8 dark:hover:bg-primary/12",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  )}
+                  aria-expanded={Boolean(trayFoodDetailOpen[groupId])}
+                >
+                  <span className="min-w-0 truncate">
+                    {trayFoodDetailOpen[groupId]
+                      ? `음식 ${tray.length}품 접기`
+                      : `음식 ${tray.length}품 상세 보기`}
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      "h-3.5 w-3.5 shrink-0 opacity-80 transition-transform duration-200",
+                      trayFoodDetailOpen[groupId] && "rotate-180"
+                    )}
+                    aria-hidden
+                  />
+                </button>
+                <AnimatePresence initial={false}>
+                  {trayFoodDetailOpen[groupId] ? (
+                    <motion.div
+                      key={`food-detail-${groupId}`}
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+                    >
+                      <ul className="space-y-0.5 pb-0.5 text-[11px] text-muted-foreground">
+                        {tray.map((m) => (
+                          <li
+                            key={m.id}
+                            className="break-words pl-0.5 tabular-nums leading-snug"
+                          >
+                            • {m.food_name} ({formatMealItemKcal(m.cal)}kcal)
+                          </li>
+                        ))}
+                      </ul>
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
               </>
             ) : (
               macroPills

@@ -4,7 +4,10 @@ import {
   parseCoachDelimitedStream,
 } from "@/lib/coach-delimited-stream";
 import { parseCoachPersonaId } from "@/lib/coach-personas";
-import { parseCoachJson } from "@/lib/coach-json-parse";
+import {
+  parseBootstrapStreamLenient,
+  parseCoachJson,
+} from "@/lib/coach-json-parse";
 import { mealUtcBoundsForCoachApi } from "@/lib/local-date";
 
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -127,7 +130,7 @@ export async function postCoachChat(
       return {
         ok: true,
         status: res.status,
-        data: parseCoachJson<unknown>(full),
+        data: parseBootstrapStreamLenient(full),
       };
     }
     const reply = delimitedStreamToCoachChatReply(full, leadPersonaId);

@@ -1,5 +1,22 @@
 import type { Meal } from "@/types/database";
 
+/** 탄·단·지 g 표시 — 부동소수점 오차 제거, 필요 시 소수 첫째 자리까지 */
+export function formatMacroGrams(g: number): string {
+  const n = Number(g);
+  if (!Number.isFinite(n)) return "0";
+  const rounded = Math.round(n * 10) / 10;
+  const s = rounded.toFixed(1);
+  return s.endsWith(".0") ? s.slice(0, -2) : s;
+}
+
+/** 식사 항목 kcal 한 줄 표시 */
+export function formatMealItemKcal(kcal: number): string {
+  const n = Number(kcal);
+  if (!Number.isFinite(n)) return "0";
+  if (Number.isInteger(n)) return String(Math.round(n));
+  return (Math.round(n * 10) / 10).toFixed(1).replace(/\.0$/, "");
+}
+
 export interface MacroTotals {
   carbsG: number;
   proteinG: number;
