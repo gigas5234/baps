@@ -23,8 +23,10 @@ import type { CoachStreamSegment } from "@/lib/coach-delimited-stream";
 import { postCoachChat } from "@/lib/coach-chat-client";
 import { trackBapsEvent } from "@/lib/analytics";
 import {
+  coachTurnSegmentForReplay,
   encodeCoachTurnForHistory,
   normalizeCoachReply,
+  plainCoachTextForTts,
   type CoachStrategicTurn,
   type DataCardPayload,
   type QuickChip,
@@ -50,6 +52,7 @@ import {
 import { ChatTtsMonitorToggle } from "@/components/common/chat-tts-monitor";
 import { unlockCoachTtsAudio } from "@/lib/chat-audio-unlock";
 import {
+  playCoachNeuralTts,
   playCoachTurnNeuralTts,
   stopCoachNeuralTtsPlayback,
 } from "@/lib/coach-tts-client";
@@ -331,6 +334,8 @@ export function ChatFab({
   const openingCoachSynced = useRef<CoachPersonaId | null>(null);
   /** 마지막으로 빠른 요청을 맞춘 `날짜|코치` — 코치·날짜 바뀌면 부트스트랩으로 칩 재수신 */
   const quickChipsBootstrapKeyRef = useRef<string>("");
+  /** 말풍선 탭 재생 — 같은 메시지·같은 구간 연타 시 한 번만 (다른 말풍선 다누르면 같은 줄도 다시 가능) */
+  const lastManualTtsReplayKeyRef = useRef<string>("");
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -350,8 +355,67 @@ export function ChatFab({
 
   /** 토글 OFF 등 상태 반영을 paint 전에 처리 — 세그먼트 루프·sleep 즉시 끊김 보조 */
   useLayoutEffect(() => {
-    if (!chatTtsEnabled) stopActiveCoachTts();
+    if (!chatTtsEnabled) {
+      stopActiveCoachTts();
+      lastManualTtsReplayKeyRef.current = "";
+    }
   }, [chatTtsEnabled, stopActiveCoachTts]);
+
+  const startManualSingleCoachTts = useCallback(
+    (
+      messageId: string,
+      focusKey: string,
+      text: string,
+      voiceCoachId: CoachPersonaId
+    ) => {
+      const dedupeKey = `${messageId}|${focusKey}`;
+      if (lastManualTtsReplayKeyRef.current === dedupeKey) return;
+      const trimmed = text.trim();
+      if (!trimmed) return;
+
+      lastManualTtsReplayKeyRef.current = dedupeKey;
+      unlockCoachTtsAudio();
+      stopActiveCoachTts();
+
+      const ac = new AbortController();
+      ttsSessionAbortRef.current = ac;
+      setTtsBubbleFocus({ messageId, segmentKey: focusKey });
+
+      void playCoachNeuralTts(trimmed, voiceCoachId, {
+        signal: ac.signal,
+      }).finally(() => {
+        if (ttsSessionAbortRef.current === ac) {
+          ttsSessionAbortRef.current = null;
+        }
+        setTtsBubbleFocus(null);
+      });
+    },
+    [stopActiveCoachTts]
+  );
+
+  const handleCoachBubbleTtsReplay = useCallback(
+    (messageId: string, turn: CoachStrategicTurn, focusKey: string) => {
+      if (!chatTtsEnabled) return;
+      const seg = coachTurnSegmentForReplay(turn, coachPersona, focusKey);
+      if (!seg?.text) return;
+      startManualSingleCoachTts(
+        messageId,
+        focusKey,
+        seg.text,
+        seg.coachId
+      );
+    },
+    [chatTtsEnabled, coachPersona, startManualSingleCoachTts]
+  );
+
+  const handleOpeningBubbleTtsReplay = useCallback(
+    (messageId: string, rawText: string, voiceCoachId: CoachPersonaId) => {
+      if (!chatTtsEnabled) return;
+      const plain = plainCoachTextForTts(rawText);
+      startManualSingleCoachTts(messageId, "opening", plain, voiceCoachId);
+    },
+    [chatTtsEnabled, startManualSingleCoachTts]
+  );
 
   const handleChatTtsToggle = useCallback(() => {
     const next = !chatTtsEnabled;
@@ -368,6 +432,7 @@ export function ChatFab({
   useEffect(() => {
     if (!isOpen) {
       stopActiveCoachTts();
+      lastManualTtsReplayKeyRef.current = "";
       openingCoachSynced.current = null;
       quickChipsBootstrapKeyRef.current = "";
       setVoiceSessionOpen(false);
@@ -1166,12 +1231,31 @@ export function ChatFab({
                               : null
                           }
                           primaryCoachId={coachPersona}
+                          ttsTapReplayEnabled={chatTtsEnabled}
+                          onTtsReplaySegment={(focusKey) =>
+                            handleCoachBubbleTtsReplay(
+                              msg.id,
+                              msg.coachTurn!,
+                              focusKey
+                            )
+                          }
                         />
                       ) : (
                         <KakaoOpeningCoachMessage
                           text={msg.message}
                           coachId={coachPersona}
                           receivedAt={receivedAt}
+                          ttsTapReplayEnabled={chatTtsEnabled}
+                          onTtsReplay={
+                            chatTtsEnabled
+                              ? () =>
+                                  handleOpeningBubbleTtsReplay(
+                                    msg.id,
+                                    msg.message,
+                                    coachPersona
+                                  )
+                              : undefined
+                          }
                         />
                       )}
                       {msg.data_card ? (

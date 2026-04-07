@@ -134,6 +134,24 @@ export function coachTurnTtsSegments(
   return out;
 }
 
+/** 말풍선 탭 재생용 — `focusKey`에 해당하는 단일 TTS 구간 */
+export function coachTurnSegmentForReplay(
+  turn: CoachStrategicTurn,
+  primaryCoach: CoachPersonaId,
+  focusKey: string
+): CoachTurnTtsSegment | null {
+  return (
+    coachTurnTtsSegments(turn, primaryCoach).find(
+      (s) => s.focusKey === focusKey
+    ) ?? null
+  );
+}
+
+/** 오프닝·플레인 문자열용 — `**` 마크다운 제거 */
+export function plainCoachTextForTts(raw: string): string {
+  return stripMdForSpeech(raw);
+}
+
 /** 한 덩어리로 이어 붙인 읽기 텍스트 (보이스 구분 없이 미리보기용 등) */
 export function coachTurnSpeakableText(turn: CoachStrategicTurn): string {
   return coachTurnTtsSegments(turn, DEFAULT_COACH_PERSONA_ID)

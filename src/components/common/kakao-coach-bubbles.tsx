@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import { useMemo } from "react";
 import {
   filterDelimitedSegmentsForInvites,
@@ -141,6 +141,9 @@ export function SingleKakaoCoachRow({
   bubbleVariant = "default",
   ttsActive = false,
   speakingAccent,
+  ttsTapReplayEnabled = false,
+  onTtsReplay,
+  ttsReplayLabel,
   children,
 }: {
   displayName: string;
@@ -151,14 +154,40 @@ export function SingleKakaoCoachRow({
   /** TTS가 이 말풍선을 읽는 중 — 네온·미세 흔들림 */
   ttsActive?: boolean;
   speakingAccent?: CoachTtsVisualAccent;
+  /** TTS ON일 때 행 탭으로 해당 말만 다시 재생 */
+  ttsTapReplayEnabled?: boolean;
+  onTtsReplay?: () => void;
+  ttsReplayLabel?: string;
   children: ReactNode;
 }) {
+  const tapReplay = Boolean(ttsTapReplayEnabled && onTtsReplay);
+  const onRowKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (!tapReplay) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onTtsReplay?.();
+    }
+  };
   return (
     <div
       className={cn(
         "flex max-w-[min(100%,20.5rem)] items-start gap-1.5",
-        ttsActive && "coach-tts-speaking-row"
+        ttsActive && "coach-tts-speaking-row",
+        tapReplay &&
+          "cursor-pointer rounded-xl px-0.5 py-0.5 -mx-0.5 -my-0.5 transition-[opacity,background-color] active:opacity-[0.88] hover:bg-muted/35"
       )}
+      role={tapReplay ? "button" : undefined}
+      tabIndex={tapReplay ? 0 : undefined}
+      aria-label={tapReplay ? (ttsReplayLabel ?? "이 말 다시 듣기") : undefined}
+      onClick={
+        tapReplay
+          ? (e) => {
+              e.preventDefault();
+              onTtsReplay?.();
+            }
+          : undefined
+      }
+      onKeyDown={onRowKeyDown}
     >
       <div
         className={cn(
@@ -330,10 +359,14 @@ export function KakaoOpeningCoachMessage({
   text,
   coachId,
   receivedAt,
+  ttsTapReplayEnabled = false,
+  onTtsReplay,
 }: {
   text: string;
   coachId: CoachPersonaId;
   receivedAt: Date;
+  ttsTapReplayEnabled?: boolean;
+  onTtsReplay?: () => void;
 }) {
   const m = coachMeta(coachId);
   const timeLabel = formatKoreanChatTime(receivedAt);
@@ -343,6 +376,9 @@ export function KakaoOpeningCoachMessage({
       emoji={m.emoji}
       avatarClass={COACH_AVATAR_SURFACE[coachId]}
       timeLabel={timeLabel}
+      ttsTapReplayEnabled={ttsTapReplayEnabled}
+      onTtsReplay={onTtsReplay}
+      ttsReplayLabel={`${m.label} 코치 인사 다시 듣기`}
     >
       <CoachTypewriter text={text} enabled msPerGrapheme={TYPE_MS}>
         {(vis) => (
@@ -360,6 +396,8 @@ export function KakaoStrategicTurnView({
   receivedAt,
   ttsFocusSegment = null,
   primaryCoachId = DEFAULT_COACH_PERSONA_ID,
+  ttsTapReplayEnabled = false,
+  onTtsReplaySegment,
 }: {
   turn: CoachStrategicTurn;
   receivedAt: Date;
@@ -367,6 +405,9 @@ export function KakaoStrategicTurnView({
   ttsFocusSegment?: string | null;
   /** 로스트 단독 행·분석·미션 보이스 기준 코치 */
   primaryCoachId?: CoachPersonaId;
+  /** TTS ON일 때 말풍선 탭 → 해당 구간만 재생 */
+  ttsTapReplayEnabled?: boolean;
+  onTtsReplaySegment?: (focusKey: string) => void;
 }) {
   const timeLabel = formatKoreanChatTime(receivedAt);
   const quips = activeCoachQuips(turn);
@@ -416,6 +457,13 @@ export function KakaoStrategicTurnView({
         timeLabel={timeLabel}
         ttsActive={ttsFocusSegment === "analysis"}
         speakingAccent={TTS_ANALYSIS_VISUAL}
+        ttsTapReplayEnabled={ttsTapReplayEnabled}
+        onTtsReplay={
+          onTtsReplaySegment
+            ? () => onTtsReplaySegment("analysis")
+            : undefined
+        }
+        ttsReplayLabel="전술 요약 다시 듣기"
       >
         <CoachTypewriter
           text={turn.analysis}
@@ -446,6 +494,13 @@ export function KakaoStrategicTurnView({
                 timeLabel={timeLabel}
                 ttsActive={ttsFocusSegment === qKey}
                 speakingAccent={COACH_TTS_VISUAL[q.persona_id]}
+                ttsTapReplayEnabled={ttsTapReplayEnabled}
+                onTtsReplay={
+                  onTtsReplaySegment
+                    ? () => onTtsReplaySegment(qKey)
+                    : undefined
+                }
+                ttsReplayLabel={`${m.label} 코치 말 다시 듣기`}
               >
                 <CoachTypewriter
                   text={q.zinger}
@@ -471,6 +526,13 @@ export function KakaoStrategicTurnView({
           timeLabel={timeLabel}
           ttsActive={ttsFocusSegment === "roast"}
           speakingAccent={COACH_TTS_VISUAL[primaryCoachId]}
+          ttsTapReplayEnabled={ttsTapReplayEnabled}
+          onTtsReplay={
+            onTtsReplaySegment
+              ? () => onTtsReplaySegment("roast")
+              : undefined
+          }
+          ttsReplayLabel={`${coachMeta(primaryCoachId).label} 코치 말 다시 듣기`}
         >
           <CoachTypewriter
             text={turn.roast!.trim()}
@@ -495,6 +557,13 @@ export function KakaoStrategicTurnView({
         bubbleVariant="mission"
         ttsActive={ttsFocusSegment === "mission"}
         speakingAccent={TTS_MISSION_VISUAL}
+        ttsTapReplayEnabled={ttsTapReplayEnabled}
+        onTtsReplay={
+          onTtsReplaySegment
+            ? () => onTtsReplaySegment("mission")
+            : undefined
+        }
+        ttsReplayLabel="미션 다시 듣기"
       >
         <CoachTypewriter
           text={turn.mission}
