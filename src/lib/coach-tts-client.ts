@@ -20,6 +20,15 @@ import {
 
 const MAX_LEN = 4000;
 
+/**
+ * `SynthesizingAudioCompleted` 이후에도 OS/스피커 버퍼가 남을 수 있어,
+ * 다음 문장이 겹치지 않도록 짧게 대기합니다.
+ */
+const BROWSER_TTS_SPEAKER_DRAIN_MS = 140;
+
+/** 모든 `playCoachNeuralTts` 호출을 한 줄로 — 스트림·턴별·말풍선 탭 간 동시 재생 방지 */
+let coachTtsPlayChain: Promise<void> = Promise.resolve();
+
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
@@ -59,7 +68,24 @@ export async function playCoachNeuralTts(
   if (!t) return;
   if (options?.signal?.aborted) return;
 
-  /** 직전 합성·오디오가 남아 있으면 겹침 — 스트림 큐·조기 완료 콜백 대비 */
+  const job = coachTtsPlayChain.then(() =>
+    playCoachNeuralTtsQueued(t, coachId, options)
+  );
+  coachTtsPlayChain = job.then(
+    () => undefined,
+    () => undefined
+  );
+  await job;
+}
+
+async function playCoachNeuralTtsQueued(
+  t: string,
+  coachId: CoachPersonaId,
+  options?: { signal?: AbortSignal }
+): Promise<void> {
+  if (options?.signal?.aborted) return;
+
+  /** 새 응답·말풍선 탭으로 강제 중단할 때 겹침 방지 (직렬 큐 + 정리) */
   stopCoachNeuralTtsPlayback();
 
   try {
@@ -185,6 +211,7 @@ async function playCoachNeuralTtsWithBrowserSdk(
         }
       );
     });
+    await sleep(BROWSER_TTS_SPEAKER_DRAIN_MS, signal);
   } catch (e) {
     dispose();
     throw e;

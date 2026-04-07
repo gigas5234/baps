@@ -405,8 +405,20 @@ export function ChatFab({
         }
       } finally {
         streamTtsDrainingRef.current = false;
-        streamTtsLastCoachRef.current = null;
+        const ac = ttsSessionAbortRef.current;
+        const resume =
+          ac != null &&
+          !ac.signal.aborted &&
+          chatTtsEnabledRef.current &&
+          (streamTtsQueueRef.current.length > 0 ||
+            !streamTtsFinalizedRef.current);
+        if (!resume) {
+          streamTtsLastCoachRef.current = null;
+        }
         setTtsInterSpeakerBridge(false);
+        if (resume) {
+          kickStreamTtsDrain();
+        }
       }
     })();
   };
