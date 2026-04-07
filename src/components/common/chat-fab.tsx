@@ -37,6 +37,10 @@ import {
   KakaoStrategicTurnView,
 } from "@/components/common/kakao-coach-bubbles";
 import { formatKoreanChatTime } from "@/lib/coach-chat-time";
+import {
+  startAzureChatStt,
+  type AzureSttSession,
+} from "@/lib/chat-azure-stt";
 
 interface ChatMessage {
   id: string;
@@ -62,9 +66,6 @@ interface ChatFabProps {
   /** 음성 세션 안내 문구 (예: 홍길동 → "홍길동님, 듣고 있어요") */
   listenerDisplayName?: string | null;
 }
-
-/** STT 연동 전 · 디자인 검증용 데모 확정 문장 (API 연결 시 제거) */
-const VOICE_STT_DEMO_FINAL = "오늘 점심은 김치찌개를 먹었어요";
 
 function listenerPresenceLine(name?: string | null): string {
   const n = name?.trim();
@@ -292,8 +293,12 @@ export function ChatFab({
   const [voiceSessionOpen, setVoiceSessionOpen] = useState(false);
   const [voicePressing, setVoicePressing] = useState(false);
   const [voiceGhostText, setVoiceGhostText] = useState("");
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const voiceHoldDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const suppressVoiceToggleClickRef = useRef(false);
+  /** true이면 길게 누르기(200ms↑) 구간에 들어간 상태 */
+  const voiceEngagedRef = useRef(false);
+  const sttControllerRef = useRef<AzureSttSession | null>(null);
   const wasChatOpenRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   /** send 직후에도 최신 대화로 history를 만들기 위함 (칩/카드는 입력 없이 즉시 API) */
@@ -314,26 +319,17 @@ export function ChatFab({
       setVoiceSessionOpen(false);
       setVoicePressing(false);
       setVoiceGhostText("");
+      setVoiceError(null);
+      voiceEngagedRef.current = false;
+      const stt = sttControllerRef.current;
+      sttControllerRef.current = null;
+      if (stt) void stt.stop().catch(() => {});
       if (voiceHoldDelayRef.current) {
         clearTimeout(voiceHoldDelayRef.current);
         voiceHoldDelayRef.current = null;
       }
     }
   }, [isOpen]);
-
-  /** 홀드 중 데모 interim 텍스트 (Azure partial 결과 대체) */
-  useEffect(() => {
-    if (!voicePressing) return;
-    const full = VOICE_STT_DEMO_FINAL;
-    let i = 0;
-    setVoiceGhostText("");
-    const t = window.setInterval(() => {
-      i += 1;
-      setVoiceGhostText(full.slice(0, Math.min(i, full.length)));
-      if (i >= full.length) clearInterval(t);
-    }, 36);
-    return () => clearInterval(t);
-  }, [voicePressing]);
 
   useEffect(() => {
     if (isOpen) setAccessoryExpanded(true);
@@ -832,18 +828,62 @@ export function ChatFab({
     clearVoiceHoldDelay();
     voiceHoldDelayRef.current = setTimeout(() => {
       voiceHoldDelayRef.current = null;
+      voiceEngagedRef.current = true;
       setVoicePressing(true);
+      setVoiceGhostText("");
+      setVoiceError(null);
+      void (async () => {
+        try {
+          const ctrl = await startAzureChatStt({
+            onInterim: (t) => setVoiceGhostText(t),
+            onError: (m) => setVoiceError(m),
+          });
+          if (!voiceEngagedRef.current) {
+            await ctrl.stop();
+            return;
+          }
+          sttControllerRef.current = ctrl;
+        } catch (e) {
+          const msg =
+            e instanceof Error ? e.message : "음성 인식을 시작하지 못했어요";
+          setVoiceError(msg);
+          voiceEngagedRef.current = false;
+          setVoicePressing(false);
+          setVoiceGhostText("");
+        }
+      })();
     }, 200);
   };
 
   const onVoicePointerUpEnd = () => {
     clearVoiceHoldDelay();
-    if (voicePressing) {
+    const engaged = voiceEngagedRef.current;
+    voiceEngagedRef.current = false;
+
+    const ctrl = sttControllerRef.current;
+    sttControllerRef.current = null;
+
+    if (engaged || ctrl) {
       suppressVoiceToggleClickRef.current = true;
-      setInput(VOICE_STT_DEMO_FINAL);
     }
+
     setVoicePressing(false);
-    setVoiceGhostText("");
+
+    if (ctrl) {
+      void (async () => {
+        try {
+          await ctrl.stop();
+          const text = ctrl.getLatestText().trim();
+          if (text) setInput(text);
+        } catch {
+          setVoiceError("음성 인식을 마무리하지 못했어요");
+        } finally {
+          setVoiceGhostText("");
+        }
+      })();
+    } else {
+      setVoiceGhostText("");
+    }
   };
 
   const onVoiceClick = () => {
@@ -853,10 +893,17 @@ export function ChatFab({
     }
     setVoiceSessionOpen((open) => {
       const next = !open;
-      if (!next) {
+      if (next) {
+        setVoiceError(null);
+      } else {
+        voiceEngagedRef.current = false;
+        clearVoiceHoldDelay();
+        const stt = sttControllerRef.current;
+        sttControllerRef.current = null;
+        if (stt) void stt.stop().catch(() => {});
         setVoicePressing(false);
         setVoiceGhostText("");
-        clearVoiceHoldDelay();
+        setVoiceError(null);
       }
       return next;
     });
@@ -1154,6 +1201,11 @@ export function ChatFab({
                   <Send className="w-4 h-4" />
                 </button>
               </div>
+              {voiceError ? (
+                <p className="px-3 pb-2 text-[11px] leading-snug text-destructive">
+                  {voiceError}
+                </p>
+              ) : null}
             </div>
           </motion.div>
         )}
