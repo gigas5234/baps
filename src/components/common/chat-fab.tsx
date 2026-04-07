@@ -344,6 +344,7 @@ export function ChatFab({
 
   useEffect(() => {
     if (!isOpen) {
+      stopActiveCoachTts();
       openingCoachSynced.current = null;
       quickChipsBootstrapKeyRef.current = "";
       setVoiceSessionOpen(false);
@@ -359,7 +360,7 @@ export function ChatFab({
       mic?.getTracks().forEach((t) => t.stop());
       setVoiceHudStream(null);
     }
-  }, [isOpen]);
+  }, [isOpen, stopActiveCoachTts]);
 
   useEffect(() => {
     if (isOpen) setAccessoryExpanded(true);
