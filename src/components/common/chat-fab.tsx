@@ -65,6 +65,26 @@ import { unlockCoachTtsAudio } from "@/lib/chat-audio-unlock";
 import { stopCoachNeuralTtsPlayback } from "@/lib/coach-tts-playback";
 import { VoiceSessionHudFrame } from "@/components/common/voice-session-hud-frame";
 
+/** 한 번 완료되면 다음부터 코치 아트리움(환영·선택 설명) 생략 */
+const ATRIUM_ONBOARDING_STORAGE_KEY = "baps.chat.atriumOnboardingDone";
+
+function readAtriumOnboardingDone(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(ATRIUM_ONBOARDING_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function persistAtriumOnboardingDone(): void {
+  try {
+    window.localStorage.setItem(ATRIUM_ONBOARDING_STORAGE_KEY, "1");
+  } catch {
+    /* ignore */
+  }
+}
+
 /** TTS 재생은 동적 청크 — 초기 번들·LCP 완화. `stop`은 `coach-tts-playback` 동기 모듈. */
 type CoachTtsModule = typeof import("@/lib/coach-tts-client");
 let coachTtsModPromise: Promise<CoachTtsModule> | null = null;
@@ -386,6 +406,13 @@ export function ChatFab({
   /** null = 환영 문구, 값 = 해당 코치 소개(가운데 패널) */
   const [atriumFocusCoachId, setAtriumFocusCoachId] =
     useState<CoachPersonaId | null>(null);
+  /**
+   * true: 코치 아트리움(가운데 환영/소개) 숨기고 채팅 레이아웃(스크롤 영역 상단) 사용.
+   * localStorage와 동기 — 온보딩 완료 시 항상 true로 시작.
+   */
+  const [enteredChatMode, setEnteredChatMode] = useState(readAtriumOnboardingDone);
+  /** 마이크 권한 대기 중에도 음성 HUD(듣는 중 테두리) 표시 */
+  const [voiceMicArming, setVoiceMicArming] = useState(false);
   /** 코치 교대·빠른 요청 영역 접기 (대화 가리지 않도록) */
   const [accessoryExpanded, setAccessoryExpanded] = useState(true);
   /** 사용자가 교대 칩을 접어 둔 경우 — 패널을 다시 열어도 강제 펼침하지 않음 */
@@ -440,7 +467,9 @@ export function ChatFab({
   const sessionReadinessRef = useRef<Promise<void>>(Promise.resolve());
   const atriumCommitPromiseRef = useRef<Promise<void> | null>(null);
 
-  const inAtrium = isOpen && messages.length === 0;
+  /** 메시지 없어도 입력·음성 시작 시 채팅 화면으로 전환 (아트리움 가운데 패널만 끔) */
+  const inAtrium =
+    isOpen && messages.length === 0 && !enteredChatMode;
 
   const kickStreamTtsDrain = () => {
     if (streamTtsDrainingRef.current) return;
@@ -679,6 +708,35 @@ export function ChatFab({
     setChatTtsEnabled(next);
   }, [chatTtsEnabled, stopActiveCoachTts]);
 
+  const markAtriumOnboardingComplete = useCallback(() => {
+    persistAtriumOnboardingDone();
+    setEnteredChatMode(true);
+  }, []);
+
+  /** 온보딩 미완료 상태에서 패널만 닫으면 다음에 다시 아트리움 표시 */
+  useEffect(() => {
+    if (isOpen) return;
+    if (readAtriumOnboardingDone()) return;
+    setEnteredChatMode(false);
+    setAtriumFocusCoachId(null);
+  }, [isOpen]);
+
+  /** 다른 탭에서 완료 저장 등 localStorage와 동기 */
+  useEffect(() => {
+    if (!isOpen) return;
+    if (readAtriumOnboardingDone()) {
+      setEnteredChatMode(true);
+    }
+  }, [isOpen]);
+
+  /** 입력·음성으로 채팅 모드 진입 시(메시지 없을 때) 스크롤을 맨 위로 */
+  useEffect(() => {
+    if (!isOpen || !enteredChatMode || messages.length > 0) return;
+    requestAnimationFrame(() => {
+      messagesScrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
+    });
+  }, [isOpen, enteredChatMode, messages.length]);
+
   useEffect(() => {
     if (!isOpen) {
       stopActiveCoachTts();
@@ -690,6 +748,7 @@ export function ChatFab({
       setAtriumFocusCoachId(null);
       setVoiceSessionOpen(false);
       setVoiceListening(false);
+      setVoiceMicArming(false);
       setVoiceGhostText("");
       setVoiceError(null);
       listeningDesiredRef.current = false;
@@ -1024,6 +1083,7 @@ export function ChatFab({
       quickChipsBootstrapKeyRef.current = `${selectedDate}|${coachPersona}`;
       openingCoachSynced.current = coachPersona;
       setAtriumFocusCoachId(null);
+      markAtriumOnboardingComplete();
     })().catch(() => {
       const fail: ChatMessage[] = [
         {
@@ -1053,6 +1113,7 @@ export function ChatFab({
       ]);
       quickChipsBootstrapKeyRef.current = `${selectedDate}|${coachPersona}`;
       setAtriumFocusCoachId(null);
+      markAtriumOnboardingComplete();
     });
     atriumCommitPromiseRef.current = p;
     try {
@@ -1060,7 +1121,7 @@ export function ChatFab({
     } finally {
       atriumCommitPromiseRef.current = null;
     }
-  }, [coachPersona, selectedDate]);
+  }, [coachPersona, selectedDate, markAtriumOnboardingComplete]);
 
   const handleAtriumCoachTap = useCallback(
     (id: CoachPersonaId) => {
@@ -1087,6 +1148,8 @@ export function ChatFab({
   ) => {
     const text = raw.trim();
     if (!text || isLoading) return;
+
+    markAtriumOnboardingComplete();
 
     if (messagesRef.current.length === 0) {
       await sessionReadinessRef.current.catch(() => {});
@@ -1350,6 +1413,7 @@ export function ChatFab({
     const stream = voiceMicStreamRef.current;
 
     setVoiceListening(false);
+    setVoiceMicArming(false);
     setVoiceGhostText("");
 
     let transcript = "";
@@ -1394,16 +1458,19 @@ export function ChatFab({
     listeningDesiredRef.current = true;
 
     try {
+      setVoiceMicArming(true);
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true },
       });
       if (!listeningDesiredRef.current) {
         stream.getTracks().forEach((t) => t.stop());
+        setVoiceMicArming(false);
         return;
       }
       voiceMicStreamRef.current = stream;
       setVoiceHudStream(stream);
       setVoiceListening(true);
+      setVoiceMicArming(false);
 
       const ctrl = await startAzureChatStt(
         {
@@ -1417,10 +1484,12 @@ export function ChatFab({
         await ctrl.stop();
         stopVoiceMicTracks();
         setVoiceListening(false);
+        setVoiceMicArming(false);
         return;
       }
       sttControllerRef.current = ctrl;
     } catch (e) {
+      setVoiceMicArming(false);
       stopVoiceMicTracks();
       setVoiceListening(false);
       listeningDesiredRef.current = false;
@@ -1452,6 +1521,7 @@ export function ChatFab({
       unlockCoachTtsAudio();
       preloadCoachTtsModule();
     }
+    setEnteredChatMode(true);
     if (isLoading) return;
     if (voiceListening) {
       void finalizeVoiceSession("manual");
@@ -1465,7 +1535,9 @@ export function ChatFab({
   };
 
   const voiceHudMode =
-    voiceSessionOpen && voiceListening ? "listening" : "hidden";
+    voiceSessionOpen && (voiceListening || voiceMicArming)
+      ? "listening"
+      : "hidden";
 
   return (
     <>
@@ -1710,7 +1782,7 @@ export function ChatFab({
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.22 }}
-                    className="pointer-events-none absolute inset-0 z-10 flex flex-col"
+                    className="pointer-events-none absolute inset-0 z-30 flex flex-col"
                     aria-hidden
                   >
                     <div className="absolute inset-0 bg-background/55 backdrop-blur-[2px] dark:bg-background/48" />
@@ -1807,6 +1879,7 @@ export function ChatFab({
                     if (voiceListening) return;
                     setInput(e.target.value);
                   }}
+                  onFocus={() => setEnteredChatMode(true)}
                   onKeyDown={(e) => {
                     if (voiceListening) return;
                     if (e.key === "Enter") void sendWithText(input, "input");

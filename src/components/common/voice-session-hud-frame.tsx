@@ -131,7 +131,7 @@ export function VoiceSessionHudFrame({
     <motion.div
       ref={rootRef}
       className={cn(
-        "pointer-events-none absolute inset-0 z-[17]",
+        "pointer-events-none absolute inset-0 z-[35]",
         mode === "listening" && "baps-voice-hud-frame",
         mode === "analyzing" && "baps-voice-hud-frame baps-voice-hud-frame--analyze-out"
       )}
