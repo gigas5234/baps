@@ -15,6 +15,7 @@ import {
   coachTtsGetActiveAudio,
   coachTtsRegisterActiveDispose,
   coachTtsSetActiveAudio,
+  stopCoachNeuralTtsPlayback,
 } from "@/lib/coach-tts-playback";
 
 const MAX_LEN = 4000;
@@ -57,6 +58,9 @@ export async function playCoachNeuralTts(
   const t = text.trim();
   if (!t) return;
   if (options?.signal?.aborted) return;
+
+  /** 직전 합성·오디오가 남아 있으면 겹침 — 스트림 큐·조기 완료 콜백 대비 */
+  stopCoachNeuralTtsPlayback();
 
   try {
     await playCoachNeuralTtsWithBrowserSdk(t, coachId, options);

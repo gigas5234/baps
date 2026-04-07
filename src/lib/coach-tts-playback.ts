@@ -11,7 +11,19 @@ let activeAudio: HTMLAudioElement | null = null;
 let activeTtsDispose: (() => void) | null = null;
 
 export function coachTtsRegisterActiveDispose(fn: (() => void) | null): void {
-  activeTtsDispose = fn;
+  /** 새 합성기 등록 전에 이전 instance를 닫지 않으면 음성이 동시에 재생됨 */
+  if (fn !== null) {
+    if (activeTtsDispose !== null && activeTtsDispose !== fn) {
+      try {
+        activeTtsDispose();
+      } catch {
+        /* ignore */
+      }
+    }
+    activeTtsDispose = fn;
+    return;
+  }
+  activeTtsDispose = null;
 }
 
 export function stopCoachNeuralTtsPlayback(): void {
