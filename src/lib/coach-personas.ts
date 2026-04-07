@@ -147,6 +147,26 @@ export function coachMeta(id: CoachPersonaId): CoachPersonaMeta {
   );
 }
 
+/**
+ * Azure TTS `ko-KR` Neural 보이스 이름 (Language support 표).
+ * HD(`:DragonHDLatestNeural`)·다국어 보이스는 리전·리소스 SKU에 따라 404/거절될 수 있음.
+ * 전체 미리듣기: https://speech.microsoft.com/portal/voicegallery
+ */
+export const AZURE_KO_KR_NEURAL_VOICE_NAMES = [
+  "ko-KR-BongJinNeural",
+  "ko-KR-GookMinNeural",
+  "ko-KR-HyunsuNeural",
+  "ko-KR-HyunsuMultilingualNeural",
+  "ko-KR-InJoonNeural",
+  "ko-KR-JiMinNeural",
+  "ko-KR-SeoHyeonNeural",
+  "ko-KR-SoonBokNeural",
+  "ko-KR-SunHiNeural",
+  "ko-KR-YuJinNeural",
+  "ko-KR-Hyunsu:DragonHDLatestNeural",
+  "ko-KR-SunHi:DragonHDLatestNeural",
+] as const;
+
 /** Azure Speech ko-KR Neural — 코치 페르소나별 보이스·말 속도(SSML prosody rate) */
 export type CoachNeuralTtsConfig = {
   voiceName: string;
@@ -157,19 +177,22 @@ export type CoachNeuralTtsConfig = {
   prosodyRate: string;
 };
 
-/** 코치별 Azure Neural 보이스·말 속도(SSML prosody rate). */
+/**
+ * 코치별 Azure Neural 보이스·말 속도.
+ * 전체적으로 느리게 느껴지면 `prosodyRate`를 `+6%`~`+12%` 단위로 올리면 됨.
+ */
 export const COACH_NEURAL_TTS: Record<CoachPersonaId, CoachNeuralTtsConfig> =
   {
-    /** 다이어트(감시) — 단호·정직·남성 · 약간 빠르게 */
-    diet: { voiceName: "ko-KR-BongJinNeural", prosodyRate: "+12%" },
-    /** 영양(분석) — 차분·논리·여성 · 표준 */
-    nutrition: { voiceName: "ko-KR-SunHiNeural", prosodyRate: "medium" },
+    /** 다이어트(감시) — 단호·정직·남성 */
+    diet: { voiceName: "ko-KR-BongJinNeural", prosodyRate: "+22%" },
+    /** 영양(분석) — 차분·논리·여성 */
+    nutrition: { voiceName: "ko-KR-SunHiNeural", prosodyRate: "+12%" },
     /** 운동(격려) — 에너지·밝은 남성 */
-    exercise: { voiceName: "ko-KR-GookMinNeural", prosodyRate: "+8%" },
-    /** 멘탈(위로) — 부드럽고 따뜻한 여성 · 약간 느리게 */
-    mental: { voiceName: "ko-KR-YuJinNeural", prosodyRate: "-12%" },
-    /** 가성비(현실) — 신뢰·이성·남성 · 차분한 관제 톤 */
-    roi: { voiceName: "ko-KR-InJoonNeural", prosodyRate: "-6%" },
+    exercise: { voiceName: "ko-KR-GookMinNeural", prosodyRate: "+18%" },
+    /** 멘탈(위로) — 부드럽고 따뜻한 여성 (너무 느리지 않게 표준보다 약간만 낮게) */
+    mental: { voiceName: "ko-KR-YuJinNeural", prosodyRate: "-4%" },
+    /** 가성비(현실) — 신뢰·이성·남성 */
+    roi: { voiceName: "ko-KR-InJoonNeural", prosodyRate: "+5%" },
   };
 
 export function coachNeuralTts(id: CoachPersonaId): CoachNeuralTtsConfig {
