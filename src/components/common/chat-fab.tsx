@@ -1058,13 +1058,7 @@ export function ChatFab({
                     ? ` · ${coachMeta(coachPersona).description}`
                     : ""}
                 </p>
-                <p
-                  className={cn(
-                    "mt-0.5 text-[10px] text-muted-foreground transition-[font-size,font-weight,color] duration-200",
-                    chatTtsEnabled &&
-                      "font-data text-[12px] font-bold tabular-nums tracking-tight text-foreground/92"
-                  )}
-                >
+                <p className="mt-0.5 text-[10px] text-muted-foreground">
                   오늘 {totalCal}kcal · 목표 {targetCal}kcal · 단백{" "}
                   {Math.round(macros.proteinG)}g ·{" "}
                   {formatKoreanChatTime(new Date())}

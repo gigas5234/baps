@@ -478,31 +478,6 @@
   }
 }
 
-/* 채팅 패널 · TTS ‘호르몬 분석’ 홀로그램 스캔 (미세 글리치 느낌) */
-@keyframes baps-chat-holo-scan {
-  0%,
-  100% {
-    opacity: 0.38;
-    transform: translateX(-4%) skewX(-0.4deg);
-  }
-  50% {
-    opacity: 0.88;
-    transform: translateX(3%) skewX(0.3deg);
-  }
-}
-
-.baps-chat-holo-scan {
-  animation: baps-chat-holo-scan 2.5s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .baps-chat-holo-scan {
-    animation: none;
-    opacity: 0.65;
-    transform: none;
-  }
-}
-
 /* 음성 입력 · 전면 HUD 테두리 (데시벨은 --baps-voice-hud-level 로 갱신) */
 .baps-voice-hud-frame {
   --baps-voice-hud-level: 0.14;
