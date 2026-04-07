@@ -21,7 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { MacroTotals } from "@/lib/meal-macros";
 import type { CoachStreamSegment } from "@/lib/coach-delimited-stream";
-import { postCoachChat } from "@/lib/coach-chat-client";
+import { postCoachChat, type CoachApiResult } from "@/lib/coach-chat-client";
 import { trackBapsEvent } from "@/lib/analytics";
 import {
   coachTurnSegmentForReplay,
@@ -84,6 +84,52 @@ function persistAtriumOnboardingDone(): void {
     /* ignore */
   }
 }
+
+/** 부트스트랩 JSON 응답 → 오프닝 문구·칩 (commit·첫 전송 공통) */
+function parseBootstrapOpeningFromOutcome(
+  outcome: CoachApiResult
+): { opening: string; chips: QuickChip[] } {
+  const { ok, status, data } = outcome;
+  const d = data as Record<string, unknown>;
+  let opening: string;
+  let chips: QuickChip[] = [];
+
+  if (status === 401) {
+    opening =
+      typeof d.error === "string"
+        ? d.error
+        : "로그인 후 이용할 수 있어요.";
+  } else if (!ok) {
+    opening =
+      typeof d.error === "string"
+        ? d.error
+        : "코치를 불러오지 못했어요.";
+  } else {
+    opening =
+      typeof d.opening === "string"
+        ? d.opening
+        : "데이터는 준비됐어. 뭐부터 물어볼래?";
+    chips = Array.isArray(d.quick_chips)
+      ? (d.quick_chips as QuickChip[]).slice(0, 3)
+      : [];
+  }
+  return { opening, chips };
+}
+
+const BOOTSTRAP_FAIL_FALLBACK_CHIPS: QuickChip[] = [
+  {
+    label: "오늘 식단 평가",
+    prompt: "오늘 식단을 팩트로 짧게 평가해줘.",
+  },
+  {
+    label: "남은 칼로리",
+    prompt: "남은 칼로리를 숫자로 말해줘.",
+  },
+  {
+    label: "저녁 추천",
+    prompt: "저녁에 뭐 먹으면 좋을지 추천해줘.",
+  },
+];
 
 /** TTS 재생은 동적 청크 — 초기 번들·LCP 완화. `stop`은 `coach-tts-playback` 동기 모듈. */
 type CoachTtsModule = typeof import("@/lib/coach-tts-client");
@@ -1042,31 +1088,7 @@ export function ChatFab({
         date: selectedDate,
         local_hour: new Date().getHours(),
       });
-      const { ok, status, data } = outcome;
-      const d = data as Record<string, unknown>;
-
-      let opening: string;
-      let chips: QuickChip[] = [];
-
-      if (status === 401) {
-        opening =
-          typeof d.error === "string"
-            ? d.error
-            : "로그인 후 이용할 수 있어요.";
-      } else if (!ok) {
-        opening =
-          typeof d.error === "string"
-            ? d.error
-            : "코치를 불러오지 못했어요.";
-      } else {
-        opening =
-          typeof d.opening === "string"
-            ? d.opening
-            : "데이터는 준비됐어. 뭐부터 물어볼래?";
-        chips = Array.isArray(d.quick_chips)
-          ? (d.quick_chips as QuickChip[]).slice(0, 3)
-          : [];
-      }
+      const { opening, chips } = parseBootstrapOpeningFromOutcome(outcome);
 
       const first: ChatMessage[] = [
         {
@@ -1097,20 +1119,7 @@ export function ChatFab({
       ];
       messagesRef.current = fail;
       setMessages(fail);
-      setQuickChips([
-        {
-          label: "오늘 식단 평가",
-          prompt: "오늘 식단을 팩트로 짧게 평가해줘.",
-        },
-        {
-          label: "남은 칼로리",
-          prompt: "남은 칼로리를 숫자로 말해줘.",
-        },
-        {
-          label: "저녁 추천",
-          prompt: "저녁에 뭐 먹으면 좋을지 추천해줘.",
-        },
-      ]);
+      setQuickChips(BOOTSTRAP_FAIL_FALLBACK_CHIPS);
       quickChipsBootstrapKeyRef.current = `${selectedDate}|${coachPersona}`;
       setAtriumFocusCoachId(null);
       markAtriumOnboardingComplete();
@@ -1150,33 +1159,11 @@ export function ChatFab({
     if (!text || isLoading) return;
 
     markAtriumOnboardingComplete();
-
-    if (messagesRef.current.length === 0) {
-      await sessionReadinessRef.current.catch(() => {});
-      await commitAtriumOpeningAndSeedThread();
-    }
+    await sessionReadinessRef.current.catch(() => {});
 
     stickToBottomRef.current = true;
     setShowJumpToLatest(false);
 
-    /* Autoplay: 네트워크 대기 전 같은 제스처에서 오디오 맥락을 연다 */
-    if (chatTtsEnabledRef.current) {
-      unlockCoachTtsAudio();
-      preloadCoachTtsModule();
-      streamTtsPipelineRef.current = new CoachStreamTtsSentencePipeline(
-        coachPersona
-      );
-      streamTtsQueueRef.current = [];
-      streamTtsFinalizedRef.current = false;
-      streamTtsHadOutputRef.current = false;
-      streamTtsLastCoachRef.current = null;
-      streamTtsDrainingRef.current = false;
-      ttsSessionAbortRef.current?.abort();
-      stopCoachNeuralTtsPlayback();
-      ttsSessionAbortRef.current = new AbortController();
-    }
-
-    const prior = messagesRef.current;
     const userMsg: ChatMessage = {
       id: `u-${Date.now()}-${source}`,
       message: text,
@@ -1193,18 +1180,87 @@ export function ChatFab({
       streamDelimited: { segments: [] },
       createdAt: streamStartedAt,
     };
+
+    /* Autoplay: 네트워크 대기 전 같은 제스처에서 오디오 맥락을 연다 */
     if (chatTtsEnabledRef.current) {
+      unlockCoachTtsAudio();
+      preloadCoachTtsModule();
+      streamTtsPipelineRef.current = new CoachStreamTtsSentencePipeline(
+        coachPersona
+      );
+      streamTtsQueueRef.current = [];
+      streamTtsFinalizedRef.current = false;
+      streamTtsHadOutputRef.current = false;
+      streamTtsLastCoachRef.current = null;
+      streamTtsDrainingRef.current = false;
+      ttsSessionAbortRef.current?.abort();
+      stopCoachNeuralTtsPlayback();
+      ttsSessionAbortRef.current = new AbortController();
       streamTtsUiMessageIdRef.current = streamId;
     }
-    const nextThread = [...prior, userMsg, streamBubble];
-    messagesRef.current = nextThread;
-    setMessages(nextThread);
-    setInput("");
-    setQuickChips([]);
-    setIsLoading(true);
+
+    const firstTurn = messagesRef.current.length === 0;
+
+    if (firstTurn) {
+      messagesRef.current = [userMsg, streamBubble];
+      setMessages([userMsg, streamBubble]);
+      setInput("");
+      setQuickChips([]);
+      setIsLoading(true);
+
+      try {
+        const outcome = await postCoachChat({
+          bootstrap: true,
+          coach_id: coachPersona,
+          date: selectedDate,
+          local_hour: new Date().getHours(),
+        });
+        const { opening, chips } = parseBootstrapOpeningFromOutcome(outcome);
+        const openingMsg: ChatMessage = {
+          id: `ai-open-${Date.now()}`,
+          is_ai: true,
+          message: opening,
+          data_card: null,
+          createdAt: Date.now(),
+        };
+        const merged = [openingMsg, userMsg, streamBubble];
+        messagesRef.current = merged;
+        setMessages(merged);
+        setQuickChips(chips);
+        quickChipsBootstrapKeyRef.current = `${selectedDate}|${coachPersona}`;
+        openingCoachSynced.current = coachPersona;
+        setAtriumFocusCoachId(null);
+      } catch {
+        const openingMsg: ChatMessage = {
+          id: `ai-open-fail-${Date.now()}`,
+          is_ai: true,
+          message:
+            "연검이 꽤 느리네. 한번 더 열어보거나, 입력으로 바로 물어봐.",
+          data_card: null,
+          createdAt: Date.now(),
+        };
+        const merged = [openingMsg, userMsg, streamBubble];
+        messagesRef.current = merged;
+        setMessages(merged);
+        setQuickChips(BOOTSTRAP_FAIL_FALLBACK_CHIPS);
+        quickChipsBootstrapKeyRef.current = `${selectedDate}|${coachPersona}`;
+        openingCoachSynced.current = coachPersona;
+        setAtriumFocusCoachId(null);
+      }
+    } else {
+      const prior = messagesRef.current;
+      const nextThread = [...prior, userMsg, streamBubble];
+      messagesRef.current = nextThread;
+      setMessages(nextThread);
+      setInput("");
+      setQuickChips([]);
+      setIsLoading(true);
+    }
 
     try {
-      const historyForApi = prior.map((m) => ({
+      const historyForApi = messagesRef.current
+        .filter((m) => m.id !== userMsg.id && m.id !== streamId)
+        .map((m) => ({
         message:
           m.is_ai && m.coachTurn
             ? encodeCoachTurnForHistory(m.coachTurn)
