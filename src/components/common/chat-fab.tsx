@@ -863,7 +863,7 @@ export function ChatFab({
     const streamBubble: ChatMessage = {
       id: streamId,
       is_ai: true,
-      message: "단톡 수신 중…",
+      message: "코치가 맥락을 정리하는 중…",
       data_card: null,
       streamDelimited: { segments: [] },
       createdAt: streamStartedAt,
@@ -901,8 +901,8 @@ export function ChatFab({
                     streamDelimited: p,
                     message:
                       p.segments.length === 0
-                        ? "단톡 수신 중…"
-                        : `단톡 · ${p.segments.length}블록`,
+                        ? "코치가 맥락을 정리하는 중…"
+                        : `응답 작성 중 · ${p.segments.length}블록`,
                   }
                 : m
             );
@@ -994,7 +994,7 @@ export function ChatFab({
           .then(({ playCoachTurnNeuralTts }) =>
             playCoachTurnNeuralTts(coachTurn, coachPersona, {
               signal: ac.signal,
-              pauseBetweenSpeakersMs: 1500,
+              pauseBetweenSpeakersMs: 1000,
               streamSegments:
                 streamSegments && streamSegments.length > 0
                   ? streamSegments
@@ -1220,6 +1220,7 @@ export function ChatFab({
                   onToggle={handleChatTtsToggle}
                   coachActive={isLoading || bootLoading}
                   interSpeakerBridge={ttsInterSpeakerBridge}
+                  ttsSegmentActive={ttsBubbleFocus !== null}
                 />
                 <button
                   type="button"

@@ -136,7 +136,7 @@ export async function playCoachTurnNeuralTts(
     options?.streamSegments && options.streamSegments.length > 0
       ? coachStreamTtsSegments(options.streamSegments, primaryCoach)
       : coachTurnTtsSegments(turn, primaryCoach);
-  const pauseMs = options?.pauseBetweenSpeakersMs ?? 1500;
+  const pauseMs = options?.pauseBetweenSpeakersMs ?? 1000;
   const signal = options?.signal;
 
   for (let i = 0; i < segs.length; i++) {

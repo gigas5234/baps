@@ -114,7 +114,7 @@ export function SingleKakaoCoachRow({
   bubbleVariant?: "default" | "mission";
   /** 스트리밍 중인 말풍선(점선 테두리) */
   bubblePending?: boolean;
-  /** TTS가 이 말풍선을 읽는 중 — 네온·미세 흔들림 */
+  /** TTS가 이 말풍선을 읽는 중 — 네온·글로우(행 CSS) */
   ttsActive?: boolean;
   speakingAccent?: CoachTtsVisualAccent;
   /** TTS ON일 때 행 탭으로 해당 말만 다시 재생 */

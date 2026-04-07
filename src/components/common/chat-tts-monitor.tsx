@@ -10,8 +10,10 @@ type ChatTtsMonitorToggleProps = {
   onToggle: () => void;
   /** 코치가 응답 생성·스트림 중일 때만 막대 애니메이션 */
   coachActive: boolean;
-  /** 다음 화자 연결 1.5초 대기 등 — EQ를 잠시 켜 “교신 중” 느낌 */
+  /** 다음 화자 연결 대기 등 — EQ를 잠시 켜 “교신 중” 느낌 */
   interSpeakerBridge?: boolean;
+  /** 턴 TTS가 실제로 한 구간을 읽는 중 — 좌측 EQ와 싱크 */
+  ttsSegmentActive?: boolean;
 };
 
 function SonicEqBars({ active }: { active: boolean }) {
@@ -75,8 +77,11 @@ export function ChatTtsMonitorToggle({
   onToggle,
   coachActive,
   interSpeakerBridge = false,
+  ttsSegmentActive = false,
 }: ChatTtsMonitorToggleProps) {
-  const barsActive = enabled && (coachActive || interSpeakerBridge);
+  const barsActive =
+    enabled &&
+    (coachActive || interSpeakerBridge || ttsSegmentActive);
 
   return (
     <button
