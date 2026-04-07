@@ -102,6 +102,21 @@ export async function postCoachChat(
     };
   }
 
+  /** 스트림 종료 후 complete=true 세그먼트로 마지막 미리보기(잔여 문장 TTS 플러시용) */
+  if (!isBootstrap && full.length > 0) {
+    try {
+      const parsed = parseCoachDelimitedStream(full, true);
+      opts?.onDelimitedPreview?.({
+        segments: filterDelimitedSegmentsForInvites(
+          parsed.segments,
+          leadPersonaId
+        ),
+      });
+    } catch {
+      /* 무시 — 본문 파싱 단계에서 처리 */
+    }
+  }
+
   if (!res.ok) {
     try {
       if (isBootstrap) {

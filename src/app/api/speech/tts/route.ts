@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { buildCoachNeuralSsml } from "@/lib/azure-speech-ssml";
 import {
   coachNeuralTts,
   parseCoachPersonaId,
@@ -6,17 +7,6 @@ import {
 } from "@/lib/coach-personas";
 
 export const runtime = "nodejs";
-
-const MAX_CHARS = 4000;
-
-function escapeForSsml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
 
 function ttsEndpoint(): string | null {
   const region = process.env.AZURE_SPEECH_REGION?.trim();
@@ -89,9 +79,7 @@ export async function POST(req: Request) {
   const coachId: CoachPersonaId = parseCoachPersonaId(rawCoach);
 
   const { voiceName, prosodyRate } = coachNeuralTts(coachId);
-  const safeText = escapeForSsml(text.slice(0, MAX_CHARS));
-
-  const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="ko-KR"><voice name="${voiceName}"><prosody rate="${escapeForSsml(prosodyRate)}">${safeText}</prosody></voice></speak>`;
+  const ssml = buildCoachNeuralSsml(text, voiceName, prosodyRate);
 
   try {
     const ttsRes = await fetch(url, {
@@ -99,7 +87,7 @@ export async function POST(req: Request) {
       headers: {
         "Ocp-Apim-Subscription-Key": key,
         "Content-Type": "application/ssml+xml",
-        "X-Microsoft-OutputFormat": "audio-24khz-48kbitrate-mono-mp3",
+        "X-Microsoft-OutputFormat": "audio-16khz-32kbitrate-mono-mp3",
       },
       body: ssml,
     });

@@ -33,6 +33,7 @@ import {
   type QuickChip,
 } from "@/lib/chat-coach";
 import { coachStreamSegmentForReplay } from "@/lib/coach-stream-tts";
+import { CoachStreamTtsSentencePipeline } from "@/lib/coach-stream-tts-pipeline";
 import {
   COACH_PERSONAS_UI,
   COACH_QUICK_CHIP_ACCENT,
@@ -347,6 +348,80 @@ export function ChatFab({
   const quickChipsBootstrapKeyRef = useRef<string>("");
   /** 말풍선 탭 재생 — 같은 메시지·같은 구간 연타 시 한 번만 (다른 말풍선 다누르면 같은 줄도 다시 가능) */
   const lastManualTtsReplayKeyRef = useRef<string>("");
+  /** LLM 스트림 → 문장 단위 선제 TTS */
+  const streamTtsPipelineRef = useRef<CoachStreamTtsSentencePipeline | null>(
+    null
+  );
+  const streamTtsQueueRef = useRef<{ text: string; coachId: CoachPersonaId }[]>(
+    []
+  );
+  const streamTtsDrainingRef = useRef(false);
+  const streamTtsFinalizedRef = useRef(false);
+  const streamTtsHadOutputRef = useRef(false);
+  const streamTtsLastCoachRef = useRef<CoachPersonaId | null>(null);
+
+  const kickStreamTtsDrain = () => {
+    if (streamTtsDrainingRef.current) return;
+    const ac = ttsSessionAbortRef.current;
+    if (!ac) return;
+    streamTtsDrainingRef.current = true;
+    void (async () => {
+      try {
+        const { playCoachNeuralTts } = await loadCoachTtsModule();
+        while (!ac.signal.aborted && chatTtsEnabledRef.current) {
+          const next = streamTtsQueueRef.current.shift();
+          if (!next) {
+            if (streamTtsFinalizedRef.current) break;
+            await new Promise((r) => setTimeout(r, 32));
+            continue;
+          }
+          streamTtsHadOutputRef.current = true;
+          const prev = streamTtsLastCoachRef.current;
+          if (prev !== null && next.coachId !== prev) {
+            setTtsInterSpeakerBridge(true);
+            try {
+              await new Promise<void>((resolve, reject) => {
+                const id = window.setTimeout(resolve, 1000);
+                const onAb = () => {
+                  window.clearTimeout(id);
+                  reject(new DOMException("Aborted", "AbortError"));
+                };
+                ac.signal.addEventListener("abort", onAb, { once: true });
+              });
+            } catch {
+              /* abort */
+            }
+            if (ac.signal.aborted) break;
+            setTtsInterSpeakerBridge(false);
+          }
+          streamTtsLastCoachRef.current = next.coachId;
+          try {
+            await playCoachNeuralTts(next.text, next.coachId, {
+              signal: ac.signal,
+            });
+          } catch (e) {
+            if (e instanceof DOMException && e.name === "AbortError") break;
+          }
+        }
+      } finally {
+        streamTtsDrainingRef.current = false;
+        streamTtsLastCoachRef.current = null;
+        setTtsInterSpeakerBridge(false);
+      }
+    })();
+  };
+
+  const awaitStreamTtsDrainIdle = async () => {
+    for (let i = 0; i < 600; i++) {
+      if (
+        !streamTtsDrainingRef.current &&
+        streamTtsQueueRef.current.length === 0
+      ) {
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 25));
+    }
+  };
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -357,6 +432,13 @@ export function ChatFab({
   }, [chatTtsEnabled]);
 
   const stopActiveCoachTts = useCallback(() => {
+    streamTtsQueueRef.current = [];
+    streamTtsFinalizedRef.current = true;
+    streamTtsPipelineRef.current?.reset();
+    streamTtsPipelineRef.current = null;
+    streamTtsHadOutputRef.current = false;
+    streamTtsLastCoachRef.current = null;
+    streamTtsDrainingRef.current = false;
     ttsSessionAbortRef.current?.abort();
     ttsSessionAbortRef.current = null;
     stopCoachNeuralTtsPlayback();
@@ -849,6 +931,17 @@ export function ChatFab({
     if (chatTtsEnabledRef.current) {
       unlockCoachTtsAudio();
       preloadCoachTtsModule();
+      streamTtsPipelineRef.current = new CoachStreamTtsSentencePipeline(
+        coachPersona
+      );
+      streamTtsQueueRef.current = [];
+      streamTtsFinalizedRef.current = false;
+      streamTtsHadOutputRef.current = false;
+      streamTtsLastCoachRef.current = null;
+      streamTtsDrainingRef.current = false;
+      ttsSessionAbortRef.current?.abort();
+      stopCoachNeuralTtsPlayback();
+      ttsSessionAbortRef.current = new AbortController();
     }
 
     const prior = messagesRef.current;
@@ -894,6 +987,13 @@ export function ChatFab({
         },
         {
           onDelimitedPreview: (p) => {
+            if (chatTtsEnabledRef.current && streamTtsPipelineRef.current) {
+              const chunks = streamTtsPipelineRef.current.feed(p.segments);
+              if (chunks.length > 0) {
+                streamTtsQueueRef.current.push(...chunks);
+                kickStreamTtsDrain();
+              }
+            }
             const mapped = messagesRef.current.map((m) =>
               m.id === streamId
                 ? {
@@ -986,33 +1086,49 @@ export function ChatFab({
       messagesRef.current = t;
       setMessages(t);
       if (chatTtsEnabledRef.current) {
-        ttsSessionAbortRef.current?.abort();
-        stopCoachNeuralTtsPlayback();
-        const ac = new AbortController();
-        ttsSessionAbortRef.current = ac;
-        void loadCoachTtsModule()
-          .then(({ playCoachTurnNeuralTts }) =>
-            playCoachTurnNeuralTts(coachTurn, coachPersona, {
-              signal: ac.signal,
-              pauseBetweenSpeakersMs: 1000,
-              streamSegments:
-                streamSegments && streamSegments.length > 0
-                  ? streamSegments
-                  : null,
-              shouldContinue: () => chatTtsEnabledRef.current,
-              onSegmentFocus: (segmentKey) =>
-                setTtsBubbleFocus({ messageId: aiMsgId, segmentKey }),
-              onSegmentBlur: () => setTtsBubbleFocus(null),
-              onInterSpeakerBridge: setTtsInterSpeakerBridge,
-            })
-          )
-          .finally(() => {
-            if (ttsSessionAbortRef.current === ac) {
-              ttsSessionAbortRef.current = null;
+        streamTtsFinalizedRef.current = true;
+        kickStreamTtsDrain();
+        void (async () => {
+          await awaitStreamTtsDrainIdle();
+          const ac = ttsSessionAbortRef.current;
+          if (
+            !streamTtsHadOutputRef.current &&
+            ac &&
+            chatTtsEnabledRef.current
+          ) {
+            stopCoachNeuralTtsPlayback();
+            try {
+              const { playCoachTurnNeuralTts } = await loadCoachTtsModule();
+              await playCoachTurnNeuralTts(coachTurn, coachPersona, {
+                signal: ac.signal,
+                pauseBetweenSpeakersMs: 1000,
+                streamSegments:
+                  streamSegments && streamSegments.length > 0
+                    ? streamSegments
+                    : null,
+                shouldContinue: () => chatTtsEnabledRef.current,
+                onSegmentFocus: (segmentKey) =>
+                  setTtsBubbleFocus({ messageId: aiMsgId, segmentKey }),
+                onSegmentBlur: () => setTtsBubbleFocus(null),
+                onInterSpeakerBridge: setTtsInterSpeakerBridge,
+              });
+            } catch (e) {
+              if (
+                process.env.NODE_ENV === "development" &&
+                e instanceof Error
+              ) {
+                console.warn("[BAPS TTS]", e.message);
+              }
             }
-            setTtsBubbleFocus(null);
-            setTtsInterSpeakerBridge(false);
-          });
+          }
+          if (ttsSessionAbortRef.current === ac) {
+            ttsSessionAbortRef.current = null;
+          }
+          streamTtsPipelineRef.current?.reset();
+          streamTtsPipelineRef.current = null;
+          setTtsBubbleFocus(null);
+          setTtsInterSpeakerBridge(false);
+        })();
       }
       const chips = normalized.quick_chips ?? [];
       setQuickChips(chips);

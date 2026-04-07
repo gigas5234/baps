@@ -7,7 +7,22 @@
 
 let activeAudio: HTMLAudioElement | null = null;
 
+/** 브라우저 Speech SDK 합성 중단용( synthesizer.close 등 ) */
+let activeTtsDispose: (() => void) | null = null;
+
+export function coachTtsRegisterActiveDispose(fn: (() => void) | null): void {
+  activeTtsDispose = fn;
+}
+
 export function stopCoachNeuralTtsPlayback(): void {
+  if (activeTtsDispose) {
+    try {
+      activeTtsDispose();
+    } catch {
+      /* synthesizer.close 이중 호출 등 */
+    }
+    activeTtsDispose = null;
+  }
   if (activeAudio) {
     activeAudio.pause();
     activeAudio.removeAttribute("src");
