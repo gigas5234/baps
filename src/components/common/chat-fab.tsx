@@ -1606,6 +1606,9 @@ export function ChatFab({
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
             className="fixed inset-0 z-50 flex max-h-[100dvh] flex-col overflow-hidden bg-background text-foreground overscroll-none touch-none"
           >
+            {/*
+              z 스택(낮→높): 메시지 z-10 · 최신메시지 z-30 · VoiceHUD z-40 · 음성문구 z-42 · 헤더/하단 z-45
+            */}
             <VoiceSessionHudFrame
               mode={voiceHudMode}
               mediaStream={
@@ -1613,7 +1616,27 @@ export function ChatFab({
               }
               onSilenceAutoEnd={() => void finalizeVoiceSession("vad")}
             />
-            <div className="relative z-20 flex shrink-0 items-start justify-between gap-2 border-b border-border bg-background px-4 py-3">
+            <AnimatePresence>
+              {voiceSessionOpen ? (
+                <motion.div
+                  key="voice-scan-overlay"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.22 }}
+                  className="pointer-events-none absolute inset-0 z-[42] flex flex-col"
+                  aria-hidden
+                >
+                  <div className="absolute inset-0 bg-background/55 backdrop-blur-[2px] dark:bg-background/48" />
+                  <div className="relative flex flex-1 flex-col items-center justify-center px-6 pb-28 pt-12 text-center">
+                    <p className="max-w-[min(100%,20rem)] text-[1.05rem] font-semibold leading-snug tracking-tight text-foreground/88 sm:text-lg">
+                      {listenerPresenceLine(listenerDisplayName)}
+                    </p>
+                  </div>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+            <div className="relative z-[45] flex shrink-0 items-start justify-between gap-2 border-b border-border bg-background px-4 py-3">
               <div className="min-w-0 flex-1">
                 <h2 className="text-base font-bold text-foreground">BAPS 분석실</h2>
                 <p className="mt-0.5 text-[10px] font-medium text-primary">
@@ -1656,7 +1679,7 @@ export function ChatFab({
               </div>
             </div>
 
-            <div className="relative min-h-0 flex-1">
+            <div className="relative z-10 min-h-0 flex-1">
               <div
                 ref={messagesScrollRef}
                 onScroll={updateStickToBottomFromScroll}
@@ -1829,30 +1852,9 @@ export function ChatFab({
                   </button>
                 </div>
               ) : null}
-
-              <AnimatePresence>
-                {voiceSessionOpen ? (
-                  <motion.div
-                    key="voice-scan-overlay"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.22 }}
-                    className="pointer-events-none absolute inset-0 z-30 flex flex-col"
-                    aria-hidden
-                  >
-                    <div className="absolute inset-0 bg-background/55 backdrop-blur-[2px] dark:bg-background/48" />
-                    <div className="relative flex flex-1 flex-col items-center justify-center px-6 pb-28 pt-12 text-center">
-                      <p className="max-w-[min(100%,20rem)] text-[1.05rem] font-semibold leading-snug tracking-tight text-foreground/88 sm:text-lg">
-                        {listenerPresenceLine(listenerDisplayName)}
-                      </p>
-                    </div>
-                  </motion.div>
-                ) : null}
-              </AnimatePresence>
             </div>
 
-            <div className="relative z-20 shrink-0 border-t border-border bg-card pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <div className="relative z-[45] shrink-0 border-t border-border bg-card pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               <button
                 type="button"
                 onClick={() => {

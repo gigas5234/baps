@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getAuthenticatedSupabaseUser } from "@/lib/api-auth";
 import { buildCoachNeuralSsml } from "@/lib/azure-speech-ssml";
 import {
   coachNeuralTts,
@@ -7,6 +8,9 @@ import {
 } from "@/lib/coach-personas";
 
 export const runtime = "nodejs";
+
+const CLIENT_UPSTREAM_ERROR =
+  "통신 장애가 발생했습니다. 잠시 후 다시 시도하세요.";
 
 function ttsEndpoint(): string | null {
   const region = process.env.AZURE_SPEECH_REGION?.trim();
@@ -31,6 +35,14 @@ function ttsEndpoint(): string | null {
  * Body: `{ text: string, coachId?: CoachPersonaId }`
  */
 export async function POST(req: Request) {
+  const { user } = await getAuthenticatedSupabaseUser();
+  if (!user) {
+    return NextResponse.json(
+      { error: "로그인이 필요합니다.", code: "UNAUTHORIZED" },
+      { status: 401 }
+    );
+  }
+
   const key = process.env.AZURE_SPEECH_KEY?.trim();
   if (!key) {
     return NextResponse.json(
@@ -94,14 +106,12 @@ export async function POST(req: Request) {
 
     if (!ttsRes.ok) {
       const detail = await ttsRes.text();
-      return NextResponse.json(
-        {
-          error: "Azure TTS 요청에 실패했습니다.",
-          status: ttsRes.status,
-          detail: detail.slice(0, 600),
-        },
-        { status: 502 }
+      console.error(
+        "Azure TTS upstream error:",
+        ttsRes.status,
+        detail.slice(0, 1200)
       );
+      return NextResponse.json({ error: CLIENT_UPSTREAM_ERROR }, { status: 502 });
     }
 
     const buf = Buffer.from(await ttsRes.arrayBuffer());
@@ -113,10 +123,7 @@ export async function POST(req: Request) {
       },
     });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "알 수 없는 오류";
-    return NextResponse.json(
-      { error: "TTS 처리 중 오류", detail: msg },
-      { status: 500 }
-    );
+    console.error("Azure TTS fetch error:", e);
+    return NextResponse.json({ error: CLIENT_UPSTREAM_ERROR }, { status: 500 });
   }
 }

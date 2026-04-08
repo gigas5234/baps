@@ -1,54 +1,20 @@
 import { generateText } from "ai";
 import { NextResponse } from "next/server";
 import { getAuthenticatedSupabaseUser } from "@/lib/api-auth";
-import {
-  buildCoachApiContext,
-  isValidApiDate,
-  type MealUtcBounds,
-} from "@/lib/chat-context-server";
+import { buildCoachApiContext, isValidApiDate } from "@/lib/chat-context-server";
 import { buildMainDashboardInsightPrompt } from "@/lib/main-summary-prompt";
 import {
   coachGoogleProviderOptions,
   coachLanguageModel,
 } from "@/lib/coach-google-ai";
 import { getCalorieZone } from "@/lib/calorie-zone";
+import {
+  parseLocalHour,
+  parseMealUtcBounds,
+  parseTimeZone,
+} from "@/utils/time-parser";
 
 export const maxDuration = 30;
-
-function parseMealUtcBounds(
-  body: Record<string, unknown>
-): MealUtcBounds | null {
-  const b = body.meal_utc_bounds;
-  if (!b || typeof b !== "object") return null;
-  const o = b as Record<string, unknown>;
-  const range_start =
-    typeof o.range_start === "string" ? o.range_start.trim() : "";
-  const day_start =
-    typeof o.day_start === "string" ? o.day_start.trim() : "";
-  const day_end = typeof o.day_end === "string" ? o.day_end.trim() : "";
-  if (!range_start || !day_start || !day_end) return null;
-  return { range_start, day_start, day_end };
-}
-
-function parseTimeZone(body: Record<string, unknown>): string | null {
-  const t =
-    typeof body.time_zone === "string"
-      ? body.time_zone.trim()
-      : typeof (body as { timeZone?: unknown }).timeZone === "string"
-        ? String((body as { timeZone: string }).timeZone).trim()
-        : "";
-  return t || null;
-}
-
-function parseLocalHour(body: Record<string, unknown>): number | undefined {
-  const lh = body.local_hour;
-  if (typeof lh === "number" && Number.isFinite(lh)) return lh;
-  if (typeof lh === "string" && lh.trim() !== "") {
-    const n = Number(lh);
-    return Number.isFinite(n) ? n : undefined;
-  }
-  return undefined;
-}
 
 function sanitizeLine(raw: string): string {
   let s = raw.trim().replace(/\s+/g, " ");

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
+import { getAuthenticatedSupabaseUser } from "@/lib/api-auth";
 
 export const runtime = "nodejs";
+
+const CLIENT_UPSTREAM_ERROR =
+  "통신 장애가 발생했습니다. 잠시 후 다시 시도하세요.";
 
 function issueTokenUrl(): string | null {
   const endpoint = process.env.AZURE_SPEECH_ENDPOINT?.trim();
@@ -21,6 +25,14 @@ function issueTokenUrl(): string | null {
  * 선택: AZURE_SPEECH_ENDPOINT (커스텀 Cognitive 리소스 URL · fromEndpoint 대응)
  */
 export async function GET() {
+  const { user } = await getAuthenticatedSupabaseUser();
+  if (!user) {
+    return NextResponse.json(
+      { error: "로그인이 필요합니다.", code: "UNAUTHORIZED" },
+      { status: 401 }
+    );
+  }
+
   const key = process.env.AZURE_SPEECH_KEY?.trim();
   const region = process.env.AZURE_SPEECH_REGION?.trim();
 
@@ -62,27 +74,23 @@ export async function GET() {
 
     if (!tokenRes.ok) {
       const detail = await tokenRes.text();
-      return NextResponse.json(
-        {
-          error: "Azure에서 토큰 발급에 실패했습니다.",
-          status: tokenRes.status,
-          detail: detail.slice(0, 800),
-        },
-        { status: 502 }
+      console.error(
+        "Azure speech token upstream error:",
+        tokenRes.status,
+        detail.slice(0, 1200)
       );
+      return NextResponse.json({ error: CLIENT_UPSTREAM_ERROR }, { status: 502 });
     }
 
     const token = (await tokenRes.text()).trim();
     if (!token) {
-      return NextResponse.json({ error: "빈 토큰 응답입니다." }, { status: 502 });
+      console.error("Azure speech token: empty body");
+      return NextResponse.json({ error: CLIENT_UPSTREAM_ERROR }, { status: 502 });
     }
 
     return NextResponse.json({ token, region });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "알 수 없는 오류";
-    return NextResponse.json(
-      { error: "토큰 요청 중 오류가 났습니다.", detail: msg },
-      { status: 500 }
-    );
+    console.error("Azure speech token fetch error:", e);
+    return NextResponse.json({ error: CLIENT_UPSTREAM_ERROR }, { status: 500 });
   }
 }

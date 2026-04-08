@@ -1,12 +1,9 @@
 import { streamText } from "ai";
 import { NextResponse } from "next/server";
-
-export const maxDuration = 60;
 import { getAuthenticatedSupabaseUser } from "@/lib/api-auth";
 import {
   buildCoachApiContext,
   isValidApiDate,
-  type MealUtcBounds,
 } from "@/lib/chat-context-server";
 import {
   fallbackBootstrap,
@@ -20,46 +17,16 @@ import {
 } from "@/lib/coach-google-ai";
 import { parseCoachPersonaId, type CoachPersonaId } from "@/lib/coach-personas";
 import { pickInterventionGuestsForChat } from "@/lib/coach-intervention-triggers";
+import {
+  parseLocalHourHint,
+  parseMealUtcBounds,
+  parseTimeZone,
+} from "@/utils/time-parser";
+
+export const maxDuration = 60;
 
 const MAX_USER_MESSAGE_CHARS = 8_000;
 const MAX_HISTORY_LINE_CHARS = 6_000;
-
-function parseMealUtcBounds(
-  body: Record<string, unknown>
-): MealUtcBounds | null {
-  const b = body.meal_utc_bounds;
-  if (!b || typeof b !== "object") return null;
-  const o = b as Record<string, unknown>;
-  const range_start =
-    typeof o.range_start === "string" ? o.range_start.trim() : "";
-  const day_start =
-    typeof o.day_start === "string" ? o.day_start.trim() : "";
-  const day_end = typeof o.day_end === "string" ? o.day_end.trim() : "";
-  if (!range_start || !day_start || !day_end) return null;
-  return { range_start, day_start, day_end };
-}
-
-function parseTimeZone(body: Record<string, unknown>): string | null {
-  const t =
-    typeof body.time_zone === "string"
-      ? body.time_zone.trim()
-      : typeof (body as { timeZone?: unknown }).timeZone === "string"
-        ? String((body as { timeZone: string }).timeZone).trim()
-        : "";
-  return t || null;
-}
-
-function parseLocalHourHint(body: Record<string, unknown>): number | undefined {
-  const lh =
-    body.local_hour ??
-    (body.context as Record<string, unknown> | undefined)?.local_hour;
-  if (typeof lh === "number" && Number.isFinite(lh)) return lh;
-  if (typeof lh === "string" && lh.trim() !== "") {
-    const n = Number(lh);
-    return Number.isFinite(n) ? n : undefined;
-  }
-  return undefined;
-}
 
 function parseHistory(
   raw: unknown
@@ -247,15 +214,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Chat route error:", error);
     return NextResponse.json(
-      {
-        error: "요청 처리에 실패했습니다.",
-        detail:
-          process.env.NODE_ENV === "development"
-            ? error instanceof Error
-              ? error.message
-              : undefined
-            : undefined,
-      },
+      { error: "요청 처리에 실패했습니다." },
       { status: 500 }
     );
   }
