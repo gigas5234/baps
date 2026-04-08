@@ -447,7 +447,14 @@ export default function HomePage() {
   };
 
   const openGalleryPicker = () => {
-    galleryInputRef.current?.click();
+    analyzeFlowModeRef.current = "meal";
+    /**
+     * 1) iOS/WebKit: `display:none`인 file input은 programmatic click이 무시되는 경우가 많음 → `sr-only` 사용.
+     * 2) 퀵액션 시트가 닫히는 페인트와 같은 턴에서 열리면 피커가 안 뜨는 기기가 있어 한 틱 뒤에 연다.
+     */
+    requestAnimationFrame(() => {
+      galleryInputRef.current?.click();
+    });
   };
 
   const processMealImageFile = async (file: File) => {
@@ -902,15 +909,19 @@ export default function HomePage() {
         type="file"
         accept="image/*"
         capture="environment"
-        className="hidden"
+        className="sr-only"
+        aria-hidden
+        tabIndex={-1}
         onChange={handleFileChange}
       />
-      {/* 사진첩: 갤러리/라이브러리에서 선택 (capture 없음) */}
+      {/* 사진첩: 갤러리/라이브러리에서 선택 (capture 없음) — `hidden` 금지: 모바일 WebKit에서 .click() 무반응 */}
       <input
         ref={galleryInputRef}
         type="file"
         accept="image/*"
-        className="hidden"
+        className="sr-only"
+        aria-hidden
+        tabIndex={-1}
         onChange={handleFileChange}
       />
 
