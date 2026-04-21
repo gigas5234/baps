@@ -1,9 +1,9 @@
 // src/components/chat/atrium-view.tsx
 // Chat v2 — Atrium (첫 진입)
 // "오늘 누구에게 감시받으실래요?" — 2×3 코치 그리드 + voice sample 태그.
-// chat-fab.tsx의 AtriumCoachTapDeck + CoachPersonaPicker + 환영 패널을 흡수.
 "use client";
 
+import { useEffect, useRef } from "react";
 import {
   COACH_ATRIUM_BLURB,
   COACH_PERSONAS_UI,
@@ -34,22 +34,26 @@ export function AtriumView({
     ?? COACH_PERSONAS_UI.find((c) => c.id === DEFAULT_COACH_PERSONA_ID)!;
   const hue = COACH_HUES[sel.id];
 
+  const detailRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (opened && detailRef.current) {
+      detailRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [opened, selected]);
+
   return (
-    <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 pb-4 pt-2">
+    <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 pb-4 pt-2">
       {/* Welcome */}
-      <header className="mt-5">
+      <header className="mt-3">
         <p className="font-mono text-[10px] font-semibold tracking-[0.14em] text-muted-foreground/70">
           BAPS · COACH ROOM
         </p>
-        <h1 className="mt-2 text-[28px] font-extrabold leading-[1.15] tracking-[-0.03em] text-foreground">
-          오늘 누구에게
-          <br />
+        <h1 className="mt-1.5 text-[24px] font-extrabold leading-[1.15] tracking-[-0.03em] text-foreground">
+          오늘 누구에게{" "}
           <span style={{ color: hue.hue }}>감시</span>받으실래요?
         </h1>
-        <p className="mt-2 max-w-[26ch] text-[13px] leading-relaxed text-muted-foreground">
-          다섯 코치 중 한 명을 골라요.
-          <br />
-          각자 관점과 말투가 다릅니다.
+        <p className="mt-1.5 max-w-[26ch] text-[12px] leading-relaxed text-muted-foreground">
+          다섯 코치 중 한 명을 골라요. 각자 관점과 말투가 다릅니다.
         </p>
       </header>
 
@@ -70,18 +74,18 @@ export function AtriumView({
                 aria-checked={isSel}
                 onClick={() => onSelect(c.id)}
                 className={cn(
-                  "relative w-full overflow-hidden rounded-2xl border p-3 text-left",
+                  "relative w-full overflow-hidden rounded-2xl border p-2.5 text-left",
                   "transition-all duration-200",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1",
                   isSel
-                    ? "shadow-[0_0_0_1px_var(--chat-coach-hue)_22%,_0_4px_14px_-2px_var(--chat-coach-hue)_33%]"
-                    : "border-border bg-card shadow-sm hover:border-foreground/15"
+                    ? "shadow-md"
+                    : "border-border bg-card shadow-sm hover:border-foreground/15 active:scale-[0.98]"
                 )}
                 style={
                   isSel
                     ? {
                         background: ch.soft,
-                        borderColor: ch.hue + "33",
+                        borderColor: ch.hue + "55",
                       }
                     : undefined
                 }
@@ -89,7 +93,7 @@ export function AtriumView({
                 {isSel && (
                   <span
                     aria-hidden
-                    className="absolute right-2.5 top-2.5 size-1.5 rounded-full"
+                    className="absolute right-2 top-2 size-1.5 rounded-full"
                     style={{
                       background: ch.hue,
                       boxShadow: `0 0 0 3px ${ch.hue}22`,
@@ -97,12 +101,12 @@ export function AtriumView({
                   />
                 )}
                 <span
-                  className="block text-2xl leading-none"
+                  className="block text-xl leading-none"
                   style={{ filter: isSel ? "none" : "grayscale(0.15)" }}
                 >
                   {c.emoji}
                 </span>
-                <p className="mt-2.5 text-[13px] font-bold tracking-[-0.01em] text-foreground">
+                <p className="mt-1.5 text-[13px] font-bold tracking-[-0.01em] text-foreground">
                   {c.label}
                 </p>
                 <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
@@ -110,7 +114,7 @@ export function AtriumView({
                 </p>
                 <span
                   className={cn(
-                    "mt-2.5 inline-block max-w-full truncate rounded-[6px] border border-dashed px-1.5 py-[5px]",
+                    "mt-2 inline-block max-w-full truncate rounded-[6px] border border-dashed px-1.5 py-[4px]",
                     "font-mono text-[9px] font-semibold tracking-[0.03em]"
                   )}
                   style={{
@@ -130,6 +134,7 @@ export function AtriumView({
       {/* Detail panel on roster */}
       {opened && (
         <aside
+          ref={detailRef}
           className="relative overflow-hidden rounded-2xl border border-border bg-card p-3.5 pb-3 shadow-md"
           aria-live="polite"
         >
@@ -151,13 +156,14 @@ export function AtriumView({
             type="button"
             onClick={onStart}
             className={cn(
-              "mt-3 flex h-[42px] w-full items-center justify-center gap-1.5 rounded-xl",
-              "text-[13.5px] font-bold tracking-[-0.01em] text-white"
+              "mt-3 flex h-[44px] w-full items-center justify-center gap-1.5 rounded-xl",
+              "text-[14px] font-bold tracking-[-0.01em] text-white",
+              "transition-transform active:scale-[0.98]"
             )}
             style={{ background: hue.hue }}
           >
             {sel.label} 코치 시작하기
-            <ChevronRight className="size-3.5" />
+            <ChevronRight className="size-4" />
           </button>
         </aside>
       )}
