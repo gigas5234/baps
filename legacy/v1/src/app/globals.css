@@ -82,10 +82,10 @@
   --secondary: #f1f5f9;
   --secondary-foreground: #0f172a;
   --muted: #f1f5f9;
-  --muted-foreground: #475569; /* P0-2: was #64748b — slate-500 → slate-600 (AA) */
+  --muted-foreground: #64748b;
   --accent: #eef2ff;
   --accent-foreground: #3730a3;
-  --destructive: #e11d48; /* P0-2: was #f43f5e — 5.0:1 */
+  --destructive: #f43f5e;
   --destructive-foreground: #ffffff;
   --border: #e2e8f0;
   --input: #e2e8f0;
@@ -94,19 +94,19 @@
 
   --scanner: #2dd4bf;
   --scanner-foreground: #0f172a;
-  --alert: #e11d48; /* P0-2: was #f43f5e */
+  --alert: #f43f5e;
   --alert-foreground: #ffffff;
   --grid-line: #f1f5f9;
 
   --gauge-safe: #2dd4bf;
-  --gauge-caution: #c2410c; /* P0-2: was #ea580c — 5.2:1 */
+  --gauge-caution: #ea580c;
   --gauge-danger: #f43f5e;
 
   --action-manual: #10b981;
 
   --chart-1: #6366f1;
   --chart-2: #2dd4bf;
-  --chart-3: #c2410c; /* P0-2 */
+  --chart-3: #ea580c;
   --chart-4: #f43f5e;
   --chart-5: #64748b;
 
@@ -132,7 +132,7 @@
   --secondary: #334155;
   --secondary-foreground: #f8fafc;
   --muted: #334155;
-  --muted-foreground: #cbd5e1; /* P0-2: was #94a3b8 — 7.2:1 */
+  --muted-foreground: #94a3b8;
   --accent: #312e81;
   --accent-foreground: #e0e7ff;
   --destructive: #fb7185;
@@ -148,14 +148,14 @@
   --grid-line: rgba(248, 250, 252, 0.08);
 
   --gauge-safe: #5eead4;
-  --gauge-caution: #fdba74; /* P0-2: was #fb923c */
+  --gauge-caution: #fb923c;
   --gauge-danger: #fb7185;
 
   --action-manual: #34d399;
 
   --chart-1: #818cf8;
   --chart-2: #5eead4;
-  --chart-3: #fdba74; /* P0-2 */
+  --chart-3: #fb923c;
   --chart-4: #fb7185;
   --chart-5: #94a3b8;
 
@@ -179,16 +179,6 @@
 @utility font-data {
   font-family: var(--font-data);
   font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" 1, "lnum" 1;
-  letter-spacing: -0.01em;
-}
-
-@utility text-data-label {
-  color: color-mix(in srgb, var(--foreground) 70%, transparent);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  font-size: 10.5px;
 }
 
 @layer base {
@@ -552,87 +542,4 @@
     filter: drop-shadow(0 0 8px rgba(45, 212, 191, 0.25));
     will-change: auto;
   }
-}
-
-/* =========================================================================
-   P1 · Design tokens (radius scale, button hierarchy, empty state, timeline)
-   ========================================================================= */
-:root {
-  --radius-pill:     9999px;
-  --radius-chip:     0.5rem;
-  --radius-row:      0.75rem;
-  --radius-sub:      1rem;
-  --radius-card:     1.25rem;
-  --radius-hero:     1.75rem;
-
-  --btn-primary-bg:           var(--primary);
-  --btn-primary-fg:           var(--primary-foreground);
-  --btn-primary-hover:        color-mix(in srgb, var(--primary) 88%, black);
-
-  --btn-outline-border:       color-mix(in srgb, var(--foreground) 18%, transparent);
-  --btn-outline-bg:           transparent;
-  --btn-outline-fg:           var(--foreground);
-  --btn-outline-hover-bg:     color-mix(in srgb, var(--foreground) 6%, transparent);
-
-  --btn-ghost-bg:             transparent;
-  --btn-ghost-fg:             color-mix(in srgb, var(--foreground) 78%, transparent);
-  --btn-ghost-hover-bg:       color-mix(in srgb, var(--foreground) 5%, transparent);
-
-  --btn-alert-bg:             color-mix(in srgb, var(--destructive) 10%, transparent);
-  --btn-alert-fg:             var(--destructive);
-  --btn-alert-hover-bg:       color-mix(in srgb, var(--destructive) 16%, transparent);
-
-  --empty-surface:            color-mix(in srgb, var(--primary) 4%, var(--card));
-  --empty-border:             color-mix(in srgb, var(--primary) 18%, transparent);
-  --empty-text-primary:       var(--foreground);
-  --empty-text-secondary:     color-mix(in srgb, var(--foreground) 60%, transparent);
-  --empty-glyph:              color-mix(in srgb, var(--primary) 55%, transparent);
-
-  --timeline-kcal:            var(--foreground);
-  --timeline-title:           color-mix(in srgb, var(--foreground) 88%, transparent);
-  --timeline-meta:            color-mix(in srgb, var(--foreground) 58%, transparent);
-  --timeline-chip-bg:         color-mix(in srgb, var(--muted) 70%, transparent);
-  --timeline-chip-fg:         color-mix(in srgb, var(--foreground) 75%, transparent);
-}
-
-.dark {
-  --btn-outline-border:       color-mix(in srgb, var(--foreground) 22%, transparent);
-  --btn-ghost-fg:             color-mix(in srgb, var(--foreground) 82%, transparent);
-
-  --empty-surface:            color-mix(in srgb, var(--primary) 7%, var(--card));
-  --empty-border:             color-mix(in srgb, var(--primary) 22%, transparent);
-  --empty-glyph:              color-mix(in srgb, var(--primary) 70%, transparent);
-
-  --timeline-title:           color-mix(in srgb, var(--foreground) 92%, transparent);
-  --timeline-meta:            color-mix(in srgb, var(--foreground) 62%, transparent);
-  --timeline-chip-bg:         color-mix(in srgb, var(--muted) 45%, transparent);
-  --timeline-chip-fg:         color-mix(in srgb, var(--foreground) 82%, transparent);
-}
-
-@utility rounded-row  { border-radius: var(--radius-row); }
-@utility rounded-sub  { border-radius: var(--radius-sub); }
-@utility rounded-card { border-radius: var(--radius-card); }
-@utility rounded-hero { border-radius: var(--radius-hero); }
-@utility rounded-chip { border-radius: var(--radius-chip); }
-
-@utility text-timeline-kcal  { color: var(--timeline-kcal); }
-@utility text-timeline-title { color: var(--timeline-title); }
-@utility text-timeline-meta  { color: var(--timeline-meta); }
-
-/* =========================================================================
-   Chat v2 · keyframes
-   ========================================================================= */
-@keyframes chat-pulse {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50%      { transform: scale(1.08); opacity: 0.85; }
-}
-
-@keyframes chat-eq {
-  0%, 100% { transform: scaleY(0.3); }
-  50%      { transform: scaleY(1); }
-}
-
-@keyframes chat-dot {
-  0%, 60%, 100% { opacity: 0.2; transform: translateY(0); }
-  30%           { opacity: 1;   transform: translateY(-2px); }
 }

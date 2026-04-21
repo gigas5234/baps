@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>BAPS Chat — 리디자인 리뷰</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+<style>
+  html, body { margin: 0; padding: 0; overscroll-behavior: none; }
+  body {
+    font-family: "Pretendard Variable", Pretendard, -apple-system, system-ui, sans-serif;
+    background: #e9e5db;
+    color: #0f172a;
+  }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 8px; border-radius: 999px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+  }
+  .chip-crit { background: rgba(244,63,94,0.12); color: #be123c; border: 1px solid rgba(244,63,94,0.3); }
+  .chip-warn { background: rgba(245,158,11,0.12); color: #92400e; border: 1px solid rgba(245,158,11,0.4); }
+  .chip-good { background: rgba(4,120,87,0.1);   color: #065f46; border: 1px solid rgba(4,120,87,0.35); }
+  .chip-info { background: rgba(29,78,216,0.1);  color: #1e3a8a; border: 1px solid rgba(29,78,216,0.3); }
+</style>
+
+<!-- React + Babel -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="screens/chat-tokens.jsx"></script>
+<script type="text/babel" src="screens/chat-before.jsx"></script>
+<script type="text/babel" src="screens/chat-after.jsx"></script>
+<script type="text/babel" src="screens/chat-after-tablet.jsx"></script>
+<script type="text/babel" src="screens/refactor-diagram.jsx"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const MW = 390, MH = 780;
+
+function Phone({ children }) {
+  return (
+    <IOSDevice width={MW} height={MH} dark={false}>
+      <div style={{ position: 'absolute', inset: 0 }}>{children}</div>
+    </IOSDevice>
+  );
+}
+
+function Panel({ children, w = 520, pad = 24 }) {
+  return (
+    <div style={{
+      width: w, padding: pad, background: '#fff',
+      borderRadius: 16, border: '1px solid rgba(15,23,42,0.06)',
+      boxShadow: '0 1px 3px rgba(15,23,42,0.04), 0 10px 32px rgba(15,23,42,0.04)',
+      fontFamily: '"Pretendard Variable", Pretendard, system-ui', boxSizing: 'border-box',
+    }}>{children}</div>
+  );
+}
+
+function BriefPanel() {
+  return (
+    <Panel w={1060} pad={32}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 6 }}>
+        <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 11, fontWeight: 700, letterSpacing: '0.2em', color: '#c96442' }}>CHAT · v2 BRIEF</span>
+        <span style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: 11, color: '#64748b' }}>baps / src/components/chat/chat-fab.tsx · 72KB</span>
+      </div>
+      <h1 style={{ margin: 0, fontSize: 34, fontWeight: 800, letterSpacing: '-0.02em' }}>
+        카톡 UI를 벗고, <span style={{ color: '#c96442' }}>코치 룸</span>으로.
+      </h1>
+      <p style={{ margin: '10px 0 20px', fontSize: 15, lineHeight: 1.6, color: 'rgba(15,23,42,0.78)', maxWidth: 780 }}>
+        현재 채팅은 <b>카카오톡 모방</b>(아바타·꼬리·말풍선)에 5코치 타일을 우겨넣어 정체성이 뚜렷하지 않고, <code style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:13, background:'rgba(15,23,42,0.05)', padding:'1px 5px', borderRadius:4 }}>chat-fab.tsx</code> 단일 파일에 2,000 LOC가 뭉쳐 있어 유지보수가 막혀 있습니다.
+        이번 리디자인은 (1) 카톡 잔재 제거, (2) 코치 hue 기반 <b>Ambient UI</b>로 브랜드를 심고, (3) 파일을 4 view + 4 hook으로 쪼개 렌더 경로를 단순화합니다.
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
+        {[
+          { k: 'Before', v: '3블록 세로 나열 · 아바타+꼬리 말풍선', tone: 'warn' },
+          { k: 'After',  v: '코치별 Hue Halo · 통합 Turn Card',    tone: 'good' },
+          { k: 'Code',   v: '1 file 72KB → 4 view · 4 hook',       tone: 'info' },
+          { k: 'TTS',    v: '별도 HUD 제거 → 버블 halo + 인라인',  tone: 'good' },
+        ].map(c => (
+          <div key={c.k} style={{
+            padding: 14, borderRadius: 12,
+            border: '1px solid rgba(15,23,42,0.06)',
+            background: c.tone === 'good' ? 'rgba(4,120,87,0.06)'
+                      : c.tone === 'warn' ? 'rgba(245,158,11,0.07)'
+                      : 'rgba(29,78,216,0.06)',
+          }}>
+            <div style={{ fontFamily:'"JetBrains Mono", monospace', fontSize:10, fontWeight:700, letterSpacing:'0.1em', color:'#64748b' }}>{c.k.toUpperCase()}</div>
+            <div style={{ marginTop: 5, fontSize: 13, lineHeight: 1.45, fontWeight: 500 }}>{c.v}</div>
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+function ReviewCard({ title, items, w = 420 }) {
+  return (
+    <Panel w={w} pad={18}>
+      <div style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:11, fontWeight:700, letterSpacing:'0.12em', color:'#64748b', marginBottom: 4 }}>{title}</div>
+      {items.map((it, i) => (
+        <div key={i} style={{ padding: '10px 0', borderBottom: i < items.length-1 ? '1px dashed rgba(15,23,42,0.08)' : 'none' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+            <span className={`chip chip-${it.kind}`}>{it.tag || ({crit:'CUT',warn:'FIX',good:'KEEP',info:'NEW'})[it.kind]}</span>
+            <span style={{ fontSize:13, fontWeight:700 }}>{it.title}</span>
+          </div>
+          <div style={{ fontSize:12.5, lineHeight:1.55, color:'rgba(15,23,42,0.78)' }}>{it.body}</div>
+          {it.ref && <div style={{ marginTop:4, fontFamily:'"JetBrains Mono",monospace', fontSize:10.5, color:'#64748b' }}>› {it.ref}</div>}
+        </div>
+      ))}
+    </Panel>
+  );
+}
+
+function PaletteCard() {
+  const coaches = [
+    { id:'diet',      name:'다이어트', role:'감시',  hue:'#b4233b' },
+    { id:'nutrition', name:'영양',     role:'분석',  hue:'#047857' },
+    { id:'exercise',  name:'운동',     role:'환산',  hue:'#b45309' },
+    { id:'mental',    name:'멘탈',     role:'리듬',  hue:'#6d28d9' },
+    { id:'roi',       name:'가성비',   role:'회계',  hue:'#1d4ed8' },
+  ];
+  return (
+    <Panel w={520}>
+      <div style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:11, fontWeight:700, letterSpacing:'0.18em', color:'#c96442' }}>COACH · HUE SYSTEM</div>
+      <h3 style={{ margin:'6px 0 14px', fontSize:20, fontWeight:700, letterSpacing:'-0.02em' }}>5 코치 · 5 Hue</h3>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:8 }}>
+        {coaches.map(c => (
+          <div key={c.id} style={{ border:'1px solid rgba(15,23,42,0.06)', borderRadius:10, overflow:'hidden' }}>
+            <div style={{ height:56, background:c.hue }}/>
+            <div style={{ padding:'6px 8px' }}>
+              <div style={{ fontSize:12, fontWeight:700 }}>{c.name}</div>
+              <div style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:9.5, color:'#64748b' }}>{c.role}</div>
+              <div style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:9, color:'#94a3b8', marginTop:2 }}>{c.hue}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop:14, padding:12, borderRadius:10, background:'rgba(15,23,42,0.03)' }}>
+        <div style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:10, fontWeight:700, color:'#64748b', letterSpacing:'0.08em', marginBottom:4 }}>RULE</div>
+        <div style={{ fontSize:12.5, lineHeight:1.55 }}>
+          • 대화 중인 코치의 hue가 <b>상단 배경 aura · 버블 halo · Send 버튼 · 빠른칩</b>에 자연스럽게 스며든다.<br/>
+          • 채도는 원본 대비 낮춰 면적 확장 시에도 피로감 없게 (soft tint 8%·ink 30%·hue 100% 3단).
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function App() {
+  return (
+    <DesignCanvas>
+      <DCSection id="brief" title="Brief" subtitle="왜 카톡 UI를 버리는가 · 파일을 왜 쪼개는가">
+        <DCArtboard id="brief" label="Redesign brief" width={1060} height={360}>
+          <BriefPanel/>
+        </DCArtboard>
+        <DCArtboard id="palette" label="Coach hue system" width={520} height={360}>
+          <PaletteCard/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="before-after" title="① Before → After · 모바일 비교" subtitle="chat-fab.tsx · ChatPanel 메인 프레임">
+        <DCArtboard id="before" label="Before — 현재 (카톡 모방)" width={MW} height={MH+40}>
+          <Phone><ChatBeforeMobile/></Phone>
+        </DCArtboard>
+        <DCArtboard id="before-review" label="해체 포인트" width={420} height={MH+40}>
+          <ReviewCard title="BEFORE · 4 cuts" items={[
+            { kind:'crit', tag:'CUT', title:'카톡 말풍선·꼬리·아바타',
+              body:'노란 유저 버블 + 회색 코치 말풍선 + 꼬리 삼각형은 카카오톡 기시감을 불러온다. 브랜드 고유의 시그니처가 없다.',
+              ref:'ChatThread · chatBubbleRenderer' },
+            { kind:'crit', tag:'CUT', title:'상단 5코치 이모지 배지',
+              body:'28×28 크기의 5개 배지가 헤더를 잡아먹는다. 선택 상태도 붉은 테두리 하나로만 구분 — 터치 타깃 빈약.',
+              ref:'CoachSwitcher · line 320' },
+            { kind:'warn', tag:'FIX', title:'3블록 세로 스택 (요약→팩폭→미션)',
+              body:'코치의 한 턴이 버블 3개로 분리되어 스크롤·시선 비용이 크다. 하나의 카드로 통합, 태그만 유지.',
+              ref:'renderCoachTurn' },
+            { kind:'warn', tag:'FIX', title:'"📋 빠른 요청" 박스',
+              body:'박스 내부 좌측 borderLeft 빨강 액센트 + 박스 자체. 이중 컨테이너로 밀도 낭비. 칩 행 하나로 축소.',
+              ref:'QuickChips · bootstrap' },
+          ]}/>
+        </DCArtboard>
+
+        <DCArtboard id="after-atrium" label="After — Atrium (첫 진입)" width={MW} height={MH+40}>
+          <Phone><ChatAfterMobile state="atrium" coach="nutrition"/></Phone>
+        </DCArtboard>
+        <DCArtboard id="after-roster" label="After — Roster (코치 선택)" width={MW} height={MH+40}>
+          <Phone><ChatAfterMobile state="roster" coach="diet"/></Phone>
+        </DCArtboard>
+        <DCArtboard id="after-thread" label="After — Thread (대화 중)" width={MW} height={MH+40}>
+          <Phone><ChatAfterMobile state="thread" coach="nutrition"/></Phone>
+        </DCArtboard>
+
+        <DCArtboard id="after-review" label="새 구조 포인트" width={420} height={MH+40}>
+          <ReviewCard title="AFTER · 5 moves" items={[
+            { kind:'good', tag:'KEEP', title:'Watcher 톤 · 팩폭 카피',
+              body:'"[보고] 단백질 -22%" 같은 코치별 voice sample은 유지. 브랜드 코어는 말투.',
+              ref:'CoachData · voice' },
+            { kind:'info', tag:'NEW', title:'Ambient Hue Aura',
+              body:'상단 배경에 대화 중인 코치의 hue가 radial-gradient로 은은히 스민다. 코치 전환 시 400ms transition — 감각적으로 "누구와 얘기 중"을 전달.',
+              ref:'ChatPanel · aura layer' },
+            { kind:'info', tag:'NEW', title:'Atrium — 웰컴 스크린',
+              body:'"오늘 누구에게 감시받으실래요?" 한 문장 + 2×3 카드 그리드. 카드 안에 voice sample 태그 미리 노출로 브랜드 톤 학습.',
+              ref:'AtriumView' },
+            { kind:'info', tag:'NEW', title:'Turn Card · 3블록 통합',
+              body:'ANALYSIS / ROAST / MISSION을 하나의 카드 안 3 row로. 코치 라벨은 좌측 vertical mono text로 공간 절약.',
+              ref:'CoachTurnCard' },
+            { kind:'info', tag:'NEW', title:'TTS Halo + 인라인 EQ',
+              body:'별도 TTS HUD 삭제. 읽고 있는 버블 자체에 hue halo + 하단 EQ 바로 재생 상태를 최소 침해로 표현.',
+              ref:'CoachStreamingBubble' },
+          ]}/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="tablet" title="② Tablet — 2-pane 확장" subtitle="lg ≥ 768 · 코치 rail 상시 노출">
+        <DCArtboard id="tablet-after" label="Tablet · Roster + Thread" width={900} height={620}>
+          <div style={{ width: 900, height: 620, borderRadius: 18, overflow: 'hidden', boxShadow: '0 8px 40px rgba(15,23,42,0.12)', border: '1px solid rgba(15,23,42,0.08)' }}>
+            <ChatAfterTablet/>
+          </div>
+        </DCArtboard>
+        <DCArtboard id="tablet-notes" label="태블릿 원칙" width={420} height={620}>
+          <ReviewCard title="TABLET · 4 rules" items={[
+            { kind:'info', tag:'RULE', title:'Rail 상시 노출',
+              body:'모바일은 모드 전환(atrium ↔ thread), 태블릿은 좌측 280px rail + 우측 대화. 코치 변경이 즉각적.',
+              ref:'ChatAfterTablet · aside' },
+            { kind:'info', tag:'RULE', title:'선택 코치 = 대화 pane hue',
+              body:'좌측에서 코치 클릭 → 우측 헤더 뱃지·Send·빠른칩·스트리밍 halo가 hue로 동시 리드.',
+              ref:'selectedId propagation' },
+            { kind:'good', tag:'KEEP', title:'하단 TTS bar',
+              body:'rail 하단에 고정 — 음성 on/off 상태와 설정 접근을 대화 영역과 분리.',
+              ref:'aside · tts bar' },
+            { kind:'info', tag:'NEW', title:'데이터 카드 + 메시지 혼합',
+              body:'단백질 현황 등 수치 카드를 버블 스트림에 자연스럽게 삽입. 대화형 data viz.',
+              ref:'TabletDataCard' },
+          ]}/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="code" title="③ 파일 리팩토링" subtitle="chat-fab.tsx 72KB 해체">
+        <DCArtboard id="refactor" label="Structure — before / after" width={1060} height={620}>
+          <RefactorDiagram/>
+        </DCArtboard>
+      </DCSection>
+
+      <DCSection id="nextsteps" title="④ 다음 스프린트" subtitle="디자인 + 코드 병렬 작업 플랜">
+        <DCArtboard id="plan" label="Proposed plan" width={640} height={520}>
+          <Panel w={640} pad={24}>
+            <div style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:11, fontWeight:700, letterSpacing:'0.18em', color:'#c96442' }}>SPRINT · CHAT v2</div>
+            <h3 style={{ margin:'6px 0 14px', fontSize:22, fontWeight:800, letterSpacing:'-0.02em' }}>3일 안에 MVP, 1주 안에 정식</h3>
+            <ol style={{ margin:0, paddingLeft:20, fontSize:13.5, lineHeight:1.75 }}>
+              <li style={{ marginBottom:8 }}><b>D1 · Tokens + AtriumView</b> — chat-tokens.ts 추출, 2×3 코치 그리드 + Ambient aura.<br/>
+                <span style={{ color:'#64748b', fontSize:12 }}>완료 시 기존 headerSwitcher 삭제 가능</span></li>
+              <li style={{ marginBottom:8 }}><b>D2 · ThreadView + Turn Card</b> — 3블록 통합 카드, 좌측 vertical label, 카톡 버블 전면 교체.<br/>
+                <span style={{ color:'#64748b', fontSize:12 }}>아바타·꼬리 렌더러 제거</span></li>
+              <li style={{ marginBottom:8 }}><b>D3 · useCoachTts + Halo</b> — TTS HUD 제거, 스트리밍 버블 halo + EQ 인라인.<br/>
+                <span style={{ color:'#64748b', fontSize:12 }}>mediaRef 7개 → 훅 내부 1개</span></li>
+              <li style={{ marginBottom:8 }}><b>D4–5 · Tablet 2-pane</b> — lg breakpoint rail, 선택 상태 전파.</li>
+              <li style={{ marginBottom:8 }}><b>D6 · useVoiceSession + useAtriumBootstrap</b> — STT·opening chips 훅 추출.</li>
+              <li><b>D7 · 접근성 스윕</b> — hue/text 대비 검사, TTS 토글 aria-pressed, 포커스 링.</li>
+            </ol>
+          </Panel>
+        </DCArtboard>
+        <DCArtboard id="kpi" label="성공 지표" width={420} height={520}>
+          <Panel w={420} pad={22}>
+            <div style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:11, fontWeight:700, letterSpacing:'0.18em', color:'#c96442' }}>KPI · 측정 가능한 효과</div>
+            <h3 style={{ margin:'6px 0 14px', fontSize:20, fontWeight:800, letterSpacing:'-0.02em' }}>리디자인이 숫자로 증명되려면</h3>
+            {[
+              { k:'첫 메시지까지 시간', v:'— → 8s 목표', note:'Atrium → 코치 선택 → 첫 send' },
+              { k:'코치 전환 빈도', v:'세션당 0 → 1.5', note:'rail 상시 노출 효과' },
+              { k:'TTS 청취 완료율', v:'— → 70%', note:'halo 가독성 덕분에 음소거 대신 유지' },
+              { k:'chat-fab LOC', v:'1,800 → ≤ 520', note:'각 view ≤ 120 LOC 목표' },
+              { k:'a11y 대비 실패', v:'8건 → 0', note:'hue/text AA 전수 통과' },
+            ].map(k => (
+              <div key={k.k} style={{ padding:'10px 0', borderBottom:'1px dashed rgba(15,23,42,0.08)' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', gap:10 }}>
+                  <span style={{ fontSize:12.5, fontWeight:600 }}>{k.k}</span>
+                  <span style={{ fontFamily:'"JetBrains Mono",monospace', fontSize:12, fontWeight:700, color:'#c96442', fontVariantNumeric:'tabular-nums' }}>{k.v}</span>
+                </div>
+                <div style={{ fontSize:11, color:'#64748b', marginTop:2 }}>{k.note}</div>
+              </div>
+            ))}
+          </Panel>
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

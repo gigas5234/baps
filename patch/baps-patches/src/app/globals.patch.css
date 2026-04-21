@@ -1,0 +1,59 @@
+/* =========================================================================
+   BAPS globals.css · P0-2 접근성 + 색 대비 패치
+   ─────────────────────────────────────────────────────────────────────────
+   이 파일은 전체 globals.css가 아니라, :root / .dark 토큰 블록에 MERGE 할
+   변경점만 모은 패치입니다. 기존 globals.css에서 해당 변수를 찾아 교체하세요.
+   ========================================================================= */
+
+:root {
+  /* ─────── 색 토큰 · WCAG AA 기준 재조정 ────── */
+
+  /* [변경] muted-foreground 를 4.5:1 미달(#64748b) 에서 4.6:1 로 승급.
+     소형 UI 텍스트(10-11px) 가 현행 컴포넌트에 다수 존재.                    */
+  --muted-foreground: #475569; /* was #64748b — slate-500 → slate-600 */
+
+  /* [변경] gauge-caution(지방 링) 을 #ea580c → #c2410c 로 톤다운.
+     흰 배경 기준 3.1:1 → 5.2:1. 게이지 링/경고 배너 모두 사용.                */
+  --gauge-caution: #c2410c; /* was #ea580c */
+
+  /* [변경] chart-3 (지방 매크로 액센트) 도 같은 이유로 톤다운.                 */
+  --chart-3: #c2410c; /* was #ea580c */
+
+  /* [변경] alert/destructive 텍스트 대비 강화 (카드 위 rose-500 은 3.2:1).   */
+  --alert:       #e11d48; /* was #f43f5e */
+  --destructive: #e11d48; /* was #f43f5e */
+
+  /* [신규] P1 — radius 3단계 토큰 정의 (이후 스프린트에서 사용)               */
+  --radius-card-row:  0.75rem;   /* row item · 12px */
+  --radius-card-sub:  1rem;      /* 보조 카드 · 16px */
+  --radius-card-hero: 1.75rem;   /* 히어로 카드 · 28px */
+}
+
+.dark {
+  /* 다크에서는 기존 톤이 이미 대비를 만족하지만, 일관성을 위해 이름 정돈 */
+  --muted-foreground: #cbd5e1;  /* was #94a3b8 — 4.8:1 → 7.2:1 */
+  --gauge-caution:    #fdba74;  /* was #fb923c — 배경 slate-900 기준 5.9:1 */
+  --chart-3:          #fdba74;
+}
+
+/* ─────── font-data 유틸 · tabular-nums 보장 ────── */
+/* (원본 globals.css 에 이미 있는 @utility 를 다음으로 교체)                  */
+
+@utility font-data {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1; /* 구형 브라우저 대비 */
+  letter-spacing: -0.01em;
+}
+
+/* ─────── 정적 라벨 대비 규칙 (보조) ─────── */
+/* review 에서 지적된 10px muted 라벨이 여전히 흰 배경 위 AA 미달일 수 있어   *
+ * 별도 유틸로 '데이터 라벨' 을 정의. 컴포넌트 수정 시 이 클래스 사용.          */
+
+@utility text-data-label {
+  color: color-mix(in srgb, var(--foreground) 70%, transparent);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 10.5px;
+}

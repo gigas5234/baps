@@ -1,0 +1,80 @@
+/* =========================================================================
+   BAPS · P1 디자인 토큰 패치
+   ─────────────────────────────────────────────────────────────────────────
+   P1-1 · radius 3단계 토큰 (row / sub / hero) 확정
+   P1-2 · 버튼 위계 — data-tone 토큰으로 primary/ghost/outline/alert 구분
+   P1-3 · empty state 전용 surface / text 토큰
+   P1-4 · Timeline hero/chip 계층 색상 토큰
+   ========================================================================= */
+
+:root {
+  /* ───── P1-1 · radius scale ───── */
+  --radius-pill:     9999px;
+  --radius-chip:     0.5rem;       /* 8px  — macro pill, slot badge */
+  --radius-row:      0.75rem;      /* 12px — meal row, timeline tray */
+  --radius-sub:      1rem;         /* 16px — inner card (image thumb, kpi tile) */
+  --radius-card:     1.25rem;      /* 20px — 일반 카드 (water, weight) */
+  --radius-hero:     1.75rem;      /* 28px — gauge, calendar, meal-analysis */
+
+  /* ───── P1-2 · button hierarchy ─────
+     원칙: "한 화면에 primary 는 최대 1개".
+     2차 액션은 outline, 3차는 ghost, 파괴 액션은 alert.              */
+  --btn-primary-bg:           var(--primary);
+  --btn-primary-fg:           var(--primary-foreground);
+  --btn-primary-hover:        color-mix(in srgb, var(--primary) 88%, black);
+
+  --btn-outline-border:       color-mix(in srgb, var(--foreground) 18%, transparent);
+  --btn-outline-bg:           transparent;
+  --btn-outline-fg:           var(--foreground);
+  --btn-outline-hover-bg:     color-mix(in srgb, var(--foreground) 6%, transparent);
+
+  --btn-ghost-bg:             transparent;
+  --btn-ghost-fg:             color-mix(in srgb, var(--foreground) 78%, transparent);
+  --btn-ghost-hover-bg:       color-mix(in srgb, var(--foreground) 5%, transparent);
+
+  --btn-alert-bg:             color-mix(in srgb, var(--destructive) 10%, transparent);
+  --btn-alert-fg:             var(--destructive);
+  --btn-alert-hover-bg:       color-mix(in srgb, var(--destructive) 16%, transparent);
+
+  /* ───── P1-3 · empty state 전용 ─────
+     회색만 쓰지 말고, 시스템의 "대기 중" 무드 (파랑/보라 미세)                 */
+  --empty-surface:            color-mix(in srgb, var(--primary) 4%, var(--card));
+  --empty-border:             color-mix(in srgb, var(--primary) 18%, transparent);
+  --empty-text-primary:       var(--foreground);
+  --empty-text-secondary:     color-mix(in srgb, var(--foreground) 60%, transparent);
+  --empty-glyph:              color-mix(in srgb, var(--primary) 55%, transparent);
+
+  /* ───── P1-4 · Timeline hero / hierarchy ─────
+     카드 내부 3단 위계: hero(kcal) > title(food) > meta(slot/time)             */
+  --timeline-kcal:            var(--foreground);
+  --timeline-title:           color-mix(in srgb, var(--foreground) 88%, transparent);
+  --timeline-meta:            color-mix(in srgb, var(--foreground) 58%, transparent);
+  --timeline-chip-bg:         color-mix(in srgb, var(--muted) 70%, transparent);
+  --timeline-chip-fg:         color-mix(in srgb, var(--foreground) 75%, transparent);
+}
+
+.dark {
+  --btn-outline-border:       color-mix(in srgb, var(--foreground) 22%, transparent);
+  --btn-ghost-fg:             color-mix(in srgb, var(--foreground) 82%, transparent);
+
+  --empty-surface:            color-mix(in srgb, var(--primary) 7%, var(--card));
+  --empty-border:             color-mix(in srgb, var(--primary) 22%, transparent);
+  --empty-glyph:              color-mix(in srgb, var(--primary) 70%, transparent);
+
+  --timeline-title:           color-mix(in srgb, var(--foreground) 92%, transparent);
+  --timeline-meta:            color-mix(in srgb, var(--foreground) 62%, transparent);
+  --timeline-chip-bg:         color-mix(in srgb, var(--muted) 45%, transparent);
+  --timeline-chip-fg:         color-mix(in srgb, var(--foreground) 82%, transparent);
+}
+
+/* ───── utility mapping ─────
+   Tailwind arbitrary 값 대신 의미 있는 유틸로 쓰기. components 에서 사용. */
+
+@utility rounded-row  { border-radius: var(--radius-row); }
+@utility rounded-sub  { border-radius: var(--radius-sub); }
+@utility rounded-card { border-radius: var(--radius-card); }
+@utility rounded-hero { border-radius: var(--radius-hero); }
+
+@utility text-timeline-kcal  { color: var(--timeline-kcal); }
+@utility text-timeline-title { color: var(--timeline-title); }
+@utility text-timeline-meta  { color: var(--timeline-meta); }

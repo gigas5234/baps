@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>BAPS — 디자인 리뷰</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
+<style>
+  html, body { margin: 0; padding: 0; overscroll-behavior: none; }
+  body {
+    font-family: "Pretendard Variable", Pretendard, -apple-system, system-ui, sans-serif;
+    background: #f0eee9;
+    color: #0f172a;
+  }
+  .issue-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 8px; border-radius: 999px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+  }
+  .issue-crit  { background: rgba(244,63,94,0.12); color: #be123c; border: 1px solid rgba(244,63,94,0.3); }
+  .issue-warn  { background: rgba(245,158,11,0.12); color: #92400e; border: 1px solid rgba(245,158,11,0.4); }
+  .issue-nit   { background: rgba(99,102,241,0.1); color: #4338ca; border: 1px solid rgba(99,102,241,0.3); }
+  .issue-good  { background: rgba(20,184,166,0.1); color: #0f766e; border: 1px solid rgba(20,184,166,0.35); }
+
+  .rc-card {
+    background: #fff;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 12px;
+    padding: 16px 18px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.03);
+  }
+  .rc-item {
+    padding: 10px 0;
+    border-bottom: 1px dashed rgba(0,0,0,0.08);
+  }
+  .rc-item:last-child { border-bottom: none; }
+  .rc-title {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 700; color: #0f172a;
+    margin: 0 0 4px;
+  }
+  .rc-body { margin: 0; font-size: 12.5px; line-height: 1.55; color: rgba(15,23,42,0.78); }
+  .rc-ref { display: inline-block; font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: #64748b; margin-top: 4px; }
+</style>
+
+<!-- React + Babel -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="screens/landing.jsx"></script>
+<script type="text/babel" src="screens/dashboard.jsx"></script>
+<script type="text/babel" src="screens/analysis.jsx"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+/* ───────────────────────────────────────────────────────────
+   BAPS Design Review — repository: gigas5234/baps @ main
+   Screens are faithful reconstructions of the tsx source for
+   critique purposes. All review copy is our own analysis.
+   ─────────────────────────────────────────────────────────── */
+
+const DEVICE_W = 390;
+const DEVICE_H = 780;
+
+function PhoneFrame({ children, title }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+      <IOSDevice width={DEVICE_W} height={DEVICE_H} dark={false}>
+        <div style={{ position: 'absolute', inset: 0 }}>{children}</div>
+      </IOSDevice>
+    </div>
+  );
+}
+
+function Chip({ kind = 'warn', children }) {
+  return <span className={`issue-chip issue-${kind}`}>{children}</span>;
+}
+
+function ReviewCard({ title, items }) {
+  return (
+    <div className="rc-card" style={{ width: 420 }}>
+      <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em',
+        textTransform: 'uppercase', color: '#64748b', fontFamily: '"JetBrains Mono", monospace' }}>
+        {title}
+      </p>
+      {items.map((it, i) => (
+        <div className="rc-item" key={i}>
+          <p className="rc-title">
+            <Chip kind={it.kind}>{it.kindLabel || ({
+              crit: 'CRITICAL', warn: 'WARN', nit: 'NIT', good: 'WIN',
+            })[it.kind]}</Chip>
+            {it.title}
+          </p>
+          <p className="rc-body">{it.body}</p>
+          {it.ref && <span className="rc-ref">› {it.ref}</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Section 1: Overview ─────────────────────────────────── */
+
+function OverviewPanel() {
+  return (
+    <div style={{
+      width: 1060, padding: '28px 36px',
+      background: '#fff', borderRadius: 16, border: '1px solid rgba(0,0,0,0.06)',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 10px 32px rgba(0,0,0,0.04)',
+      fontFamily: '"Pretendard Variable", Pretendard, system-ui',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 6 }}>
+        <p style={{ margin: 0, fontFamily: '"JetBrains Mono", monospace', fontSize: 11, fontWeight: 700,
+          letterSpacing: '0.2em', color: '#6366f1' }}>DESIGN REVIEW · v1</p>
+        <p style={{ margin: 0, fontFamily: '"JetBrains Mono", monospace', fontSize: 11, color: '#64748b' }}>
+          gigas5234/baps @ main
+        </p>
+      </div>
+      <h1 style={{ margin: 0, fontSize: 34, fontWeight: 700, letterSpacing: '-0.02em', color: '#0f172a' }}>
+        BAPS — 전반 디자인 리뷰
+      </h1>
+      <p style={{ margin: '10px 0 20px', fontSize: 15, lineHeight: 1.6, color: 'rgba(15,23,42,0.75)', maxWidth: 820 }}>
+        <b>"The Watcher Edition"</b>을 표방하는 식단 기록 앱. 차가운 AI톤 + 팩폭 카피 + 글래스모피즘 + 데이터 그리드 레이아웃을
+        표방하고 있습니다. 랜딩·대시보드·분석 결과 3개 핵심 화면을 중심으로, <b>톤 일관성</b>·<b>정보 위계</b>·<b>촉각적 밀도</b>·
+        <b>접근성</b> 네 축에서 검토했습니다.
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
+        {[
+          { k: '✦ 시각 톤', v: '일관된 Indigo + Teal, Watcher 톤 잘 유지', tone: 'good' },
+          { k: '✦ 정보 위계', v: '대시보드 카드 밀도 과다, 스캔성 약함', tone: 'warn' },
+          { k: '✦ 카피', v: '팩폭 톤 OK — 1인칭 “우리” 혼용 정리 필요', tone: 'nit' },
+          { k: '✦ 접근성', v: 'gauge 색 대비·라벨 숫자 태깅 미흡', tone: 'crit' },
+        ].map((c, i) => (
+          <div key={i} style={{
+            padding: 14, borderRadius: 12,
+            border: '1px solid rgba(0,0,0,0.06)',
+            background: c.tone === 'good' ? 'rgba(20,184,166,0.06)'
+                      : c.tone === 'warn' ? 'rgba(245,158,11,0.06)'
+                      : c.tone === 'nit'  ? 'rgba(99,102,241,0.06)'
+                      : 'rgba(244,63,94,0.06)',
+          }}>
+            <p style={{ margin: 0, fontFamily: '"JetBrains Mono", monospace', fontSize: 10,
+              fontWeight: 700, color: '#64748b', letterSpacing: '0.06em' }}>{c.k}</p>
+            <p style={{ margin: '6px 0 0', fontSize: 13, lineHeight: 1.45, color: '#0f172a', fontWeight: 500 }}>
+              {c.v}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 16 }}>
+        <div>
+          <p style={{ margin: '0 0 8px', fontSize: 12, fontWeight: 700, color: '#0f172a',
+            fontFamily: '"JetBrains Mono", monospace', letterSpacing: '0.05em' }}>TL;DR</p>
+          <ol style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.7, color: 'rgba(15,23,42,0.8)' }}>
+            <li><b>대시보드 과밀</b> — 칼로리 게이지 카드 하나에 8가지 지표가 겹쳐 시선이 흩어짐. 핵심 숫자 하나 + 지원 지표 3개 원칙으로 정리.</li>
+            <li><b>톤 균열</b> — 랜딩의 "완벽한 식단 기록" 같은 달콤한 카피가 Watcher 톤과 어긋남. "감지/분석" 어휘로 통일.</li>
+            <li><b>숫자 타이포</b> — JetBrains Mono 적용은 훌륭하나 tabular-nums 누락 구간 있음(항목 카드). 숫자 흔들림.</li>
+            <li><b>접근성</b> — 게이지 stroke 색이 연하고(fat: #f08745 on 반투명 배경) text-contrast 2.8:1. AA 실패.</li>
+          </ol>
+        </div>
+        <div>
+          <LegendBox kind="crit" count={3} label="Critical" note="배포 전 반드시 수정"/>
+        </div>
+        <div>
+          <LegendBox kind="warn" count={6} label="Warn" note="다음 스프린트"/>
+        </div>
+        <div>
+          <LegendBox kind="nit" count={5} label="Nit" note="취향·세부"/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LegendBox({ kind, count, label, note }) {
+  const bg = kind === 'crit' ? 'rgba(244,63,94,0.06)'
+            : kind === 'warn' ? 'rgba(245,158,11,0.06)'
+            : 'rgba(99,102,241,0.06)';
+  return (
+    <div style={{ padding: 14, borderRadius: 12, background: bg, border: '1px solid rgba(0,0,0,0.06)' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <p style={{ margin: 0, fontFamily: '"JetBrains Mono", monospace', fontSize: 28,
+          fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>{count}</p>
+        <Chip kind={kind}>{label.toUpperCase()}</Chip>
+      </div>
+      <p style={{ margin: '6px 0 0', fontSize: 11, color: '#64748b' }}>{note}</p>
+    </div>
+  );
+}
+
+/* ─── Design system reference card ───────────────────────── */
+
+function DesignSystemPanel() {
+  const tokens = [
+    { name: 'background', hex: '#F8FAFC', role: 'Canvas' },
+    { name: 'card',       hex: '#FFFFFF', role: 'Surface' },
+    { name: 'primary',    hex: '#6366F1', role: 'AI Indigo' },
+    { name: 'scanner',    hex: '#2DD4BF', role: 'Point · Scan' },
+    { name: 'alert',      hex: '#F43F5E', role: 'Fact · Warn' },
+    { name: 'foreground', hex: '#0F172A', role: 'Text' },
+  ];
+  return (
+    <div style={{
+      width: 520, padding: 24, borderRadius: 16, background: '#fff',
+      border: '1px solid rgba(0,0,0,0.06)',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 10px 32px rgba(0,0,0,0.04)',
+    }}>
+      <p style={{ margin: 0, fontFamily: '"JetBrains Mono", monospace', fontSize: 11, fontWeight: 700,
+        letterSpacing: '0.18em', color: '#6366f1' }}>DESIGN SYSTEM · SNAPSHOT</p>
+      <h3 style={{ margin: '8px 0 16px', fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>
+        The Watcher Edition — 토큰 일람
+      </h3>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+        {tokens.map(t => (
+          <div key={t.name} style={{
+            border: '1px solid rgba(0,0,0,0.06)', borderRadius: 10, overflow: 'hidden',
+          }}>
+            <div style={{ height: 56, background: t.hex, borderBottom: '1px solid rgba(0,0,0,0.06)' }}/>
+            <div style={{ padding: '8px 10px' }}>
+              <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: '#0f172a' }}>{t.role}</p>
+              <p style={{ margin: '2px 0 0', fontFamily: '"JetBrains Mono", monospace', fontSize: 11, color: '#64748b' }}>
+                {t.hex}
+              </p>
+              <p style={{ margin: '0', fontFamily: '"JetBrains Mono", monospace', fontSize: 10, color: '#94a3b8' }}>
+                --{t.name}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div style={{ padding: 12, borderRadius: 10, border: '1px solid rgba(0,0,0,0.06)' }}>
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: '#64748b', fontFamily: '"JetBrains Mono", monospace' }}>SANS · UI/한글</p>
+          <p style={{ margin: '4px 0 0', fontSize: 20, fontWeight: 600, color: '#0f172a' }}>
+            Pretendard — 밥 먹었니
+          </p>
+        </div>
+        <div style={{ padding: 12, borderRadius: 10, border: '1px solid rgba(0,0,0,0.06)' }}>
+          <p style={{ margin: 0, fontSize: 11, fontWeight: 700, color: '#64748b', fontFamily: '"JetBrains Mono", monospace' }}>MONO · DATA</p>
+          <p style={{ margin: '4px 0 0', fontFamily: '"JetBrains Mono", monospace', fontSize: 20, fontWeight: 700, color: '#0f172a' }}>
+            1,624 kcal
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Section heading ───────────────────────────────────── */
+
+function SectionHeader({ eyebrow, title, blurb }) {
+  return (
+    <div style={{ padding: '24px 60px 0', maxWidth: 880 }}>
+      <p style={{ margin: 0, fontFamily: '"JetBrains Mono", monospace', fontSize: 11, fontWeight: 700,
+        letterSpacing: '0.2em', color: '#6366f1' }}>{eyebrow}</p>
+      <h2 style={{ margin: '6px 0 8px', fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em', color: '#0f172a' }}>
+        {title}
+      </h2>
+      <p style={{ margin: 0, fontSize: 15, lineHeight: 1.55, color: 'rgba(15,23,42,0.75)' }}>
+        {blurb}
+      </p>
+    </div>
+  );
+}
+
+/* ─── Main review app ───────────────────────────────────── */
+
+function App() {
+  return (
+    <DesignCanvas>
+      {/* 1. Overview */}
+      <DCSection id="overview" title="Overview" subtitle="디자인 리뷰 요약 · v1 draft">
+        <DCArtboard id="summary" label="Review summary" width={1060} height={540}>
+          <OverviewPanel/>
+        </DCArtboard>
+        <DCArtboard id="tokens" label="Design tokens snapshot" width={520} height={540}>
+          <DesignSystemPanel/>
+        </DCArtboard>
+      </DCSection>
+
+      {/* 2. Landing */}
+      <DCSection id="landing" title="① Landing · 첫 진입" subtitle="home-landing.tsx · 히어로 + 피치 + CTA">
+        <DCArtboard id="landing-screen" label="현재 화면" width={DEVICE_W} height={DEVICE_H + 40}>
+          <PhoneFrame><BapsLandingScreen/></PhoneFrame>
+        </DCArtboard>
+        <DCArtboard id="landing-review" label="리뷰 코멘트" width={420} height={DEVICE_H + 40}>
+          <ReviewCard title="LANDING · 4 findings" items={[
+            { kind: 'good', title: 'HUD + 스캔 빔 · Watcher 톤 확립',
+              body: 'AI 시선을 가시화한 레이어. 구현이 무겁지 않고 첫인상에서 "분석 중" 느낌을 바로 전달. 이 디테일은 유지.',
+              ref: 'LandingHeroHud.tsx' },
+            { kind: 'warn', title: '피치 카피가 Watcher 톤과 분리됨',
+              body: '"사진 한 장으로 완성하는 완벽한 식단 기록" — 달콤하고 범용적. 디자인 시스템 문서의 "식단 감지됨. 분석을 시작합니다." 레퍼런스 톤으로 다시 쓰는 것이 제안됨. 예: "찰칵. 0.8초 안에 식단을 해독합니다."',
+              ref: 'home-landing.tsx · L42' },
+            { kind: 'warn', title: 'CTA 단일 옵션 — 대안 부재',
+              body: 'Google 버튼만 노출. 카카오 로그인도 지원한다면 CTA 2열로. 지원하지 않는다면 "로그인 없이 체험" Ghost 링크를 하나 추가해 마찰 줄이기.',
+              ref: 'CTA bar' },
+            { kind: 'nit', title: '피치 카드 대비 아쉬움',
+              body: '카드 배경 rgba(0,0,0,0.65) + 본문 rgba(255,255,255,0.85) — 4.1:1. WCAG AA 15px 본문 최소 4.5:1 미달. 배경을 .75로 올리거나 본문을 불투명하게.',
+              ref: 'pitch card' },
+          ]}/>
+        </DCArtboard>
+      </DCSection>
+
+      {/* 3. Dashboard */}
+      <DCSection id="dashboard" title="② Dashboard · 오늘의 식단" subtitle="app/page.tsx · 게이지 + 보조지표 + 타임라인">
+        <DCArtboard id="dashboard-screen" label="현재 화면" width={DEVICE_W} height={DEVICE_H + 40}>
+          <PhoneFrame><BapsDashboardScreen/></PhoneFrame>
+        </DCArtboard>
+        <DCArtboard id="dashboard-review" label="리뷰 코멘트" width={420} height={DEVICE_H + 40}>
+          <ReviewCard title="DASHBOARD · 8 findings" items={[
+            { kind: 'crit', title: '게이지 카드가 8개 지표를 한 번에 짊어짐',
+              body: '상태 배지 · 3링 게이지 · 중앙 kcal · 좌우 매크로 · 프로그레스 바 · zone 메시지 · 달성률/남은 kcal 듀얼 지표 · 코치 메시지. 시선이 흩어짐. 구조 제안: ① 중앙 kcal (36pt) ② 3매크로 (수평 라인) ③ 코치 한 줄. 나머지는 카드 아래 expandable로.',
+              ref: 'calorie-gauge.tsx' },
+            { kind: 'crit', title: 'AA 색 대비 실패 — 게이지 · 텍스트',
+              body: 'fat 링(#f08745) on 흰 배경은 2.6:1. "달성률" 10px 라벨 #64748b on 흰색 4.3:1 (AA small text 실패). Indigo 700(#4338ca) 또는 slate 700 이상으로 톤 다운.',
+              ref: 'CalorieGaugeCard' },
+            { kind: 'warn', title: '"Live signal · 끼니 3회 감지 · 탄 78% 달성"',
+              body: 'Watcher 톤은 좋으나 단어 3개가 동일 무게로 나열. 타이포 위계 없음. "•" 대신 구분점 \\\\ 또는 mono tabular 숫자 강조로 리듬 주기.',
+              ref: 'bottom metric row' },
+            { kind: 'warn', title: '빈 슬롯 UX · 아침/야식',
+              body: '"아침 식사 추가" 점선 박스가 2개. 공간은 많이 쓰지만 정보량은 0. 접힌 inline row 한 줄로 축소하고 tap-to-expand.',
+              ref: 'MealTimelineSection empty' },
+            { kind: 'warn', title: 'FAB 2개가 하단에서 충돌',
+              body: '중앙 + 버튼(사진/기록)과 우하단 채팅 FAB이 모두 prominent. 중앙 FAB은 BottomSheet 트리거 — 채팅은 작은 secondary로 또는 스크롤 시 페이드아웃.',
+              ref: 'QuickActionFab + ChatFab' },
+            { kind: 'nit', title: '"좋아요! 여유 있어요 🙂" — 톤 이탈',
+              body: '이모지 + 느낌표 + 반말. Watcher 캐릭터보다 마이피트니스팔 톤에 가깝다. "여유 구간. 576kcal 남음." 정도로.',
+              ref: 'zone message' },
+            { kind: 'nit', title: '물/체중 카드 시각적 무게 불균형',
+              body: '물병 일러스트는 크고 디테일, 체중은 숫자 + 미니 차트. 좌우 대칭이 아님. 체중 쪽에도 아이소메트릭 저울 일러스트 또는 둘 다 숫자-중심으로 통일.',
+              ref: 'WaterCounter vs WeightSpark' },
+            { kind: 'good', title: '데일리 퀵 배너 — 그리드 배경',
+              body: '실험실 리포트 느낌의 그리드 배경 + 팩폭 한 줄. 디자인 시스템 목표에 가장 잘 들어맞는 컴포넌트. 재사용 템플릿화 추천.',
+              ref: 'DailyQuipBanner' },
+          ]}/>
+        </DCArtboard>
+      </DCSection>
+
+      {/* 4. Analysis */}
+      <DCSection id="analysis" title="③ Meal Analysis · 분석 결과" subtitle="meal-analysis-result.tsx">
+        <DCArtboard id="analysis-screen" label="현재 화면" width={DEVICE_W} height={DEVICE_H + 40}>
+          <PhoneFrame><BapsAnalysisScreen/></PhoneFrame>
+        </DCArtboard>
+        <DCArtboard id="analysis-review" label="리뷰 코멘트" width={420} height={DEVICE_H + 40}>
+          <ReviewCard title="ANALYSIS · 5 findings" items={[
+            { kind: 'good', title: '사진 위 마커 + 태그 레이아웃',
+              body: '"현미밥 210g" 같은 구체 수치가 이미지 위에 찍혀있는 것은 brand의 분석력을 직관적으로 보여주는 가장 강한 장면. 이 화면을 랜딩 스크린샷으로도 쓸 만함.',
+              ref: 'photo tag layer' },
+            { kind: 'crit', title: '총 칼로리 카드의 padding 낭비',
+              body: '784 kcal + 점심·13:24 뱃지 두 요소에 전체 행 사용. 바로 아래 매크로 3카드와 같은 높이감. 이 카드를 매크로 그리드 위에 얇은 strip으로 묶거나, 카드를 반으로 줄이고 상단 헤더에 inline으로.',
+              ref: 'Kcal hero card' },
+            { kind: 'warn', title: 'Fact Alert vs 시각 위계',
+              body: '"FACT ALERT" 배너가 음식 사진 바로 아래 노출되지만 색(rose) + 아이콘만으로 경고라는 인지가 약함. 상단에 얇은 붉은 액센트 라인 또는 pulse 도트 추가.',
+              ref: 'fact banner' },
+            { kind: 'warn', title: '매크로 3카드 — pct 라벨이 문맥 부족',
+              body: '"38% / 일일" — 어떤 일일 목표인지 설명 없음. tooltip 또는 하단에 한 줄. 또는 그냥 "일일 목표 38%"로 풀어쓰기.',
+              ref: 'macro grid · pct' },
+            { kind: 'nit', title: '저장/수정 CTA 비율',
+              body: '수정 1fr · 저장 2fr 비율은 저장 우선 의도 OK. 다만 "수정"은 더 약한 ghost 버튼(테두리 없이 텍스트만)으로 줄여 저장의 시선 독점 더 강조.',
+              ref: 'bottom CTA' },
+          ]}/>
+        </DCArtboard>
+      </DCSection>
+
+      {/* 5. Cross-cutting */}
+      <DCSection id="crosscut" title="④ Cross-cutting · 시스템 차원 소견" subtitle="단일 화면을 넘는 일관성 이슈">
+        <DCArtboard id="crosscut-card" label="Systemic" width={520} height={560}>
+          <ReviewCard title="SYSTEM · 6 findings" items={[
+            { kind: 'crit', title: 'tabular-nums 누락 구간',
+              body: '게이지 중앙 1,624는 tabular이지만 meal card의 520/680 kcal은 proportional. 숫자가 0.5px씩 떨림. 전역 .font-data 유틸에 font-variant-numeric: tabular-nums를 포함시키는 것을 권장.',
+              ref: 'globals.css · @utility font-data' },
+            { kind: 'crit', title: 'Watcher 카피 규칙 문서화',
+              body: '디자인 문서에는 냉철/정교/위트라는 3축이 있지만 구현 곳곳에서 이탈. 각 톤의 예/반례를 10쌍씩 만들어 copy.md로 고정. LLM 생성 카피에도 이 규칙 프리앰블로.',
+              ref: 'docs/design-system.md · 톤앤매너' },
+            { kind: 'warn', title: '카드 radius 토큰 불일치',
+              body: 'calorie-gauge: 28px, water: 16px, meal: 12px, analysis photo: 16px. 최소 --radius-sm/md/lg 3단계로 제약. 28은 "히어로만", 16은 "보조 카드", 12는 "row item" 규칙화.',
+              ref: 'multiple' },
+            { kind: 'warn', title: 'glass 유틸 — 어둠 위/밝음 위 분기',
+              body: 'baps-glass가 랜딩(어둠 위)과 게이지 카드(밝음 위)에 모두 쓰이는데 tint/blur 값이 다르게 느껴짐. --glass-dark / --glass-light 두 variant로 쪼개기.',
+              ref: 'globals.css · baps-glass' },
+            { kind: 'nit', title: '이모지 사용 · 브랜드 색과 충돌',
+              body: '🌅☀️🌇🌙 시간대 아이콘은 귀엽지만 Watcher 톤과 불일치. 얇은 stroke의 커스텀 아이콘 4개로 교체하거나, 색을 빼고 grayscale 필터.',
+              ref: 'MealTimeline slots' },
+            { kind: 'good', title: 'JetBrains Mono + Pretendard 조합',
+              body: '한글 본문과 데이터 mono의 전환이 부드러움. 숫자 영역마다 mono 적용은 디자인 시스템이 지키고자 하는 "정교함" 규칙의 가장 큰 시각적 기여.',
+              ref: 'type system' },
+          ]}/>
+        </DCArtboard>
+
+        <DCArtboard id="nextsteps" label="Proposed next steps" width={520} height={560}>
+          <div style={{
+            width: 520, height: 560,
+            padding: 24, background: '#fff', borderRadius: 16,
+            border: '1px solid rgba(0,0,0,0.06)',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 10px 32px rgba(0,0,0,0.04)',
+            fontFamily: '"Pretendard Variable", Pretendard, system-ui',
+            overflow: 'hidden', boxSizing: 'border-box',
+          }}>
+            <p style={{ margin: 0, fontFamily: '"JetBrains Mono", monospace', fontSize: 11, fontWeight: 700,
+              letterSpacing: '0.18em', color: '#6366f1' }}>NEXT SPRINT · 제안</p>
+            <h3 style={{ margin: '8px 0 14px', fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>
+              우선순위 백로그
+            </h3>
+            <ol style={{ margin: 0, paddingLeft: 20, fontSize: 13.5, lineHeight: 1.7, color: 'rgba(15,23,42,0.85)' }}>
+              <li style={{ marginBottom: 10 }}>
+                <b>P0 · 게이지 카드 리팩터</b> — 8지표 → 3지표로 축소.<br/>
+                <span style={{ color: '#64748b', fontSize: 12 }}>소요: ~1d · 영향: 홈 스캔타임 -40% 예상</span>
+              </li>
+              <li style={{ marginBottom: 10 }}>
+                <b>P0 · 접근성 색 대비 스윕</b> — fat 링 · zone text · macro pct.<br/>
+                <span style={{ color: '#64748b', fontSize: 12 }}>소요: 0.5d · 블로커: 런칭 전</span>
+              </li>
+              <li style={{ marginBottom: 10 }}>
+                <b>P1 · copy.md — Watcher 카피 규칙</b> 작성 + 기존 카피 재작성.<br/>
+                <span style={{ color: '#64748b', fontSize: 12 }}>소요: 1d · 스코프: 8 화면 x 3~5 스트링</span>
+              </li>
+              <li style={{ marginBottom: 10 }}>
+                <b>P1 · Radius 토큰 3단계 정의</b>.<br/>
+                <span style={{ color: '#64748b', fontSize: 12 }}>소요: 0.5d · 파급: 전역 grep 10~15곳</span>
+              </li>
+              <li style={{ marginBottom: 10 }}>
+                <b>P2 · FAB 구조 — 단일 main + 플로팅 chat</b>.<br/>
+                <span style={{ color: '#64748b', fontSize: 12 }}>소요: 0.5d</span>
+              </li>
+              <li>
+                <b>P2 · 시간대 아이콘 커스텀 4종</b> 제작.<br/>
+                <span style={{ color: '#64748b', fontSize: 12 }}>소요: 0.5d · 아이콘 통일성</span>
+              </li>
+            </ol>
+          </div>
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
