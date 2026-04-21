@@ -25,11 +25,7 @@ import {
 import { useCoachThread } from "./use-coach-thread";
 import { useCoachTts, preloadCoachTts } from "./use-coach-tts";
 import { useVoiceSession } from "./use-voice-session";
-import {
-  useAtriumBootstrap,
-  readAtriumOnboardingDone,
-  persistAtriumOnboardingDone,
-} from "./use-atrium-bootstrap";
+import { useAtriumBootstrap } from "./use-atrium-bootstrap";
 import { AtriumView } from "./atrium-view";
 import { ThreadView } from "./thread-view";
 import { Composer } from "./composer";
@@ -50,9 +46,7 @@ export function ChatPanel({
   listenerDisplayName,
   onClose,
 }: ChatPanelProps) {
-  const [mode, setMode] = useState<ChatPanelMode>(() =>
-    readAtriumOnboardingDone() ? "thread" : "atrium"
-  );
+  const [mode, setMode] = useState<ChatPanelMode>("atrium");
   const [persona, setPersona] = useState<CoachPersonaId>(DEFAULT_COACH_PERSONA_ID);
   const [input, setInput] = useState("");
   const [streamingId, setStreamingId] = useState<string | null>(null);
@@ -95,7 +89,6 @@ export function ChatPanel({
   }, [mode, persona, selectedDate, opening, append]);
 
   const startThread = useCallback(() => {
-    persistAtriumOnboardingDone();
     setMode("thread");
     void tts.unlock();
   }, [tts]);

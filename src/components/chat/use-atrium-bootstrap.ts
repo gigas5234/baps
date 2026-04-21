@@ -11,27 +11,6 @@ import {
   type CoachPersonaId,
 } from "@/lib/coach-personas";
 
-const ATRIUM_ONBOARDING_STORAGE_KEY = "baps.chat.atriumOnboardingDone";
-
-export function readAtriumOnboardingDone(): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    return (
-      window.localStorage.getItem(ATRIUM_ONBOARDING_STORAGE_KEY) === "1"
-    );
-  } catch {
-    return false;
-  }
-}
-
-export function persistAtriumOnboardingDone(): void {
-  try {
-    window.localStorage.setItem(ATRIUM_ONBOARDING_STORAGE_KEY, "1");
-  } catch {
-    /* ignore */
-  }
-}
-
 const FALLBACK_CHIPS: QuickChip[] = [
   { label: "오늘 식단 평가", prompt: "오늘 식단을 팩트로 짧게 평가해줘." },
   { label: "남은 칼로리",   prompt: "남은 칼로리를 숫자로 말해줘." },
