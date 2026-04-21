@@ -49,24 +49,30 @@ export function useVoiceSession({ onFinal, idleTimeoutMs = 4000 }: UseVoiceSessi
     if (sessionRef.current) return;
     setError(null);
     try {
-      const s = await startAzureChatStt({
-        onInterim: (t) => {
+      let latest = "";
+      const session = await startAzureChatStt({
+        onInterim: (t: string) => {
+          latest = t;
           setInterim(t);
           clearIdle();
-          idleRef.current = window.setTimeout(stop, idleTimeoutMs);
+          idleRef.current = window.setTimeout(() => {
+            const finalText = (session?.getLatestText?.() ?? latest).trim();
+            if (finalText) onFinalRef.current(finalText);
+            stop();
+          }, idleTimeoutMs);
         },
-        onFinal: (t) => {
-          if (t.trim()) onFinalRef.current(t.trim());
-          stop();
-        },
-        onError: (e) => {
-          setError(e.message);
+        onError: (msg: string) => {
+          setError(msg);
           stop();
         },
       });
-      sessionRef.current = s;
+      sessionRef.current = session;
       setActive(true);
-      idleRef.current = window.setTimeout(stop, idleTimeoutMs);
+      idleRef.current = window.setTimeout(() => {
+        const finalText = (session?.getLatestText?.() ?? latest).trim();
+        if (finalText) onFinalRef.current(finalText);
+        stop();
+      }, idleTimeoutMs);
     } catch (e) {
       setError((e as Error).message);
     }

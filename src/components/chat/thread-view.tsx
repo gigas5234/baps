@@ -79,7 +79,7 @@ function UserBubble({ message }: { message: ChatMessage }) {
     <div className="flex items-end justify-end gap-1.5">
       {message.createdAt && (
         <span className="mb-1 font-mono text-[10px] tabular-nums text-muted-foreground/60">
-          {formatKoreanChatTime(message.createdAt)}
+          {formatKoreanChatTime(new Date(message.createdAt))}
         </span>
       )}
       <div className="max-w-[75%] rounded-[16px] rounded-br-[4px] bg-foreground px-3 py-2 text-[13.5px] leading-[1.45] text-background">
@@ -111,7 +111,7 @@ function SimpleCoachBubble({
         </div>
         {createdAt && (
           <span className="ml-0.5 mt-1 block font-mono text-[10px] tabular-nums text-muted-foreground/60">
-            {formatKoreanChatTime(createdAt)}
+            {formatKoreanChatTime(new Date(createdAt))}
           </span>
         )}
       </div>
@@ -153,7 +153,9 @@ function StreamingBubble({
           >
             분석 중
           </span>
-          <CoachTypewriter text={text} />
+          <CoachTypewriter text={text} enabled>
+            {(visible) => <>{visible}</>}
+          </CoachTypewriter>
         </div>
         {speaking && (
           <div className="ml-0.5 mt-1.5 flex items-center gap-1.5">

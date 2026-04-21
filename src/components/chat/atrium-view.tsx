@@ -5,6 +5,7 @@
 "use client";
 
 import {
+  COACH_ATRIUM_BLURB,
   COACH_PERSONAS_UI,
   DEFAULT_COACH_PERSONA_ID,
   personalizeAtriumQuote,
@@ -102,10 +103,10 @@ export function AtriumView({
                   {c.emoji}
                 </span>
                 <p className="mt-2.5 text-[13px] font-bold tracking-[-0.01em] text-foreground">
-                  {c.name}
+                  {c.label}
                 </p>
                 <p className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-                  {c.tagline}
+                  {COACH_ATRIUM_BLURB[c.id].tagline}
                 </p>
                 <span
                   className={cn(
@@ -118,7 +119,7 @@ export function AtriumView({
                     background: isSel ? "#fff" : "rgba(15,23,42,0.03)",
                   }}
                 >
-                  {c.voiceSample}
+                  {c.description}
                 </span>
               </button>
             </li>
@@ -141,10 +142,10 @@ export function AtriumView({
             className="font-mono text-[11px] font-bold tracking-[0.08em]"
             style={{ color: hue.ink }}
           >
-            {sel.name.toUpperCase()} · {sel.role}
+            {sel.label.toUpperCase()} · {COACH_ATRIUM_BLURB[sel.id].tagline}
           </p>
           <p className="mt-2 text-[13.5px] font-medium leading-relaxed text-foreground">
-            “{personalizeAtriumQuote(sel.id, userDisplayName)}”
+            “{personalizeAtriumQuote(COACH_ATRIUM_BLURB[sel.id].quoteTpl, userDisplayName ?? "")}”
           </p>
           <button
             type="button"
@@ -155,7 +156,7 @@ export function AtriumView({
             )}
             style={{ background: hue.hue }}
           >
-            {sel.name} 코치 시작하기
+            {sel.label} 코치 시작하기
             <ChevronRight className="size-3.5" />
           </button>
         </aside>

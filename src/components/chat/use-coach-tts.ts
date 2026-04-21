@@ -13,8 +13,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CoachStreamTtsSentencePipeline,
-  type StreamTtsChunk,
 } from "@/lib/coach-stream-tts-pipeline";
+import type { CoachStreamSegment } from "@/lib/coach-delimited-stream";
 import { unlockCoachTtsAudio } from "@/lib/chat-audio-unlock";
 import { stopCoachNeuralTtsPlayback } from "@/lib/coach-tts-playback";
 import type { CoachPersonaId } from "@/lib/coach-personas";
@@ -25,11 +25,6 @@ let modCache: Promise<CoachTtsModule> | null = null;
 /** 초기 번들 경량화: LCP 이후 preload. */
 export function preloadCoachTts(): void {
   modCache ??= import("@/lib/coach-tts-client");
-}
-
-function loadMod(): Promise<CoachTtsModule> {
-  preloadCoachTts();
-  return modCache!;
 }
 
 export interface UseCoachTtsOptions {
@@ -49,23 +44,19 @@ export interface UseCoachTtsOptions {
  */
 export function useCoachTts({ persona, enabledInitial = true }: UseCoachTtsOptions) {
   const [enabled, setEnabled] = useState(enabledInitial);
-  const [speaking, setSpeaking] = useState(false);
+  // TTS deferred — speaking indicator stays false; halo/EQ 스텁.
+  const [speaking] = useState(false);
 
   const pipelineRef = useRef<CoachStreamTtsSentencePipeline | null>(null);
   const unlockedRef = useRef(false);
 
-  /** 파이프라인 lazy 생성. persona 변경 시 교체. */
+  /** 파이프라인 lazy 생성. persona 변경 시 lead 교체. */
   useEffect(() => {
-    const p = new CoachStreamTtsSentencePipeline({
-      persona,
-      loadModule: loadMod,
-      onSpeakingChange: setSpeaking,
-    });
-    pipelineRef.current = p;
-    return () => {
-      p.dispose();
-      pipelineRef.current = null;
-    };
+    if (!pipelineRef.current) {
+      pipelineRef.current = new CoachStreamTtsSentencePipeline(persona);
+    } else {
+      pipelineRef.current.setLead(persona);
+    }
   }, [persona]);
 
   const unlock = useCallback(async () => {
@@ -75,21 +66,20 @@ export function useCoachTts({ persona, enabledInitial = true }: UseCoachTtsOptio
   }, []);
 
   const push = useCallback(
-    (chunk: StreamTtsChunk) => {
+    (segments: CoachStreamSegment[]) => {
       if (!enabled) return;
-      pipelineRef.current?.feed(chunk);
+      pipelineRef.current?.feed(segments);
     },
     [enabled]
   );
 
   const finalize = useCallback(() => {
-    pipelineRef.current?.finalize();
+    pipelineRef.current?.reset();
   }, []);
 
   const stop = useCallback(() => {
     stopCoachNeuralTtsPlayback();
     pipelineRef.current?.reset();
-    setSpeaking(false);
   }, []);
 
   const toggle = useCallback(() => {

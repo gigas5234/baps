@@ -8,16 +8,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, Volume2, VolumeX } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  COACH_PERSONAS_UI,
+  COACH_ATRIUM_BLURB,
   DEFAULT_COACH_PERSONA_ID,
   coachMeta,
   type CoachPersonaId,
 } from "@/lib/coach-personas";
 import type { MacroTotals } from "@/lib/meal-macros";
-import {
-  postCoachChat,
-  type CoachStrategicTurn,
-} from "@/lib/coach-chat-client";
+import { postCoachChat } from "@/lib/coach-chat-client";
 import { normalizeCoachReply } from "@/lib/chat-coach";
 import {
   AMBIENT_AURA_STYLE,
@@ -115,16 +112,22 @@ export function ChatPanel({
 
     try {
       const outcome = await postCoachChat({
-        persona,
-        selectedDate,
+        coach_id: persona,
+        date: selectedDate,
         message: text,
       });
-      const normalized = normalizeCoachReply(outcome);
+      const raw = (outcome.data ?? {}) as Record<string, unknown>;
+      const reply = normalizeCoachReply(raw);
       commitTurn(
         aiId,
-        normalized.turn as CoachStrategicTurn,
-        normalized.dataCard,
-        normalized.streamSegments
+        {
+          analysis: reply.analysis,
+          roast: reply.roast,
+          mission: reply.mission,
+          coach_quips: reply.coach_quips,
+        },
+        reply.data_card,
+        undefined
       );
     } finally {
       setStreamingId(null);
@@ -163,7 +166,7 @@ export function ChatPanel({
             <div className="flex flex-col gap-0.5">
               <div className="flex items-center gap-1.5 text-[15px] font-bold tracking-[-0.01em]">
                 <span>{pMeta.emoji}</span>
-                {pMeta.name} 코치
+                {pMeta.label} 코치
                 <span
                   className="ml-0.5 rounded-[4px] px-1.5 py-[2px] font-mono text-[9px] font-semibold tracking-[0.05em]"
                   style={{ color: hue.ink, background: hue.soft }}
@@ -171,7 +174,7 @@ export function ChatPanel({
                   {hue.label.toUpperCase()}
                 </span>
               </div>
-              <p className="text-[11px] text-muted-foreground">{pMeta.role}</p>
+              <p className="text-[11px] text-muted-foreground">{COACH_ATRIUM_BLURB[persona].tagline}</p>
             </div>
           )}
         </div>
@@ -213,7 +216,7 @@ export function ChatPanel({
         {mode === "thread" && (
           <ThreadView
             persona={persona}
-            personaLabel={pMeta.name}
+            personaLabel={pMeta.label}
             personaEmoji={pMeta.emoji}
             messages={messages}
             streamingId={streamingId}

@@ -50,7 +50,7 @@ export function useAtriumBootstrap({
   userDisplayName,
 }: UseAtriumBootstrapOptions) {
   const [opening, setOpening] = useState<string>(() =>
-    buildChatAtriumWelcome(persona, userDisplayName)
+    buildChatAtriumWelcome(userDisplayName ?? "")
   );
   const [quickChips, setQuickChips] = useState<QuickChip[]>(FALLBACK_CHIPS);
   const [loading, setLoading] = useState(false);
@@ -65,11 +65,11 @@ export function useAtriumBootstrap({
     setLoading(true);
     try {
       const outcome = await postCoachChat({
-        persona,
-        selectedDate,
-        mode: "bootstrap",
+        coach_id: persona,
+        date: selectedDate,
+        bootstrap: true,
       });
-      const d = outcome.data as Record<string, unknown>;
+      const d = (outcome.data ?? {}) as Record<string, unknown>;
       if (outcome.ok) {
         if (typeof d.opening === "string") setOpening(d.opening);
         if (Array.isArray(d.quick_chips)) {
