@@ -63,17 +63,14 @@ export function ChatFab(props: ChatFabProps) {
               transition={{ type: "tween", ease: [0.4, 0, 0.2, 1], duration: 0.28 }}
               onClick={(e) => e.stopPropagation()}
               className={cn(
-                "absolute inset-x-0 bottom-0 h-[92dvh] max-h-[92dvh] overflow-hidden",
-                "rounded-t-[20px] bg-background shadow-2xl",
-                "md:inset-auto md:bottom-4 md:right-4 md:h-[720px] md:w-[420px] md:rounded-[20px]",
-                "lg:bottom-6 lg:right-6 lg:h-[760px] lg:w-[900px]"
+                "absolute inset-0 overflow-hidden bg-background shadow-2xl"
               )}
             >
               <button
                 type="button"
                 onClick={close}
                 aria-label="닫기"
-                className="absolute right-3 top-3 z-10 flex size-8 items-center justify-center rounded-full bg-card/80 backdrop-blur-sm md:hidden"
+                className="absolute right-3 top-3 z-10 flex size-8 items-center justify-center rounded-full bg-card/80 backdrop-blur-sm"
               >
                 <X className="size-4 text-muted-foreground" />
               </button>
