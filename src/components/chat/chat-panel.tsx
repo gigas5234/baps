@@ -132,7 +132,8 @@ export function ChatPanel({
     <div
       style={{ ...coachHueCssVars(persona) }}
       className={cn(
-        "relative flex h-full flex-col overflow-hidden bg-background text-foreground"
+        "relative mx-auto flex h-full w-full max-w-[520px] flex-col overflow-hidden bg-background text-foreground",
+        "md:border-x md:border-border"
       )}
     >
       {/* Ambient aura */}

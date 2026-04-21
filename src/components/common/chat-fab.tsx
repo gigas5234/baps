@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageCircle, X } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MacroTotals } from "@/lib/meal-macros";
 import { ChatPanel } from "@/components/chat/chat-panel";
@@ -66,14 +66,6 @@ export function ChatFab(props: ChatFabProps) {
                 "absolute inset-0 overflow-hidden bg-background shadow-2xl"
               )}
             >
-              <button
-                type="button"
-                onClick={close}
-                aria-label="닫기"
-                className="absolute right-3 top-3 z-10 flex size-8 items-center justify-center rounded-full bg-card/80 backdrop-blur-sm"
-              >
-                <X className="size-4 text-muted-foreground" />
-              </button>
               <ChatPanel {...props} onClose={close} />
             </motion.section>
           </motion.div>
